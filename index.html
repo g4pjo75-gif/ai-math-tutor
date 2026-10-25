@@ -151,7 +151,7 @@
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
             <h1 class="font-bold text-sm sm:text-base leading-tight truncate">高校数学I・A AI家庭教師</h1>
-            <span class="bg-amber-400 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0 shadow-sm">β-Test v1.3</span>
+            <span class="bg-amber-400 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0 shadow-sm">β-Test v1.4</span>
           </div>
           <p class="text-[10px] sm:text-[11px] text-emerald-200 truncate">チャート式準拠・音声解説付きステップ授業</p>
         </div>
@@ -190,7 +190,7 @@
         <span class="animate-pulse text-amber-300">🧪</span>
         <span class="font-bold text-emerald-200">先行ベータテスト版 (Beta Test Edition)</span>
       </div>
-      <span class="text-[10px] text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded font-bold">v1.3-beta</span>
+      <span class="text-[10px] text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded font-bold">v1.4-beta</span>
     </div>
 
     <!-- APIキー未設定アナウンスバナー -->
@@ -327,27 +327,91 @@
         <div id="finalAnswer" class="text-lg font-bold"></div>
       </div>
 
-      <!-- 数字を変えた類題ボタン -->
-      <button onclick="generateSimilarProblem()"
-        id="similarProblemBtn"
-        class="w-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-400 font-bold py-3 rounded-xl shadow-sm transition border border-blue-200 dark:border-blue-800 mt-3 flex items-center justify-center gap-2">
-        <span id="similarProblemBtnText">🔄 数字を変えた類題を解く</span>
-        <span id="similarProblemBtnSpinner" class="hidden animate-spin mr-2">⟳</span>
-      </button>
+      <!-- 類題＆ノート アクションボタン群 -->
+      <div class="space-y-2.5 pt-2">
+        <!-- メイン：自分で挑戦して採点（おすすめ） -->
+        <button onclick="startQuizChallenge()"
+          id="quizChallengeBtn"
+          class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 px-4 rounded-2xl shadow-md transition flex items-center justify-center gap-2 text-sm sm:text-base">
+          <span id="quizChallengeBtnText">🎯 この問題の「類題」に自分で挑戦する！</span>
+          <span id="quizChallengeBtnSpinner" class="hidden animate-spin mr-2">⟳</span>
+        </button>
 
-      <!-- オ答ノート保存ボタン -->
-      <button onclick="saveCurrentToTutorHistory()"
-        id="saveToNoteBtn"
-        class="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold py-3 rounded-xl shadow-sm transition border border-slate-200 dark:border-slate-600 mt-3 flex items-center justify-center gap-2">
-        📁 この解説をマイノートに保存
-      </button>
+        <div class="grid grid-cols-2 gap-2">
+          <!-- サブ：解説をすぐ見る -->
+          <button onclick="generateSimilarProblem()"
+            id="similarProblemBtn"
+            class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2.5 px-3 rounded-xl transition border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-center gap-1.5 truncate">
+            <span id="similarProblemBtnText">📖 類題の解説を見る</span>
+            <span id="similarProblemBtnSpinner" class="hidden animate-spin mr-1">⟳</span>
+          </button>
+
+          <!-- オ答ノート保存ボタン -->
+          <button onclick="saveCurrentToTutorHistory()"
+            id="saveToNoteBtn"
+            class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2.5 px-3 rounded-xl transition border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-center gap-1.5 truncate">
+            📁 ノートに保存
+          </button>
+        </div>
+      </div>
+
+      <!-- 類題チャレンジ カード（自分で解いて採点） -->
+      <div id="quizSection" class="hidden bg-white dark:bg-slate-900 rounded-2xl shadow-lg border-2 border-emerald-500/60 p-4 sm:p-5 space-y-4 scroll-mt-24">
+        <div class="flex items-center justify-between border-b pb-3 dark:border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🎯</span>
+            <div>
+              <h3 class="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100">類題チャレンジ！自分で解いてみよう</h3>
+              <p class="text-[11px] text-emerald-600 dark:text-emerald-400">数字が変わった双子問題です。ノートに解いて答えを入力してください。</p>
+            </div>
+          </div>
+          <button onclick="closeQuizSection()" class="text-slate-400 hover:text-slate-600 text-sm font-bold p-1">✕</button>
+        </div>
+
+        <!-- 類題 問題文 -->
+        <div class="bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3.5 space-y-1">
+          <div class="text-xs font-bold text-emerald-800 dark:text-emerald-300">【出題】</div>
+          <div id="quizProblemText" class="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-200 leading-relaxed"></div>
+        </div>
+
+        <!-- ヒント開閉アコーディオン -->
+        <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl p-3">
+          <button onclick="toggleQuizHint()" class="flex items-center justify-between w-full text-xs font-bold text-amber-800 dark:text-amber-300">
+            <span>💡 解き方のヒント（着眼点）を見る</span>
+            <span id="quizHintIcon">▼</span>
+          </button>
+          <div id="quizHintContent" class="hidden pt-2 text-xs text-amber-900 dark:text-amber-200 leading-relaxed border-t border-amber-200/60 dark:border-amber-900/60 mt-2"></div>
+        </div>
+
+        <!-- 生徒の答え入力フォーム -->
+        <div class="space-y-2">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+            ✏️ あなたの答えを入力：
+          </label>
+          <div class="flex gap-2">
+            <input type="text" id="studentAnswerInput"
+              placeholder="例: -3 <= y <= 3 または (x+2)(2x-1)"
+              class="flex-1 text-sm border-2 border-emerald-500/50 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-emerald-600 bg-white dark:bg-slate-800 dark:text-white"
+              onkeydown="if(event.key==='Enter') submitStudentAnswer()" />
+            <button onclick="submitStudentAnswer()" id="submitAnswerBtn"
+              class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow flex items-center gap-1.5 shrink-0">
+              <span id="submitAnswerBtnText">採点する 🚀</span>
+              <span id="submitAnswerBtnSpinner" class="hidden animate-spin">⟳</span>
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400">※ 不等号は &lt;= や &gt;= でも入力できます。全角・半角どちらでも自動判定されます。</p>
+        </div>
+
+        <!-- 採点結果カード（正解 / 不正解） -->
+        <div id="quizResultBox" class="hidden rounded-xl p-4 space-y-2.5 border"></div>
+      </div>
     </section>
 
   </main>
 
   <!-- フッター（バージョン表示） -->
   <footer class="max-w-3xl mx-auto px-4 py-6 text-center text-xs text-slate-400 space-y-1">
-    <p class="font-medium text-slate-500 dark:text-slate-400">高校数学I・A AI家庭教師 | 先行ベータテスト版 (Beta Test v1.3)</p>
+    <p class="font-medium text-slate-500 dark:text-slate-400">高校数学I・A AI家庭教師 | 先行ベータテスト版 (Beta Test v1.4)</p>
     <p class="text-[11px] text-slate-400 dark:text-slate-500 font-mono">Build: 2026.10-beta • High-Quality Audio Engine</p>
   </footer>
 
@@ -357,7 +421,7 @@
       <div class="flex items-center justify-between border-b pb-3">
         <div class="flex items-center gap-2">
           <h3 class="font-bold text-base text-slate-800 dark:text-slate-100">⚙️ API設定 ＆ モデル選択</h3>
-          <span class="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">Beta v1.3</span>
+          <span class="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">Beta v1.4</span>
         </div>
         <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-700 text-lg font-bold">✕</button>
       </div>
@@ -456,6 +520,7 @@
     let currentImageBase64 = null;
     let currentProblems = [];        // 認識されたすべての問題（小問リスト）
     let currentProblemIndex = 0;     // 現在表示中の問題インデックス
+    let currentQuizData = null;      // 自分で解く類題データ { problem, answer, hint }
     let currentSteps = [];
     let isPlayingQueue = false;
     let currentModelId = null;       // 「もっとやさしく」再生成で使う
@@ -643,7 +708,7 @@
     }
 
     // =========================================================================
-    // 類題（数字を変えた問題）生成
+    // 類題（数字を変えた問題）生成 & 自分で解く「類題チャレンジ」AI自動採点システム
     // =========================================================================
     function buildSimilarProblemPrompt() {
       const unitHint = document.getElementById('unitSelect').value;
@@ -668,16 +733,16 @@ ${keyPoint}
 - 数字、係数、定義域、条件などを変えること（完全に同じ問題にしない）
 - 問題文だけを出力すること（解説は不要）
 - 元の問題より少しだけ難しくするか、同程度の難易度にすること
-- 出力は問題文のみ（LaTeX形式可）
+- 数式は必ずLaTeX形式（$...$）で記述し、JSONエスケープ（\\\\leqq, \\\\ge）を厳守すること
 - 「問題：」などのラベルは付けず、問題文だけを出力`;
     }
 
+    // 1. 類題の解説をすぐ見る（従来の自動解説フロー）
     async function generateSimilarProblem() {
       const btn = document.getElementById('similarProblemBtn');
       const btnText = document.getElementById('similarProblemBtnText');
       const btnSpinner = document.getElementById('similarProblemBtnSpinner');
 
-      // ローディング状態
       if (btn) {
         btn.disabled = true;
         if (btnText) btnText.classList.add('hidden');
@@ -690,7 +755,6 @@ ${keyPoint}
       if (!geminiKey) {
         openSettings();
         showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
-        // ボタン状態を復元
         if (btn) {
           btn.disabled = false;
           if (btnText) btnText.classList.remove('hidden');
@@ -701,8 +765,6 @@ ${keyPoint}
 
       try {
         const prompt = buildSimilarProblemPrompt();
-
-        // 類題生成用APIコール（temperatureを0.7に設定して多様性を確保）
         const res = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
           temperature: 0.7,
           maxOutputTokens: 512,
@@ -710,37 +772,24 @@ ${keyPoint}
           rawText: true
         });
 
-        // レスポンスから問題文を抽出
         let similarProblem = '';
-        if (typeof res === 'string') {
-          similarProblem = res.trim();
-        } else if (res) {
-          similarProblem = String(res).trim();
-        }
+        if (typeof res === 'string') similarProblem = res.trim();
+        else if (res) similarProblem = String(res).trim();
 
-        // 余分なテキスト（マークダウン、ラベル等）を除去
         similarProblem = similarProblem
           .replace(/^```[\s\S]*?\n/, '')
           .replace(/```$/g, '')
           .replace(/^(問題[：:]?\s*|類題[：:]?\s*|Question[：:]?\s*)/i, '')
           .trim();
 
-        if (!similarProblem) {
-          throw new Error('類題の生成に失敗しました。');
-        }
+        if (!similarProblem) throw new Error('類題の生成に失敗しました。');
 
-        // 問題文をテキスト入力欄に自動入力
         const questionInput = document.getElementById('questionInput');
-        if (questionInput) {
-          questionInput.value = similarProblem;
-        }
+        if (questionInput) questionInput.value = sanitizeMathString(similarProblem);
 
-        // 画像をクリア（類題はテキストベース）
         clearImage();
-
-        // 既存のsolveProblemフローを実行
+        closeQuizSection();
         await solveProblem();
-
       } catch (err) {
         if (isQuotaError(err)) {
           showQuotaError(selectedModel);
@@ -752,13 +801,288 @@ ${keyPoint}
           showStatus(errMsg, 'red');
         }
       } finally {
-        // ボタン状態を復元
         if (btn) {
           btn.disabled = false;
           if (btnText) btnText.classList.remove('hidden');
           if (btnSpinner) btnSpinner.classList.add('hidden');
         }
       }
+    }
+
+    // 2. 自分で解く「類題チャレンジ」出題
+    async function startQuizChallenge() {
+      const btn = document.getElementById('quizChallengeBtn');
+      const btnText = document.getElementById('quizChallengeBtnText');
+      const btnSpinner = document.getElementById('quizChallengeBtnSpinner');
+
+      if (btn) {
+        btn.disabled = true;
+        if (btnText) btnText.classList.add('hidden');
+        if (btnSpinner) btnSpinner.classList.remove('hidden');
+      }
+
+      const geminiKey = safeStorage.getItem('gemini_api_key');
+      const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
+
+      if (!geminiKey) {
+        openSettings();
+        showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
+        if (btn) {
+          btn.disabled = false;
+          if (btnText) btnText.classList.remove('hidden');
+          if (btnSpinner) btnSpinner.classList.add('hidden');
+        }
+        return;
+      }
+
+      const unitHint = document.getElementById('unitSelect').value;
+      const currentProblem = currentProblemText || document.getElementById('recognizedProblem').textContent || '';
+      const keyPoint = document.getElementById('keyPoint').textContent || '';
+
+      const QUIZ_GEN_SCHEMA = {
+        type: 'OBJECT',
+        properties: {
+          problem: { type: 'STRING' },
+          answer: { type: 'STRING' },
+          hint: { type: 'STRING' }
+        },
+        required: ['problem', 'answer', 'hint']
+      };
+
+      const prompt = `あなたは日本の高校1年生を教えるプロ数学教師です。
+生徒が自力で解くための「類題（数字・条件だけを変えた同じ解法パターンの双子問題）」を1問出題してください。
+問題文、基準正解（最終解答）、解き方のヒント（着眼点）を作成してください。
+
+【元の問題】
+${currentProblem}
+
+【単元ヒント】
+${unitHint}
+
+【重要ポイント】
+${keyPoint}
+
+【ルール】
+- 元の問題と同じ解法パターンを使うこと（数字や係数、定義域を変える）
+- 数式は必ずLaTeX形式（$...$ または $$...$$）で記述し、バックスラッシュは2重化（\\\\leqq, \\\\ge, \\\\frac）してください。
+- 出力は必ず指定のJSONスキーマのみ。`;
+
+      try {
+        const res = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
+          schema: QUIZ_GEN_SCHEMA,
+          temperature: 0.6,
+          timeoutMs: 25000
+        });
+
+        currentQuizData = {
+          problem: sanitizeMathString(res.problem || ''),
+          answer: sanitizeMathString(res.answer || ''),
+          hint: sanitizeMathString(res.hint || '')
+        };
+
+        const probEl = document.getElementById('quizProblemText');
+        probEl.textContent = currentQuizData.problem;
+        renderMathIn(probEl);
+
+        const hintEl = document.getElementById('quizHintContent');
+        hintEl.textContent = currentQuizData.hint;
+        renderMathIn(hintEl);
+        hintEl.classList.add('hidden');
+        document.getElementById('quizHintIcon').textContent = '▼';
+
+        document.getElementById('studentAnswerInput').value = '';
+        const resultBox = document.getElementById('quizResultBox');
+        resultBox.classList.add('hidden');
+        resultBox.innerHTML = '';
+
+        const quizSec = document.getElementById('quizSection');
+        quizSec.classList.remove('hidden');
+        quizSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        speakJapanese('では、数字を変えた類題に挑戦してみましょう！ノートに解いて、答えを入力してくださいね。');
+      } catch (err) {
+        showStatus(`❌ 類題出題エラー: ${err.message}`, 'red');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          if (btnText) btnText.classList.remove('hidden');
+          if (btnSpinner) btnSpinner.classList.add('hidden');
+        }
+      }
+    }
+
+    function toggleQuizHint() {
+      const content = document.getElementById('quizHintContent');
+      const icon = document.getElementById('quizHintIcon');
+      const isHidden = content.classList.toggle('hidden');
+      icon.textContent = isHidden ? '▼' : '▲';
+    }
+
+    function closeQuizSection() {
+      const quizSec = document.getElementById('quizSection');
+      if (quizSec) quizSec.classList.add('hidden');
+    }
+
+    // 3. 生徒の答えをAIが自動採点
+    async function submitStudentAnswer() {
+      if (!currentQuizData) return;
+      const inputEl = document.getElementById('studentAnswerInput');
+      const studentAns = (inputEl.value || '').trim();
+
+      if (!studentAns) {
+        alert('答えを入力してから「採点する」を押してください。');
+        inputEl.focus();
+        return;
+      }
+
+      const btn = document.getElementById('submitAnswerBtn');
+      const btnText = document.getElementById('submitAnswerBtnText');
+      const btnSpinner = document.getElementById('submitAnswerBtnSpinner');
+
+      if (btn) {
+        btn.disabled = true;
+        if (btnText) btnText.classList.add('hidden');
+        if (btnSpinner) btnSpinner.classList.remove('hidden');
+      }
+
+      const geminiKey = safeStorage.getItem('gemini_api_key');
+      const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
+
+      const JUDGE_SCHEMA = {
+        type: 'OBJECT',
+        properties: {
+          is_correct: { type: 'BOOLEAN' },
+          judgement_title: { type: 'STRING' },
+          comment: { type: 'STRING' },
+          correct_answer: { type: 'STRING' },
+          speech_ja: { type: 'STRING' }
+        },
+        required: ['is_correct', 'judgement_title', 'comment', 'correct_answer', 'speech_ja']
+      };
+
+      const prompt = `あなたは高校数学の採点担当プロ講師です。生徒が解いた答えを厳密かつ優しく採点してください。
+【出題された問題】
+${currentQuizData.problem}
+
+【基準正解】
+${currentQuizData.answer}
+
+【生徒が入力した答え】
+${studentAns}
+
+【採点ルール】
+- 数学的に同値であれば、表記方法の些細な違い（空白の有無、全角半角、<= と ≦、(x+1)(x+2) と (x+2)(x+1) など）はすべて「正解(is_correct: true)」にしてください。
+- 正解の場合は、生徒を褒めるあたたかいコメント（1〜2文）と短い音声台本を作成してください。
+- 不正解の場合は、いきなり答えを全部バラすのではなく、生徒がどこでつまずいたのか（符号ミス、不等号の向き、計算ミスなど）の「気づきのヒント」をやさしく説明してください。
+- 数式は必ずLaTeX形式（$ ... $）で記述し、バックスラッシュは2重エスケープ（\\\\leqq, \\\\ge）してください。`;
+
+      try {
+        const judge = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
+          schema: JUDGE_SCHEMA,
+          temperature: 0.2,
+          timeoutMs: 25000
+        });
+
+        renderQuizResult(judge, studentAns);
+      } catch (err) {
+        alert('採点エラー: ' + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          if (btnText) btnText.classList.remove('hidden');
+          if (btnSpinner) btnSpinner.classList.add('hidden');
+        }
+      }
+    }
+
+    function renderQuizResult(judge, studentAns) {
+      const box = document.getElementById('quizResultBox');
+      if (!box) return;
+
+      const isCorrect = Boolean(judge.is_correct);
+      const bgClass = isCorrect
+        ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-100'
+        : 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-950 dark:text-amber-100';
+
+      box.className = `rounded-xl p-4 space-y-3 border shadow-sm ${bgClass}`;
+
+      box.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">${isCorrect ? '🎉 ⭕' : '💡 ❌'}</span>
+            <span class="font-bold text-base sm:text-lg">${escapeHtml(judge.judgement_title || (isCorrect ? '正解！素晴らしい！' : '惜しい！もう一歩です'))}</span>
+          </div>
+        </div>
+
+        <div class="text-xs sm:text-sm leading-relaxed p-3 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-current/20">
+          <div class="font-bold mb-1">【先生からの講評】</div>
+          <div id="quizJudgeComment">${escapeHtml(sanitizeMathString(judge.comment || ''))}</div>
+        </div>
+
+        ${!isCorrect ? `
+        <div class="text-xs p-2.5 rounded-lg bg-amber-100/70 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200">
+          <strong>ヒント：</strong> 符号や不等号の向き、定義域の端の値をもう一度確認してみましょう！
+        </div>
+        ` : ''}
+
+        <div class="flex flex-wrap items-center gap-2 pt-1">
+          ${isCorrect ? `
+          <button onclick="saveQuizToHistory()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition flex items-center gap-1.5">
+            📁 この成果をマイノートに記録
+          </button>
+          ` : `
+          <button onclick="document.getElementById('studentAnswerInput').focus()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
+            ✏️ もう一度解き直す
+          </button>
+          <button onclick="showQuizFullSolution()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
+            📖 完全なステップ解説を見る
+          </button>
+          `}
+        </div>
+      `;
+
+      box.classList.remove('hidden');
+      renderMathIn(document.getElementById('quizJudgeComment'));
+
+      if (judge.speech_ja) {
+        speakJapanese(judge.speech_ja);
+      }
+    }
+
+    function showQuizFullSolution() {
+      if (!currentQuizData || !currentQuizData.problem) return;
+      const questionInput = document.getElementById('questionInput');
+      if (questionInput) {
+        questionInput.value = currentQuizData.problem;
+      }
+      clearImage();
+      closeQuizSection();
+      solveProblem();
+    }
+
+    function saveQuizToHistory() {
+      if (!currentQuizData) return;
+      const unitHint = document.getElementById('unitSelect').value;
+      const data = {
+        unitHint: unitHint,
+        problem_label: '類題チャレンジ (正解)',
+        recognized_problem: currentQuizData.problem,
+        key_point: currentQuizData.hint,
+        steps: [
+          {
+            step_number: 1,
+            title: '類題チャレンジ 正解達成',
+            focus: '自力で解法を導き出しました！',
+            why: '学んだ考え方を数字が変わった類題に正しく応用できました。',
+            display_math: `生徒の解答: ${document.getElementById('studentAnswerInput').value}\\n正解: ${currentQuizData.answer}`,
+            watch_out: '',
+            speech_ja: '類題チャレンジ、見事に正解できましたね！素晴らしいです。'
+          }
+        ],
+        final_answer: currentQuizData.answer
+      };
+      saveTutorHistory(data);
+      showStatus('✅ 類題チャレンジの正解記録をマイノートに保存しました！', 'blue');
     }
 
     // アップロード進行バー制御
@@ -1436,9 +1760,24 @@ ${keyPoint}
     }
 
     // =========================================================================
-    // 6. KaTeX 数式レンダリング & 日本語 TTS(Web Speech API) ステップ別ハイライト朗読
+    // 6. KaTeX 数式レンダリング & 不等号(leqq/geqq) 自動修復
     // =========================================================================
+    function sanitizeMathString(rawStr) {
+      if (!rawStr) return '';
+      let s = String(rawStr);
+      // JSONエスケープ脱落で壊れた 1leqqxleqq4 -> 1 \leqq x \leqq 4 の復元
+      s = s.replace(/([0-9a-zA-Z_])(leqq|geqq|leq|geq)([^a-zA-Z])/g, '$1 \\$2 $3');
+      s = s.replace(/([^a-zA-Z0-9_\\])(leqq|geqq|leq|geq)([0-9a-zA-Z_])/g, '$1 \\$2 $3');
+      s = s.replace(/(^|[^\\a-zA-Z])(leqq|geqq)([^a-zA-Z]|$)/g, '$1\\$2$3');
+      s = s.replace(/\\\\([a-zA-Z]+)/g, '\\$1');
+      return s;
+    }
+
     function renderMathIn(el) {
+      if (!el) return;
+      if (typeof el === 'object' && el.textContent) {
+        el.textContent = sanitizeMathString(el.textContent);
+      }
       if (typeof renderMathInElement === 'function') {
         renderMathInElement(el, {
           delimiters: [
@@ -1447,6 +1786,10 @@ ${keyPoint}
             { left: '\\(', right: '\\)', display: false },
             { left: '\\[', right: '\\]', display: true }
           ],
+          macros: {
+            "\\leqq": "\\le",
+            "\\geqq": "\\ge"
+          },
           throwOnError: false
         });
       }
