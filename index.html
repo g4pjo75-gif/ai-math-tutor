@@ -142,33 +142,33 @@
 
   <!-- 2. 上部ナビゲーションバー -->
   <header class="chalkboard-header text-white sticky top-0 z-30 shadow-md">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <span class="text-2xl">👨‍🏫</span>
-        <div>
-          <h1 class="font-bold text-base sm:text-lg leading-tight">高校数学I・A AI家庭教師</h1>
-          <p class="text-[11px] text-emerald-200">チャート式準拠・音声解説付きステップ授業</p>
+    <div class="max-w-3xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-1.5 sm:gap-2">
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <span class="text-xl sm:text-2xl shrink-0">👨‍🏫</span>
+        <div class="min-w-0">
+          <h1 class="font-bold text-sm sm:text-base leading-tight truncate">高校数学I・A AI家庭教師</h1>
+          <p class="text-[10px] sm:text-[11px] text-emerald-200 truncate">チャート式準拠・音声解説付きステップ授業</p>
         </div>
       </div>
 
       <!-- モデル選択ドロップダウン & 設定ボタン -->
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <select id="modelSelect" onchange="onModelDropdownChange()"
-          class="bg-slate-800/90 text-white text-xs rounded-lg px-2.5 py-2 border border-emerald-500/40 focus:outline-none">
+          class="bg-slate-800/90 text-white text-[11px] sm:text-xs rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 border border-emerald-500/40 focus:outline-none max-w-[85px] xs:max-w-[120px] sm:max-w-[180px] truncate">
           <option value="gemini-3-flash-preview" selected>gemini-3-flash-preview (おすすめ・最新)</option>
           <option value="gemini-flash-latest">gemini-flash-latest (標準)</option>
           <option value="gemini-2.0-flash">gemini-2.0-flash (安定版)</option>
           <option value="gemini-1.5-pro">gemini-1.5-pro (高精度)</option>
         </select>
-        <button onclick="openSettings()" class="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-sm" title="API設定・モデル検索">
-          ⚙️ 設定
+        <button onclick="openSettings()" class="bg-white/10 hover:bg-white/20 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1" title="API設定・モデル検索">
+          <span>⚙️</span><span class="inline">設定</span>
         </button>
         <button onclick="toggleDarkMode()" id="darkModeToggle"
-          class="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-sm" title="ダークモード切り替え">
+          class="bg-white/10 hover:bg-white/20 p-1.5 sm:p-2 rounded-lg text-xs sm:text-sm shrink-0" title="ダークモード切り替え">
           🌙
         </button>
         <button onclick="showTutorHistory()" id="noteBtn"
-          class="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-sm" title="マイノート（過去の解説記録）">
+          class="bg-white/10 hover:bg-white/20 p-1.5 sm:p-2 rounded-lg text-xs sm:text-sm shrink-0" title="マイノート（過去の解説記録）">
           📁
         </button>
       </div>
@@ -289,9 +289,15 @@
         <p id="voiceHint" class="hidden w-full text-[11px] text-amber-200 bg-amber-900/40 border border-amber-500/40 rounded-lg px-2.5 py-1.5"></p>
       </div>
 
+      <!-- 複数問題切り替えタブ（小問が2問以上ある場合に表示） -->
+      <div id="problemTabBar" class="hidden flex items-center gap-2 overflow-x-auto pb-1 -mb-1"></div>
+
       <!-- 問題認識 & 重要ポイント -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-2 dark:bg-slate-900 dark:border-slate-800">
-        <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400">📌 認識した問題</div>
+        <div class="flex items-center justify-between">
+          <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400">📌 認識した問題</div>
+          <span id="currentProblemBadge" class="hidden bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 text-xs font-bold px-2.5 py-0.5 rounded-full"></span>
+        </div>
         <div id="recognizedProblem" class="text-sm bg-slate-50 p-3 rounded-xl border border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"></div>
         <div class="pt-2 text-xs font-bold text-amber-700 dark:text-amber-400">💡 この問題の着眼点（どこを見る？）</div>
         <div id="keyPoint" class="text-sm text-slate-700 bg-amber-50/70 p-3 rounded-xl border border-amber-200 dark:bg-amber-900/30 dark:text-slate-200 dark:border-amber-900"></div>
@@ -424,6 +430,8 @@
 
     // グローバル状態
     let currentImageBase64 = null;
+    let currentProblems = [];        // 認識されたすべての問題（小問リスト）
+    let currentProblemIndex = 0;     // 現在表示中の問題インデックス
     let currentSteps = [];
     let isPlayingQueue = false;
     let currentModelId = null;       // 「もっとやさしく」再生成で使う
@@ -586,8 +594,10 @@
       }
 
       const unitHint = document.getElementById('unitSelect').value;
+      const currentProb = currentProblems[currentProblemIndex] || {};
       const data = {
         unitHint: unitHint,
+        problem_label: currentProb.problem_label || '',
         recognized_problem: document.getElementById('recognizedProblem').textContent || '',
         key_point: document.getElementById('keyPoint').textContent || '',
         steps: currentSteps,
@@ -1022,33 +1032,44 @@ ${keyPoint}
     // =========================================================================
     // 5. 日本の高校1年生(数学I・A)チューター プロンプト & [解決策 3, 4] 25秒タイムアウト/自動再試行
     // =========================================================================
-    // Gemini 構造化出力用スキーマ（JSONパース失敗を防ぐ）
+    // Gemini 構造化出力用スキーマ（複数小問・単数小問対応）
     const TUTOR_RESPONSE_SCHEMA = {
       type: 'OBJECT',
       properties: {
-        recognized_problem: { type: 'STRING' },
-        key_point: { type: 'STRING' },
-        steps: {
+        problems: {
           type: 'ARRAY',
           items: {
             type: 'OBJECT',
             properties: {
-              step_number: { type: 'INTEGER' },
-              title: { type: 'STRING' },
-              focus: { type: 'STRING' },
-              why: { type: 'STRING' },
-              display_math: { type: 'STRING' },
-              watch_out: { type: 'STRING' },
-              speech_ja: { type: 'STRING' }
+              problem_label: { type: 'STRING' },
+              recognized_problem: { type: 'STRING' },
+              key_point: { type: 'STRING' },
+              steps: {
+                type: 'ARRAY',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    step_number: { type: 'INTEGER' },
+                    title: { type: 'STRING' },
+                    focus: { type: 'STRING' },
+                    why: { type: 'STRING' },
+                    display_math: { type: 'STRING' },
+                    watch_out: { type: 'STRING' },
+                    speech_ja: { type: 'STRING' }
+                  },
+                  required: ['step_number', 'title', 'display_math', 'speech_ja'],
+                  propertyOrdering: ['step_number', 'title', 'focus', 'why', 'display_math', 'watch_out', 'speech_ja']
+                }
+              },
+              final_answer: { type: 'STRING' }
             },
-            required: ['step_number', 'title', 'display_math', 'speech_ja'],
-            propertyOrdering: ['step_number', 'title', 'focus', 'why', 'display_math', 'watch_out', 'speech_ja']
+            required: ['problem_label', 'recognized_problem', 'key_point', 'steps', 'final_answer'],
+            propertyOrdering: ['problem_label', 'recognized_problem', 'key_point', 'steps', 'final_answer']
           }
-        },
-        final_answer: { type: 'STRING' }
+        }
       },
-      required: ['recognized_problem', 'key_point', 'steps', 'final_answer'],
-      propertyOrdering: ['recognized_problem', 'key_point', 'steps', 'final_answer']
+      required: ['problems'],
+      propertyOrdering: ['problems']
     };
 
     const SIMPLIFY_RESPONSE_SCHEMA = {
@@ -1071,6 +1092,11 @@ ${keyPoint}
 だから、答えや式だけを並べるのではなく、先生が黒板の前で話すように「どこを見るか → なぜその道具を使うか → どう解くか」の順で説明してください。
 
 単元ヒント: ${unitHint}
+
+【複数問題（小問）の全問認識ルール（最重要・厳守）】
+添付画像の中に (1), (2), (3) や 1, 2 などの複数の問題（小問）が含まれている場合、絶対に1つだけを勝手に選んで省略しないでください。
+画像内のすべての問題を左から右、上から下の順番で漏れなくすべて認識し、それぞれの問題ごとに完全なステップ解説を作成してください。
+（画像内に問題が1問のみの場合でも、problems配列に要素1つの配列として出力してください）
 
 【授業の設計ルール】
 1. まず問題の「形」を見ます。何が問われているか、どの条件が隠れているかを最初に確認します。
@@ -1118,66 +1144,76 @@ ${keyPoint}
 【出力形式】
 必ず次のJSON形式のみを出力してください（マークダウンのコードブロックは不要）。
 {
-  "recognized_problem": "認識した問題文（数式は $...$ または $$...$$）",
-  "key_point": "この問題の着眼点。どこを見て、何を使うか（1〜2文、LaTeX可）",
-  "steps": [
+  "problems": [
     {
-      "step_number": 1,
-      "title": "短い見出し（例：平方完成をして頂点を求める）",
-      "focus": "このステップで問題のどこに注目するか（1文）",
-      "why": "なぜこの道具・方針を使うのか（1〜2文）",
-      "display_math": "黒板に書く解説と途中式（数式は必ず $...$ または $$...$$）",
-      "watch_out": "ここでつまずきやすい点（なければ空文字）",
-      "speech_ja": "音声で読み上げる台本。LaTeX禁止。100〜180文字"
+      "problem_label": "(1)",
+      "recognized_problem": "認識した問題文（数式は $...$ または $$...$$）",
+      "key_point": "この問題の着眼点。どこを見て、何を使うか（1〜2文、LaTeX可）",
+      "steps": [
+        {
+          "step_number": 1,
+          "title": "短い見出し（例：平方完成をして頂点を求める）",
+          "focus": "このステップで問題のどこに注目するか（1文）",
+          "why": "なぜこの道具・方針を使うのか（1〜2文）",
+          "display_math": "黒板に書く解説と途中式（数式は必ず $...$ または $$...$$）",
+          "watch_out": "ここでつまずきやすい点（なければ空文字）",
+          "speech_ja": "音声で読み上げる台本。LaTeX禁止。100〜180文字"
+        }
+      ],
+      "final_answer": "最終的な答え（$$...$$ で明確に）"
     }
-  ],
-  "final_answer": "最終的な答え（$$...$$ で明確に）"
+  ]
 }
 
 【良い出力の例（因数分解）】
 生徒の問題：2x^2 + 5x - 3 を因数分解する
 {
-  "recognized_problem": "$2x^2+5x-3$ を因数分解する。",
-  "key_point": "最高次の係数が2なので、公式ではなく「たすき掛け」を使います。かけて $2\\times(-3)=-6$、たして $5$ になる2数を探すのがコツです。",
-  "steps": [
+  "problems": [
     {
-      "step_number": 1,
-      "title": "方針を決める",
-      "focus": "最高次の係数が1ではなく2であることに注目します。",
-      "why": "係数が1なら「かけて-3、たして5」で済みますが、今回は2があるので、両端の数を掛けた-6を使うたすき掛けが必要です。",
-      "display_math": "共通因数はありません。\\n最高次の係数が $2$ なので、たすき掛けで考えます。",
-      "watch_out": "いきなり「かけて-3」と決めつけると失敗します。",
-      "speech_ja": "まず、共通因数があるか見てみましょう。ありませんね。次に、エックスの2乗の係数が2であることに注目します。1ではないので、たすき掛けを使います。"
-    },
-    {
-      "step_number": 2,
-      "title": "たすき掛けの2数を見つける",
-      "focus": "$2\\times(-3)=-6$ と、$x$ の係数 $5$ の組み合わせを探します。",
-      "why": "かけて-6、たして5になる2数は6と-1です。これを使うと、真ん中の5xを6xと-xに分けられます。",
-      "display_math": "$2\\times(-3)=-6$、和が $5$ より\\n$6$ と $-1$\\n$2x^2+5x-3=2x^2+6x-x-3$",
-      "watch_out": "6と-1の符号を逆にしないこと。和が+5になるか必ず確認します。",
-      "speech_ja": "かけてマイナス6、たして5になる数を探します。6とマイナス1ですね。これで、真ん中の5エックスを、6エックスとマイナス1エックスに分けられます。ここで一度、自分で確かめてみましょう。"
-    },
-    {
-      "step_number": 3,
-      "title": "共通因数でくくる",
-      "focus": "前の2項と後ろの2項を、それぞれペアで見ます。",
-      "why": "2xでくくると(x+3)が出て、後ろも-1でくくると(x+3)が出ます。同じカッコが出たら成功の合図です。",
-      "display_math": "$2x(x+3)-(x+3)$\\n$=(x+3)(2x-1)$",
-      "watch_out": "後ろを-(x+3)とするとき、-1でくくることを忘れないようにします。",
-      "speech_ja": "前の2つを2エックスでくくると、エックスプラス3が出ます。後ろの2つをマイナス1でくくると、同じエックスプラス3が出ます。同じカッコが出たら、まとめられます。"
-    },
-    {
-      "step_number": 4,
-      "title": "検算する",
-      "focus": "答えを展開して、元の式に戻るか確認します。",
-      "why": "因数分解は展開の逆なので、展開して元に戻れば安心です。",
-      "display_math": "$(x+3)(2x-1)=2x^2-x+6x-3=2x^2+5x-3$",
-      "watch_out": "符号のミスは展開のときに見つかることが多いです。",
-      "speech_ja": "最後に検算しましょう。エックスプラス3と2エックスマイナス1を展開すると、2エックスの2乗プラス5エックスマイナス3に戻ります。正解です。"
+      "problem_label": "(1)",
+      "recognized_problem": "$2x^2+5x-3$ を因数分解する。",
+      "key_point": "最高次の係数が2なので、公式ではなく「たすき掛け」を使います。かけて $2\\times(-3)=-6$、たして $5$ になる2数を探すのがコツです。",
+      "steps": [
+        {
+          "step_number": 1,
+          "title": "方針を決める",
+          "focus": "最高次の係数が1ではなく2であることに注目します。",
+          "why": "係数が1なら「かけて-3、たして5」で済みますが、今回は2があるので、両端の数を掛けた-6を使うたすき掛けが必要です。",
+          "display_math": "共通因数はありません。\\n最高次の係数が $2$ なので、たすき掛けで考えます。",
+          "watch_out": "いきなり「かけて-3」と決めつけると失敗します。",
+          "speech_ja": "まず、共通因数があるか見てみましょう。ありませんね。次に、エックスの2乗の係数が2であることに注目します。1ではないので、たすき掛けを使います。"
+        },
+        {
+          "step_number": 2,
+          "title": "たすき掛けの2数を見つける",
+          "focus": "$2\\times(-3)=-6$ と、$x$ の係数 $5$ の組み合わせを探します。",
+          "why": "かけて-6、たして5になる2数は6と-1です。これを使うと、真ん中の5xを6xと-xに分けられます。",
+          "display_math": "$2\\times(-3)=-6$、和が $5$ より\\n$6$ と $-1$\\n$2x^2+5x-3=2x^2+6x-x-3$",
+          "watch_out": "6と-1の符号を逆にしないこと。和が+5になるか必ず確認します。",
+          "speech_ja": "かけてマイナス6、たして5になる数を探します。6とマイナス1ですね。これで、真ん中の5エックスを、6エックスとマイナス1エックスに分けられます。ここで一度、自分で確かめてみましょう。"
+        },
+        {
+          "step_number": 3,
+          "title": "共通因数でくくる",
+          "focus": "前の2項と後ろの2項を、それぞれペアで見ます。",
+          "why": "2xでくくると(x+3)が出て、後ろも-1でくくると(x+3)が出ます。同じカッコが出たら成功の合図です。",
+          "display_math": "$2x(x+3)-(x+3)$\\n$=(x+3)(2x-1)$",
+          "watch_out": "後ろを-(x+3)とするとき、-1でくくることを忘れないようにします。",
+          "speech_ja": "前の2つを2エックスでくくると、エックスプラス3が出ます。後ろの2つをマイナス1でくくると、同じエックスプラス3が出ます。同じカッコが出たら、まとめられます。"
+        },
+        {
+          "step_number": 4,
+          "title": "検算する",
+          "focus": "答えを展開して、元の式に戻るか確認します。",
+          "why": "因数分解は展開の逆なので、展開して元に戻れば安心です。",
+          "display_math": "$(x+3)(2x-1)=2x^2-x+6x-3=2x^2+5x-3$",
+          "watch_out": "符号のミスは展開のときに見つかることが多いです。",
+          "speech_ja": "最後に検算しましょう。エックスプラス3と2エックスマイナス1を展開すると、2エックスの2乗プラス5エックスマイナス3に戻ります。正解です。"
+        }
+      ],
+      "final_answer": "$(x+3)(2x-1)$"
     }
-  ],
-  "final_answer": "$(x+3)(2x-1)$"
+  ]
 }
 
 この例のように、「どこを見るか」「なぜその道具か」「つまずきポイント」「やさしい音声台本」を毎回そろえてください。
@@ -1198,11 +1234,23 @@ ${keyPoint}
     function parseTutorJson(rawText) {
       const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
       const firstBrace = cleaned.indexOf('{');
-      const lastBrace = cleaned.lastIndexOf('}');
-      if (firstBrace === -1 || lastBrace === -1) {
+      const firstBracket = cleaned.indexOf('[');
+
+      let startIdx = -1;
+      let endIdx = -1;
+
+      if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+        startIdx = firstBrace;
+        endIdx = cleaned.lastIndexOf('}');
+      } else if (firstBracket !== -1) {
+        startIdx = firstBracket;
+        endIdx = cleaned.lastIndexOf(']');
+      }
+
+      if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
         throw new Error('AIの応答からJSONデータを抽出できませんでした。');
       }
-      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+      return JSON.parse(cleaned.slice(startIdx, endIdx + 1));
     }
 
     async function callGeminiModel(modelId, apiKey, promptText, imageBase64, options = {}) {
@@ -1381,29 +1429,117 @@ ${keyPoint}
       }
     }
 
-    function renderTutorResult(data) {
-      showSectionWithFade('resultSection');
+    function normalizeTutorResult(data) {
+      if (!data) return [];
+      // 1. data.problems 配列の場合
+      if (Array.isArray(data.problems) && data.problems.length > 0) {
+        return data.problems.map((p, i) => ({
+          problem_label: p.problem_label || `問題 (${i + 1})`,
+          recognized_problem: p.recognized_problem || '',
+          key_point: p.key_point || '',
+          steps: Array.isArray(p.steps) ? p.steps : [],
+          final_answer: p.final_answer || ''
+        }));
+      }
+      // 2. data 自体が配列の場合
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((p, i) => ({
+          problem_label: p.problem_label || `問題 (${i + 1})`,
+          recognized_problem: p.recognized_problem || '',
+          key_point: p.key_point || '',
+          steps: Array.isArray(p.steps) ? p.steps : [],
+          final_answer: p.final_answer || ''
+        }));
+      }
+      // 3. 単一オブジェクト（下位互換）
+      if (data.recognized_problem || data.steps) {
+        return [{
+          problem_label: data.problem_label || '問題 (1)',
+          recognized_problem: data.recognized_problem || '',
+          key_point: data.key_point || '',
+          steps: Array.isArray(data.steps) ? data.steps : [],
+          final_answer: data.final_answer || ''
+        }];
+      }
+      return [];
+    }
+
+    function renderProblemTabs() {
+      const tabBar = document.getElementById('problemTabBar');
+      if (!tabBar) return;
+
+      if (!currentProblems || currentProblems.length <= 1) {
+        tabBar.classList.add('hidden');
+        tabBar.innerHTML = '';
+        const badge = document.getElementById('currentProblemBadge');
+        if (badge) badge.classList.add('hidden');
+        return;
+      }
+
+      tabBar.classList.remove('hidden');
+      tabBar.innerHTML = '';
+
+      currentProblems.forEach((prob, idx) => {
+        const label = prob.problem_label || `問題 (${idx + 1})`;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = `problem-tab-${idx}`;
+        btn.onclick = () => switchProblemTab(idx);
+
+        const isActive = idx === currentProblemIndex;
+        btn.className = isActive
+          ? 'bg-emerald-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm shadow flex items-center gap-1.5 shrink-0 transition'
+          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 shrink-0 transition';
+
+        btn.innerHTML = `<span>📖</span> <span>${escapeHtml(label)} を表示</span>`;
+        tabBar.appendChild(btn);
+      });
+    }
+
+    function switchProblemTab(index) {
+      if (index < 0 || index >= currentProblems.length) return;
+      stopSpeech();
+      currentProblemIndex = index;
+      renderProblemTabs();
+      displayCurrentProblem(true);
+    }
+
+    function displayCurrentProblem(autoPlay = true) {
+      const prob = currentProblems[currentProblemIndex];
+      if (!prob) return;
+
+      currentSteps = Array.isArray(prob.steps) ? prob.steps : [];
+      currentProblemText = prob.recognized_problem || '';
+
+      const badge = document.getElementById('currentProblemBadge');
+      if (badge) {
+        if (currentProblems.length > 1) {
+          badge.textContent = prob.problem_label || `問題 (${currentProblemIndex + 1})`;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
 
       const probEl = document.getElementById('recognizedProblem');
-      probEl.textContent = data.recognized_problem || '';
+      probEl.textContent = prob.recognized_problem || '';
       renderMathIn(probEl);
 
       const keyEl = document.getElementById('keyPoint');
-      keyEl.textContent = data.key_point || '';
+      keyEl.textContent = prob.key_point || '';
       renderMathIn(keyEl);
 
-      currentSteps = Array.isArray(data.steps) ? data.steps : [];
       renderStepCards();
 
       const finalEl = document.getElementById('finalAnswer');
-      finalEl.textContent = data.final_answer || '';
+      finalEl.textContent = prob.final_answer || '';
       renderMathIn(finalEl);
 
-      document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-      // 解説完了後 1ステップから自動で授業開始
-      if (currentSteps.length > 0) {
-        setTimeout(() => playAllSteps(), 600);
+      // 類題ボタン表示テキスト更新
+      const similarBtnText = document.getElementById('similarProblemBtnText');
+      if (similarBtnText) {
+        const label = prob.problem_label ? `${prob.problem_label} の` : '';
+        similarBtnText.textContent = `🔄 ${label}数字を変えた類題を解く`;
       }
 
       // ノート保存ボタン状態リセット
@@ -1417,13 +1553,28 @@ ${keyPoint}
         saveBtn.classList.replace('dark:text-emerald-400', 'dark:text-slate-200');
       }
 
+      if (autoPlay && currentSteps.length > 0) {
+        setTimeout(() => playAllSteps(), 600);
+      }
+    }
+
+    function renderTutorResult(data) {
+      showSectionWithFade('resultSection');
+
+      currentProblems = normalizeTutorResult(data);
+      currentProblemIndex = 0;
+
+      renderProblemTabs();
+      displayCurrentProblem(true);
+
+      document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
       // 類題ボタン状態リセット
       const similarBtn = document.getElementById('similarProblemBtn');
       const similarBtnText = document.getElementById('similarProblemBtnText');
       const similarBtnSpinner = document.getElementById('similarProblemBtnSpinner');
       if (similarBtn) {
         similarBtn.disabled = false;
-        if (similarBtnText) similarBtnText.classList.remove('hidden');
         if (similarBtnSpinner) similarBtnSpinner.classList.add('hidden');
       }
     }
