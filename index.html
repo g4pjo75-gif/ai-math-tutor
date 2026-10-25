@@ -283,6 +283,9 @@
             <option value="1.15">1.15x (少し速め)</option>
           </select>
         </div>
+        <p class="w-full text-[11px] text-slate-300 dark:text-slate-400">
+          💡 iPhoneで声が聞こえない時は、本体横の<strong>消音スイッチ（マナーモード）</strong>を解除し、音量を上げてください。
+        </p>
         <p id="voiceHint" class="hidden w-full text-[11px] text-amber-200 bg-amber-900/40 border border-amber-500/40 rounded-lg px-2.5 py-1.5"></p>
       </div>
 
@@ -1270,6 +1273,7 @@ ${keyPoint}
     }
 
     async function solveProblem(overrideModelId = null) {
+      unlockAudioForIOS();
       stopSpeech();
       const geminiKey = safeStorage.getItem('gemini_api_key');
       const customModel = safeStorage.getItem('custom_model_id');
@@ -1612,6 +1616,22 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 
     // ===== 音声（Web Speech API / 端末内蔵音声）=====
     let speechToken = 0;
+    let isSpeechUnlocked = false;
+
+    // iOS Safari Web Speech API アンロック（ユーザーの最初の操作時に無音を再生して制限解除）
+    function unlockAudioForIOS() {
+      if (isSpeechUnlocked || !('speechSynthesis' in window)) return;
+      try {
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0.01;
+        u.rate = 2.0;
+        window.speechSynthesis.speak(u);
+        window.speechSynthesis.resume();
+        isSpeechUnlocked = true;
+      } catch (e) {}
+    }
+    window.addEventListener('touchstart', unlockAudioForIOS, { once: true, passive: true });
+    window.addEventListener('click', unlockAudioForIOS, { once: true });
 
     function initVoiceSelect() {
       if (!('speechSynthesis' in window)) {
@@ -1675,6 +1695,15 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         const found = voices.find(v => v.voiceURI === saved || v.name === saved);
         if (found) return found;
       }
+
+      // iOS Safari ではユーザーが手動選択していない場合、voice を明示指定せず
+      // lang='ja-JP' に任せる方がシステム標準音声（Kyoko 等）で確実に再生される
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS && !saved) {
+        return null;
+      }
+
       const jaVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('ja'));
       if (!jaVoices.length) return null;
 
@@ -1685,6 +1714,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
     }
 
     function testVoice() {
+      unlockAudioForIOS();
       speakJapanese('こんにちは。今日も一緒に、数学をがんばりましょう。');
     }
 
@@ -1739,7 +1769,10 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       }
 
       const token = ++speechToken;
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+      } catch (e) {}
 
       const chunks = splitSpeech(text);
       if (!chunks.length) {
@@ -1762,7 +1795,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         const utter = new SpeechSynthesisUtterance(chunk.text);
         utter.lang = 'ja-JP';
         utter.rate = rate;
-        utter.pitch = 1.02;
+        utter.pitch = 1.0;
         if (voice) utter.voice = voice;
 
         let finished = false;
@@ -1773,11 +1806,21 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           setTimeout(speakNext, chunk.pauseMs);
         };
         utter.onend = finish;
-        utter.onerror = finish;
-        window.speechSynthesis.speak(utter);
+        utter.onerror = (e) => {
+          console.warn('Speech error:', e);
+          finish();
+        };
+
+        try {
+          window.speechSynthesis.resume();
+          window.speechSynthesis.speak(utter);
+        } catch (err) {
+          finish();
+        }
       };
 
-      setTimeout(speakNext, 100);
+      // 最初の発声は即時呼び出し（iOSのユーザー操作コンテキストを維持）
+      speakNext();
     }
 
         function playSingleStep(idx) {
