@@ -2,6 +2,9 @@
 <html lang="ja" class="light">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>AI 数学I・A チューター | 見て聞いてわかる黒板授業</title>
   
@@ -146,7 +149,10 @@
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
         <span class="text-xl sm:text-2xl shrink-0">👨‍🏫</span>
         <div class="min-w-0">
-          <h1 class="font-bold text-sm sm:text-base leading-tight truncate">高校数学I・A AI家庭教師</h1>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-bold text-sm sm:text-base leading-tight truncate">高校数学I・A AI家庭教師</h1>
+            <span class="bg-emerald-700/80 text-[10px] px-1.5 py-0.2 rounded text-emerald-100 font-mono shrink-0">v1.3</span>
+          </div>
           <p class="text-[10px] sm:text-[11px] text-emerald-200 truncate">チャート式準拠・音声解説付きステップ授業</p>
         </div>
       </div>
@@ -1321,7 +1327,6 @@ ${keyPoint}
     }
 
     async function solveProblem(overrideModelId = null) {
-      unlockAudioForIOS();
       stopSpeech();
       const geminiKey = safeStorage.getItem('gemini_api_key');
       const customModel = safeStorage.getItem('custom_model_id');
@@ -1765,99 +1770,55 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       });
     }
 
-    // ===== 音声（Web Speech API / 端末内蔵音声）=====
+    // ===== 音声（Web Speech API & クラウド高音質 Audio ハイブリッド再生）=====
     let speechToken = 0;
-    let isSpeechUnlocked = false;
-
-    // iOS Safari Web Speech API アンロック（ユーザーの最初の操作時に無音を再生して制限解除）
-    function unlockAudioForIOS() {
-      if (isSpeechUnlocked || !('speechSynthesis' in window)) return;
-      try {
-        const u = new SpeechSynthesisUtterance(' ');
-        u.volume = 0.01;
-        u.rate = 2.0;
-        window.speechSynthesis.speak(u);
-        window.speechSynthesis.resume();
-        isSpeechUnlocked = true;
-      } catch (e) {}
-    }
-    window.addEventListener('touchstart', unlockAudioForIOS, { once: true, passive: true });
-    window.addEventListener('click', unlockAudioForIOS, { once: true });
+    let currentAudioEl = null;
 
     function initVoiceSelect() {
-      if (!('speechSynthesis' in window)) {
-        showVoiceHint('⚠️ このブラウザは音声読み上げに対応していません。', true);
-        return;
-      }
       populateVoiceSelect();
-      window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
-      [300, 1000, 2500, 5000].forEach(ms => setTimeout(populateVoiceSelect, ms));
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
+        [300, 1000, 2500, 5000].forEach(ms => setTimeout(populateVoiceSelect, ms));
+      }
     }
 
     function populateVoiceSelect() {
       const sel = document.getElementById('voiceSelect');
       if (!sel) return;
 
-      const voices = window.speechSynthesis.getVoices();
+      const voices = ('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : [];
       const jaVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('ja'));
 
-      if (voices.length > 0) {
-        sel.innerHTML = '<option value="">自動（おすすめ）</option>' + jaVoices.map(v =>
+      let optionsHtml = '<option value="cloud:google" selected>☁️ 高音質クラウド音声（iOS推奨）</option>';
+      if (jaVoices.length > 0) {
+        optionsHtml += '<optgroup label="端末内蔵音声 (Web Speech)">' + jaVoices.map(v =>
           `<option value="${escapeHtml(v.voiceURI)}">${escapeHtml(v.name)}（${escapeHtml(v.lang || '')}）</option>`
-        ).join('');
-        const saved = safeStorage.getItem('preferred_voice_uri') || '';
-        if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
+        ).join('') + '</optgroup>';
       }
 
-      const hint = document.getElementById('voiceHint');
-      if (hint) {
-        if (!jaVoices.length) {
-          hint.textContent = '⚠️ この端末に日本語の音声が見つかりません。OSの音声設定で日本語音声を追加してください。';
-          hint.classList.remove('hidden');
-        } else {
-          hint.classList.add('hidden');
-        }
-      }
-    }
-
-    function showVoiceHint(message, show) {
-      const hint = document.getElementById('voiceHint');
-      if (hint) {
-        hint.textContent = message || '';
-        hint.classList.toggle('hidden', !show || !message);
+      sel.innerHTML = optionsHtml;
+      const saved = safeStorage.getItem('preferred_voice_uri') || 'cloud:google';
+      if ([...sel.options].some(o => o.value === saved)) {
+        sel.value = saved;
       }
     }
 
     function onVoiceChange() {
-      safeStorage.setItem('preferred_voice_uri', document.getElementById('voiceSelect').value);
+      const val = document.getElementById('voiceSelect').value;
+      safeStorage.setItem('preferred_voice_uri', val);
       testVoice();
     }
 
-    // 音声選択優先順位：
-    // 1. Microsoft Natural / Online 系（Nanami, Keita 等「Natural」「Online」含む）
-    // 2. Apple 高品質音声（Kyoko, Otoya, Hattori 等）
-    // 3. Google 日本語音声
-    // 4. その他 ja-JP 音声
     function getSelectedVoice() {
       if (!('speechSynthesis' in window)) return null;
       const voices = window.speechSynthesis.getVoices();
       const saved = safeStorage.getItem('preferred_voice_uri');
-      if (saved) {
+      if (saved && !saved.startsWith('cloud:')) {
         const found = voices.find(v => v.voiceURI === saved || v.name === saved);
         if (found) return found;
       }
-
-      // iOS Safari ではユーザーが手動選択していない場合、voice を明示指定せず
-      // lang='ja-JP' に任せる方がシステム標準音声（Kyoko 等）で確実に再生される
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS && !saved) {
-        return null;
-      }
-
       const jaVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('ja'));
       if (!jaVoices.length) return null;
-
       return jaVoices.find(v => /natural|online/i.test(v.name)) ||
         jaVoices.find(v => /kyoko|otoya|hattori/i.test(v.name)) ||
         jaVoices.find(v => /google/i.test(v.name)) ||
@@ -1865,7 +1826,6 @@ ${step.why ? `【今の意図】${step.why}` : ''}
     }
 
     function testVoice() {
-      unlockAudioForIOS();
       speakJapanese('こんにちは。今日も一緒に、数学をがんばりましょう。');
     }
 
@@ -1898,32 +1858,25 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       const chunks = [];
       for (const s of sentences) {
         let remaining = s;
-        while (remaining.length > 100) {
-          let cut = remaining.lastIndexOf('、', 80);
-          if (cut < 30) cut = 80;
-          chunks.push({ text: remaining.slice(0, cut + 1).trim(), pauseMs: 180 });
+        while (remaining.length > 70) {
+          let cut = remaining.lastIndexOf('、', 60);
+          if (cut < 20) cut = 60;
+          chunks.push({ text: remaining.slice(0, cut + 1).trim(), pauseMs: 150 });
           remaining = remaining.slice(cut + 1).trim();
         }
         if (remaining) {
           const isQuestion = /[？?]$/.test(remaining);
-          chunks.push({ text: remaining, pauseMs: isQuestion ? 600 : 180 });
+          chunks.push({ text: remaining, pauseMs: isQuestion ? 450 : 150 });
         }
       }
 
       return chunks;
     }
 
+    // メイン音声読み上げ関数（クラウド高音質 Audio 優先 ＆ Web Speech API フォールバック）
     function speakJapanese(text, onEndCallback) {
-      if (!('speechSynthesis' in window)) {
-        if (onEndCallback) onEndCallback();
-        return;
-      }
-
       const token = ++speechToken;
-      try {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.resume();
-      } catch (e) {}
+      stopSpeechAudioOnly();
 
       const chunks = splitSpeech(text);
       if (!chunks.length) {
@@ -1931,18 +1884,93 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         return;
       }
 
-      const rate = parseFloat(document.getElementById('speechRate')?.value || '0.95');
-      const voice = getSelectedVoice();
-      let i = 0;
+      const voiceSetting = safeStorage.getItem('preferred_voice_uri') || 'cloud:google';
+      const useCloud = voiceSetting.startsWith('cloud:') || !('speechSynthesis' in window);
 
-      const speakNext = () => {
+      if (useCloud) {
+        playCloudTtsQueue(chunks, token, onEndCallback);
+      } else {
+        playWebSpeechQueue(chunks, token, onEndCallback);
+      }
+    }
+
+    function stopSpeechAudioOnly() {
+      if (currentAudioEl) {
+        try {
+          currentAudioEl.pause();
+          currentAudioEl.currentTime = 0;
+          currentAudioEl.src = '';
+        } catch (e) {}
+        currentAudioEl = null;
+      }
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.resume();
+        } catch (e) {}
+      }
+    }
+
+    // 1. クラウド高音質 Audio 再生（iOS 消音モード貫通・安定性最高）
+    function playCloudTtsQueue(chunks, token, onEndCallback) {
+      let idx = 0;
+
+      const playNextChunk = () => {
         if (token !== speechToken) return;
-        if (i >= chunks.length) {
+        if (idx >= chunks.length) {
           if (onEndCallback) onEndCallback();
           return;
         }
 
-        const chunk = chunks[i++];
+        const chunk = chunks[idx++];
+        const encoded = encodeURIComponent(chunk.text);
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=ja&client=tw-ob&q=${encoded}`;
+
+        const audio = new Audio();
+        audio.preload = 'auto';
+        currentAudioEl = audio;
+
+        let finished = false;
+        const next = () => {
+          if (finished) return;
+          finished = true;
+          if (token !== speechToken) return;
+          setTimeout(playNextChunk, chunk.pauseMs || 150);
+        };
+
+        audio.onended = next;
+        audio.onerror = (e) => {
+          console.warn('Cloud TTS error, trying WebSpeech for chunk:', e);
+          playSingleWebSpeechChunk(chunk.text, next);
+        };
+
+        audio.src = url;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            console.warn('Audio play rejected (autoplay block?), trying WebSpeech:', err);
+            playSingleWebSpeechChunk(chunk.text, next);
+          });
+        }
+      };
+
+      playNextChunk();
+    }
+
+    // 2. 端末内蔵 Web Speech API 再生
+    function playWebSpeechQueue(chunks, token, onEndCallback) {
+      const rate = parseFloat(document.getElementById('speechRate')?.value || '0.95');
+      const voice = getSelectedVoice();
+      let idx = 0;
+
+      const speakNextChunk = () => {
+        if (token !== speechToken) return;
+        if (idx >= chunks.length) {
+          if (onEndCallback) onEndCallback();
+          return;
+        }
+
+        const chunk = chunks[idx++];
         const utter = new SpeechSynthesisUtterance(chunk.text);
         utter.lang = 'ja-JP';
         utter.rate = rate;
@@ -1954,11 +1982,12 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           if (finished) return;
           finished = true;
           if (token !== speechToken) return;
-          setTimeout(speakNext, chunk.pauseMs);
+          setTimeout(speakNextChunk, chunk.pauseMs);
         };
+
         utter.onend = finish;
         utter.onerror = (e) => {
-          console.warn('Speech error:', e);
+          console.warn('WebSpeech error:', e);
           finish();
         };
 
@@ -1970,11 +1999,27 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         }
       };
 
-      // 最初の発声は即時呼び出し（iOSのユーザー操作コンテキストを維持）
-      speakNext();
+      speakNextChunk();
     }
 
-        function playSingleStep(idx) {
+    function playSingleWebSpeechChunk(text, onEnd) {
+      if (!('speechSynthesis' in window)) {
+        if (onEnd) onEnd();
+        return;
+      }
+      try {
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ja-JP';
+        utter.rate = 0.95;
+        utter.onend = onEnd;
+        utter.onerror = onEnd;
+        window.speechSynthesis.speak(utter);
+      } catch (e) {
+        if (onEnd) onEnd();
+      }
+    }
+
+    function playSingleStep(idx) {
       isPlayingQueue = false;
       const step = currentSteps[idx];
       if (!step) return;
@@ -1995,7 +2040,6 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           return;
         }
         highlightStepCard(i);
-        // 「ステップ1。」のような機械的な前置きはしない（先生の話し言葉のまま）
         const lead = i === startIndex && startIndex === 0 ? 'では、一緒に見ていきましょう。' : '';
         speakJapanese(`${lead}${currentSteps[i].speech_ja || ''}`, () => next(i + 1));
       }
@@ -2005,7 +2049,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
     function stopSpeech() {
       isPlayingQueue = false;
       speechToken++;
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      stopSpeechAudioOnly();
       highlightStepCard(-1);
     }
 
