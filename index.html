@@ -1,0 +1,1882 @@
+<!DOCTYPE html>
+<html lang="ja" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>AI 数学I・A チューター | 見て聞いてわかる黒板授業</title>
+  
+  <!-- PWA & iOS Safari Home Screen Meta -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="AI数学" />
+  <meta name="theme-color" content="#1e3a2f" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <!-- Tailwind CSS (dark mode: class) -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            chalk: {
+              dark: '#142820',
+              mid: '#1e3a2f',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- KaTeX for Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <style>
+    :root {
+      --safe-area-inset-top: 0px;
+      --safe-area-inset-bottom: 0px;
+      --safe-area-inset-left: 0px;
+      --safe-area-inset-right: 0px;
+    }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo', 'Noto Sans JP', sans-serif;
+      font-feature-settings: 'palt' 1;
+      background-color: #f1f5f9;
+      scroll-behavior: smooth;
+      overscroll-behavior: contain;
+    }
+    .step-card {
+      transition: all 0.25s ease;
+      border-left: 5px solid transparent;
+      opacity: 0;
+      transform: translateY(8px);
+      animation: stepFadeIn 0.35s ease forwards;
+    }
+    .step-card:nth-child(1) { animation-delay: 60ms; }
+    .step-card:nth-child(2) { animation-delay: 140ms; }
+    .step-card:nth-child(3) { animation-delay: 220ms; }
+    .step-card:nth-child(4) { animation-delay: 300ms; }
+    .step-card:nth-child(5) { animation-delay: 380ms; }
+    .step-card:nth-child(6) { animation-delay: 460ms; }
+    .step-active {
+      border-left-color: #2563eb;
+      background-color: #eff6ff !important;
+      box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.15);
+      transform: scale(1.01);
+    }
+    .chalkboard-header { background: linear-gradient(135deg, #1e3a2f 0%, #142820 100%); }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.5rem 0; }
+
+    /* ダークモード色のオーバーライド */
+    .dark body { background-color: #0f172a; color: #f1f5f9; }
+    .dark .step-active { background-color: #0f172a !important; }
+    .dark .katex-display { }
+
+    @keyframes stepFadeIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* アップロード進捗バー */
+    .upload-progress-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: #e2e8f0;
+      overflow: hidden;
+      transition: height 0.2s ease, opacity 0.2s ease;
+    }
+    .upload-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #34d399);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .dark .upload-progress-bar { background: #334155; }
+
+    /* セクションフェードイン/アウト */
+    .section-fade {
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    .section-fade.hidden-section {
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+    }
+
+    /* セイフエリア（iOSノッチ/ホームインジケーター） */
+    .pb-safe { padding-bottom: calc(24px + var(--safe-area-inset-bottom)); }
+    .pt-safe { padding-top: calc(1rem + var(--safe-area-inset-top)); }
+
+    /* マイノートモーダルアニメーション */
+    #tutorHistoryModal > div {
+      animation: modalSlideUp 0.3s ease-out;
+    }
+
+    @keyframes modalSlideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 dark:text-slate-200 pb-safe">
+
+  <!-- 1. 初期 PIN ログインモーダル (初期パスワード: 1234) -->
+  <div id="pinModal" class="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
+      <div class="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold">📐</div>
+      <h2 class="text-xl font-bold text-slate-800 mb-1">AI 数学チューター ロック解除</h2>
+      <p class="text-xs text-slate-500 mb-4">4桁のPINコードを入力してください（初期値: 1234）</p>
+      <input id="pinInput" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
+        class="w-full text-center text-2xl tracking-widest font-bold border-2 border-slate-300 rounded-xl py-3 mb-3 focus:outline-none focus:border-emerald-600"
+        onkeydown="if(event.key==='Enter') unlockApp()" />
+      <p id="pinError" class="text-xs text-red-600 mb-3 hidden">PINコードが正しくありません。</p>
+      <button onclick="unlockApp()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 rounded-xl transition">
+        ロック解除して始める
+      </button>
+    </div>
+  </div>
+
+  <!-- 2. 上部ナビゲーションバー -->
+  <header class="chalkboard-header text-white sticky top-0 z-30 shadow-md">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">👨‍🏫</span>
+        <div>
+          <h1 class="font-bold text-base sm:text-lg leading-tight">高校数学I・A AI家庭教師</h1>
+          <p class="text-[11px] text-emerald-200">チャート式準拠・音声解説付きステップ授業</p>
+        </div>
+      </div>
+
+      <!-- モデル選択ドロップダウン & 設定ボタン -->
+      <div class="flex items-center gap-2">
+        <select id="modelSelect" onchange="onModelDropdownChange()"
+          class="bg-slate-800/90 text-white text-xs rounded-lg px-2.5 py-2 border border-emerald-500/40 focus:outline-none">
+          <option value="gemini-3-flash-preview" selected>gemini-3-flash-preview (おすすめ・最新)</option>
+          <option value="gemini-flash-latest">gemini-flash-latest (標準)</option>
+          <option value="gemini-2.0-flash">gemini-2.0-flash (安定版)</option>
+          <option value="gemini-1.5-pro">gemini-1.5-pro (高精度)</option>
+        </select>
+        <button onclick="openSettings()" class="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-sm" title="API設定・モデル検索">
+          ⚙️ 設定
+        </button>
+        <button onclick="toggleDarkMode()" id="darkModeToggle"
+          class="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-sm" title="ダークモード切り替え">
+          🌙
+        </button>
+        <button onclick="showTutorHistory()" id="noteBtn"
+          class="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-sm" title="マイノート（過去の解説記録）">
+          📁
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3. メインコンテナ -->
+  <main class="max-w-3xl mx-auto px-4 pt-5 space-y-5 bg-slate-50 dark:bg-slate-950 min-h-[calc(100vh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom))]">
+
+    <!-- APIキー未設定アナウンスバナー -->
+    <div id="apiWarningBanner" class="bg-amber-50 border border-amber-300 rounded-xl p-3.5 flex items-center justify-between gap-3 hidden">
+      <div class="text-xs text-amber-900">
+        <strong>🔑 APIキーが未設定です：</strong> 右上の「⚙️ 設定」からGemini APIキーを登録し、「利用可能なモデルを自動取得」を押してください。
+      </div>
+      <button onclick="openSettings()" class="shrink-0 bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">設定を開く</button>
+    </div>
+
+    <!-- 問題入力 & 画像アップロードカード -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 space-y-4 dark:bg-slate-900 dark:border-slate-800">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <label class="text-sm font-bold text-slate-700 dark:text-slate-300">📚 単元ヒント（任意）</label>
+        <select id="unitSelect" class="text-xs border border-slate-300 rounded-lg px-3 py-1.5 bg-slate-50 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600">
+          <option value="自動判定">自動判定（AIにおまかせ）</option>
+          <option value="数と式（展開・因数分解・実数・1次不等式）">数学I：数と式（因数分解・たすき掛け・不等式）</option>
+          <option value="2次関数（平方完成・最大最小・2次方程式・判別式D・場合分け）">数学I：2次関数（平方完成・場合分け・判別式D）</option>
+          <option value="図形と計量（三角比 sin/cos/tan・正弦定理・余弦定理）">数学I：図形と計量（三角比・正弦/余弦定理）</option>
+          <option value="データの分析（分散・標準偏差・共分散・相関係数）">数学I：データの分析</option>
+          <option value="場合の数と確率（順列 P・組合せ C・反復試行・条件付き確率）">数学A：場合の数と確率</option>
+          <option value="図形の性質（チェバ・メネラウスの定理・方べきの定理・円の性質）">数学A：図形の性質</option>
+          <option value="整数の性質（ユークリッドの互除法・1次不定方程式・n進法）">数学A：整数の性質</option>
+        </select>
+      </div>
+
+      <!-- カメラ撮影 / アルバム選択 -->
+      <div class="grid grid-cols-2 gap-3">
+        <label class="cursor-pointer bg-emerald-50 hover:bg-emerald-100 border-2 border-dashed border-emerald-400 rounded-xl p-3 text-center transition dark:bg-emerald-900/20 dark:border-emerald-500/30"
+          id="cameraLabel">
+          <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleImageUpload(event)" />
+          <div class="text-2xl mb-1">📷</div>
+          <div class="text-xs font-bold text-emerald-800 dark:text-emerald-400">カメラで問題を撮影</div>
+        </label>
+        <label class="cursor-pointer bg-blue-50 hover:bg-blue-100 border-2 border-dashed border-blue-400 rounded-xl p-3 text-center transition dark:bg-blue-900/20 dark:border-blue-500/30"
+          id="albumLabel">
+          <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
+          <div class="text-2xl mb-1">🖼️</div>
+          <div class="text-xs font-bold text-blue-800 dark:text-blue-400">アルバムから画像選択</div>
+        </label>
+      </div>
+
+      <!-- アップロード進行バー（初期非表示） -->
+      <div id="uploadProgress" class="hidden space-y-2">
+        <div class="flex items-center justify-between text-xs mb-0.5">
+          <span id="uploadStatusText" class="text-slate-600 dark:text-slate-400 font-medium">画像を準備中...</span>
+          <span id="uploadPercent" class="text-slate-500 dark:text-slate-500">0%</span>
+        </div>
+        <div class="upload-progress-bar">
+          <div id="uploadProgressFill" class="upload-progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- 画像プレビュー -->
+      <div id="imagePreviewContainer" class="hidden relative bg-slate-900 rounded-xl overflow-hidden max-h-64 flex items-center justify-center section-fade dark:bg-slate-800">
+        <img id="imagePreview" src="" alt="問題プレビュー" class="max-h-60 object-contain" />
+        <button onclick="clearImage()" class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2.5 py-1 rounded-full shadow dark:bg-red-500">✕ 削除</button>
+      </div>
+
+      <!-- テキスト直接質問入力 -->
+      <div>
+        <textarea id="questionInput" rows="2"
+          placeholder="写真なしでテキストで質問することもできます（例：2x^2 - 5x - 3 をたすき掛けで因数分解して）"
+          class="w-full text-sm border border-slate-300 rounded-xl p-3 focus:outline-none focus:border-emerald-600 bg-slate-50 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600"></textarea>
+      </div>
+
+      <!-- 解説実行ボタン -->
+      <button id="solveBtn" onclick="solveProblem()"
+        class="w-full bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white font-bold py-3.5 rounded-xl shadow-md transition flex items-center justify-center gap-2 dark:bg-emerald-600 dark:hover:bg-emerald-500">
+        <span id="solveBtnText">✨ AI先生に解説してもらう</span>
+        <span id="solveBtnSpinner" class="hidden animate-spin mr-2">⟳</span>
+      </button>
+    </section>
+
+    <!-- ロード＆エラー状態表示エリア -->
+    <div id="statusBox" class="hidden rounded-2xl p-5 text-center border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"></div>
+
+    <!-- 4. 音声コントロールバー & 黒板解説結果エリア -->
+    <section id="resultSection" class="hidden section-fade space-y-4 scroll-mt-40">
+      <!-- オーディオコントロールバー -->
+      <div class="bg-slate-800 text-white rounded-2xl p-3.5 shadow flex flex-wrap items-center justify-between gap-2 sticky top-4 z-20 dark:bg-slate-900">
+        <div class="flex items-center gap-2">
+          <button onclick="playAllSteps()" class="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 dark:bg-emerald-500 dark:hover:bg-emerald-400">
+            ▶️ 最初から連続再生
+          </button>
+          <button onclick="stopSpeech()" class="bg-rose-600 hover:bg-rose-500 text-xs font-bold px-3 py-2 rounded-xl dark:bg-rose-500 dark:hover:bg-rose-400">
+            ⏹️ 停止
+          </button>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <span>🗣️ 声:</span>
+          <select id="voiceSelect" onchange="onVoiceChange()" title="日本語の音声を選択"
+            class="bg-slate-700 text-white rounded-lg px-2 py-1 border border-slate-600 max-w-[11rem] dark:bg-slate-800 dark:border-slate-600">
+            <option value="">自動（おすすめ）</option>
+          </select>
+          <button onclick="testVoice()" class="bg-slate-700 hover:bg-slate-600 text-white text-[11px] px-2 py-1 rounded-lg border border-slate-600 dark:bg-slate-800 dark:border-slate-600">
+            ▶ 声を聞く
+          </button>
+          <span class="ml-1">🔊 速度:</span>
+          <select id="speechRate" class="bg-slate-700 text-white rounded-lg px-2 py-1 border border-slate-600 dark:bg-slate-800 dark:border-slate-600">
+            <option value="0.8">0.8x (とてもゆっくり)</option>
+            <option value="0.9">0.9x (ゆっくり)</option>
+            <option value="0.95" selected>0.95x (おすすめ)</option>
+            <option value="1.0">1.0x (標準)</option>
+            <option value="1.15">1.15x (少し速め)</option>
+          </select>
+        </div>
+        <p id="voiceHint" class="hidden w-full text-[11px] text-amber-200 bg-amber-900/40 border border-amber-500/40 rounded-lg px-2.5 py-1.5"></p>
+      </div>
+
+      <!-- 問題認識 & 重要ポイント -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-2 dark:bg-slate-900 dark:border-slate-800">
+        <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400">📌 認識した問題</div>
+        <div id="recognizedProblem" class="text-sm bg-slate-50 p-3 rounded-xl border border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"></div>
+        <div class="pt-2 text-xs font-bold text-amber-700 dark:text-amber-400">💡 この問題の着眼点（どこを見る？）</div>
+        <div id="keyPoint" class="text-sm text-slate-700 bg-amber-50/70 p-3 rounded-xl border border-amber-200 dark:bg-amber-900/30 dark:text-slate-200 dark:border-amber-900"></div>
+      </div>
+
+      <!-- ステップ別カードリスト -->
+      <div id="stepsContainer" class="space-y-3"></div>
+
+      <!-- 最終回答カード -->
+      <div class="bg-emerald-900 text-white rounded-2xl p-5 shadow-lg dark:bg-emerald-950">
+        <div class="text-xs text-emerald-300 font-bold mb-1">🎯 最終的な答え（解答）</div>
+        <div id="finalAnswer" class="text-lg font-bold"></div>
+      </div>
+
+      <!-- 数字を変えた類題ボタン -->
+      <button onclick="generateSimilarProblem()"
+        id="similarProblemBtn"
+        class="w-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-400 font-bold py-3 rounded-xl shadow-sm transition border border-blue-200 dark:border-blue-800 mt-3 flex items-center justify-center gap-2">
+        <span id="similarProblemBtnText">🔄 数字を変えた類題を解く</span>
+        <span id="similarProblemBtnSpinner" class="hidden animate-spin mr-2">⟳</span>
+      </button>
+
+      <!-- オ答ノート保存ボタン -->
+      <button onclick="saveCurrentToTutorHistory()"
+        id="saveToNoteBtn"
+        class="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold py-3 rounded-xl shadow-sm transition border border-slate-200 dark:border-slate-600 mt-3 flex items-center justify-center gap-2">
+        📁 この解説をマイノートに保存
+      </button>
+    </section>
+
+  </main>
+
+  <!-- 5. 設定モーダル（APIキー保存 + ListModels自動取得 + カスタムモデル入力） -->
+  <div id="settingsModal" class="fixed inset-0 bg-slate-900/85 z-40 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto dark:bg-slate-900">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="font-bold text-base text-slate-800">⚙️ APIキー ＆ モデル設定</h3>
+        <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-700 text-lg font-bold">✕</button>
+      </div>
+
+      <!-- Gemini APIキー入力 -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-bold text-slate-700">🔑 Google Gemini API キー (AI Studio)</label>
+        <input id="geminiKeyInput" type="password" placeholder="AIzaSy..."
+          class="w-full text-sm border border-slate-300 rounded-xl p-2.5 focus:outline-none focus:border-emerald-600" />
+      </div>
+
+      <!-- [解決策 1] 自分のAPIキーで利用可能なモデルを自動取得するボタン -->
+      <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-bold text-emerald-900">🔍 APIキーで利用可能なモデルを自動検索</span>
+          <button onclick="fetchAvailableModels()"
+            class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+            モデル一覧を自動取得
+          </button>
+        </div>
+        <p id="modelFetchStatus" class="text-[11px] text-emerald-800">
+          ボタンを押すと <code>v1beta/models</code> を照会し、現在のAPIキーで100%動作するモデルのみを上部ドロップダウンに登録します。
+        </p>
+      </div>
+
+      <!-- [解決策 2] モデル名を直接入力（カスタムモデルID） -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-bold text-slate-700">✏️ カスタムモデルIDの直接指定（任意・最優先）</label>
+        <input id="customModelInput" type="text" placeholder="例: gemini-2.5-flash / gemini-3.8-flash / gemini-2.0-flash"
+          class="w-full text-xs border border-slate-300 rounded-xl p-2.5 focus:outline-none focus:border-blue-600" />
+        <p class="text-[11px] text-slate-500">
+          ※ 空欄の場合は上部ドロップダウンで選択されたモデルが使用されます。Googleのモデル名変更時に直接入力して即座に対応できます。
+        </p>
+      </div>
+
+      <!-- (補助) Groq / OpenAI APIキー 及び PIN変更 -->
+      <details class="text-xs border-t pt-3">
+        <summary class="font-bold text-slate-600 cursor-pointer">➕ 予備プロバイダ (Groq / OpenAI) ＆ PINコード変更</summary>
+        <div class="mt-3 space-y-2.5">
+          <div>
+            <label class="block font-semibold mb-1">Groq API Key (無料 Llama Vision 予備用)</label>
+            <input id="groqKeyInput" type="password" placeholder="gsk_..." class="w-full border rounded-lg p-2" />
+          </div>
+          <div>
+            <label class="block font-semibold mb-1">OpenAI API Key (gpt-4o-mini 等)</label>
+            <input id="openaiKeyInput" type="password" placeholder="sk-..." class="w-full border rounded-lg p-2" />
+          </div>
+          <div>
+            <label class="block font-semibold mb-1">ロック解除 PINコード変更 (初期値: 1234)</label>
+            <input id="newPinInput" type="text" placeholder="1234" class="w-full border rounded-lg p-2" />
+          </div>
+        </div>
+      </details>
+
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button onclick="closeSettings()" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl">閉じる</button>
+        <button onclick="saveSettings()" class="px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl">💾 保存する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- マイノート (オ答ノート) モーダル -->
+  <div id="tutorHistoryModal" class="fixed inset-0 bg-slate-900/85 z-50 hidden items-center justify-center p-4 sm:p-6">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto dark:bg-slate-900">
+      <div class="flex items-center justify-between border-b pb-4">
+        <h3 class="font-bold text-base text-slate-800 dark:text-slate-100">📁 マイノート</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400">過去の解説記録</p>
+        <button onclick="closeTutorHistoryModal()" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg font-bold">✕</button>
+      </div>
+      <div class="p-4 space-y-2" id="tutorHistoryList">
+        <!-- カードは JS で動的生成 -->
+      </div>
+      <div class="pt-4 border-t">
+        <button onclick="closeTutorHistoryModal()" class="w-full px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-xl">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. 安全ストレージラッパー (safeStorage - file:// 及び Safari プライベートモード対応)
+    // =========================================================================
+    const memoryStore = {};
+    const safeStorage = {
+      getItem(key) {
+        try { return localStorage.getItem(key) ?? memoryStore[key] ?? null; }
+        catch (e) { return memoryStore[key] ?? null; }
+      },
+      setItem(key, val) {
+        memoryStore[key] = String(val);
+        try { localStorage.setItem(key, String(val)); } catch (e) {}
+      }
+    };
+
+    // グローバル状態
+    let currentImageBase64 = null;
+    let currentSteps = [];
+    let isPlayingQueue = false;
+    let currentModelId = null;       // 「もっとやさしく」再生成で使う
+    let currentProblemText = '';     // 同上（問題文のコンテキスト）
+    let tutorHistory = [];           // マイノート（過去の解説記録）
+
+    // 埋め込み API キー（空のデフォルト）
+    const EMBEDDED_GEMINI_API_KEY = '';
+
+    // =========================================================================
+    // 0. モバイルUI/UX ユーティリティ（ダークモード、アップロード進捗バー、セクション遷移）
+    // =========================================================================
+    function toggleDarkMode() {
+      const html = document.documentElement;
+      const isDark = html.classList.toggle('dark');
+      safeStorage.setItem('dark_mode', isDark ? '1' : '0');
+      const btn = document.getElementById('darkModeToggle');
+      if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+    }
+
+    function initDarkMode() {
+      const saved = safeStorage.getItem('dark_mode');
+      const html = document.documentElement;
+      const btn = document.getElementById('darkModeToggle');
+      if (saved === '1' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        html.classList.add('dark');
+        if (btn) btn.textContent = '☀️';
+      } else {
+        html.classList.remove('dark');
+        if (btn) btn.textContent = '🌙';
+      }
+    }
+
+    // セイフエリア値の更新（iOSノッチ/ホームインジケーター対応）
+    function updateSafeArea() {
+      document.documentElement.style.setProperty('--safe-area-inset-top', `${window.innerHeight - window.visualViewport?.height || 0}px`);
+      document.documentElement.style.setProperty('--safe-area-inset-bottom', `env(safe-area-inset-bottom)`);
+      document.documentElement.style.setProperty('--safe-area-inset-left', `env(safe-area-inset-left)`);
+      document.documentElement.style.setProperty('--safe-area-inset-right', `env(safe-area-inset-right)`);
+    }
+
+    // =========================================================================
+    // マイノート（オ答ノート / 過去の解説記録）
+    // =========================================================================
+    function initTutorHistory() {
+      const saved = safeStorage.getItem('tutor_history');
+      if (saved) {
+        try {
+          tutorHistory = JSON.parse(saved);
+        } catch (e) {
+          tutorHistory = [];
+        }
+      }
+    }
+
+    function saveTutorHistory(data) {
+      const entry = {
+        id: Date.now().toString(),
+        savedAt: new Date().toISOString(),
+        unitHint: data.unitHint || '自動判定',
+        recognized_problem: data.recognized_problem || '',
+        key_point: data.key_point || '',
+        steps: Array.isArray(data.steps) ? data.steps : [],
+        final_answer: data.final_answer || '',
+        isBookmarked: false
+      };
+
+      // 最大100件まで保持、古いものから削除
+      tutorHistory.unshift(entry);
+      if (tutorHistory.length > 100) {
+        tutorHistory = tutorHistory.slice(0, 100);
+      }
+
+      safeStorage.setItem('tutor_history', JSON.stringify(tutorHistory));
+      return entry.id;
+    }
+
+    function deleteFromTutorHistory(id) {
+      tutorHistory = tutorHistory.filter(item => item.id !== id);
+      safeStorage.setItem('tutor_history', JSON.stringify(tutorHistory));
+      renderTutorHistoryList();
+    }
+
+    function renderTutorHistoryList() {
+      const container = document.getElementById('tutorHistoryList');
+      if (!container) return;
+
+      if (tutorHistory.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8">
+            <p class="text-slate-500 dark:text-slate-400 text-sm">記録がまだありません。</p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1">解説が終わった後に「📁 ノートに保存」ボタンで追加できます。</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = tutorHistory.map((item, idx) => {
+        const date = new Date(item.savedAt);
+        const dateStr = date.toLocaleDateString('ja-JP', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit'
+        });
+        const problemPreview = (item.recognized_problem || '').replace(/\$/g, '').slice(0, 40);
+        return `
+          <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 mb-3 shadow-sm">
+            <div class="flex items-start justify-between gap-2 mb-1.5">
+              <div class="flex-1 min-w-0">
+                <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-0.5">${escapeHtml(item.unitHint)}</div>
+                <div class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">${escapeHtml(problemPreview)}${problemPreview.length >= 40 ? '…' : ''}</div>
+                <div class="text-[10px] text-slate-500 dark:text-slate-500 mt-1">${dateStr}</div>
+              </div>
+              <div class="flex items-start gap-1">
+                <button onclick="restoreFromHistory('${escapeJsString(item.id)}')" 
+                  class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-blue-200 transition">
+                  🔄 もう一度見る
+                </button>
+                <button onclick="deleteFromTutorHistory('${escapeJsString(item.id)}')" 
+                  class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-rose-200 transition">
+                  🗑️ 削除
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeJsString(str) {
+      return String(str).replace(/\\/g, '\\\\').replace(/'/g, '\\\'').replace(/\n/g, '\\n');
+    }
+
+    async function restoreFromHistory(id) {
+      const item = tutorHistory.find(it => it.id === id);
+      if (!item) return;
+
+      closeTutorHistoryModal();
+      renderTutorResult(item);
+    }
+
+    function showTutorHistory() {
+      const modal = document.getElementById('tutorHistoryModal');
+      if (!modal) return;
+      renderTutorHistoryList();
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeTutorHistoryModal() {
+      const modal = document.getElementById('tutorHistoryModal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function saveCurrentToTutorHistory() {
+      if (!currentSteps.length && !currentProblemText) {
+        showStatus('⚠️ 保存する解説データがありません。', 'amber');
+        return;
+      }
+
+      const unitHint = document.getElementById('unitSelect').value;
+      const data = {
+        unitHint: unitHint,
+        recognized_problem: document.getElementById('recognizedProblem').textContent || '',
+        key_point: document.getElementById('keyPoint').textContent || '',
+        steps: currentSteps,
+        final_answer: document.getElementById('finalAnswer').textContent || ''
+      };
+
+      const id = saveTutorHistory(data);
+      const btn = document.getElementById('saveToNoteBtn');
+      if (btn) {
+        btn.textContent = '✅ マイノートに保存済み';
+        btn.classList.replace('bg-slate-100', 'bg-emerald-100');
+        btn.classList.replace('text-slate-700', 'text-emerald-700');
+        btn.classList.replace('dark:bg-slate-800', 'dark:bg-emerald-900/30');
+        btn.classList.replace('dark:text-slate-200', 'dark:text-emerald-400');
+        btn.disabled = true;
+      }
+
+      showStatus('✅ マイノートに保存しました。', 'blue');
+    }
+
+    // =========================================================================
+    // 類題（数字を変えた問題）生成
+    // =========================================================================
+    function buildSimilarProblemPrompt() {
+      const unitHint = document.getElementById('unitSelect').value;
+      const recognizedProblem = document.getElementById('recognizedProblem').textContent || '';
+      const keyPoint = document.getElementById('keyPoint').textContent || '';
+      const currentProblem = currentProblemText || recognizedProblem;
+
+      return `あなたは数学の問題作成者です。
+以下の問題と同じ単元・同じ解法パターンの「類題（数字や条件だけ変えた問題）」を1問作ってください。
+
+【元の問題】
+${currentProblem}
+
+【単元ヒント】
+${unitHint}
+
+【重要な解法ポイント】
+${keyPoint}
+
+【条件】
+- 元の問題と同じ単元・同じ解法パターンを使うこと
+- 数字、係数、定義域、条件などを変えること（完全に同じ問題にしない）
+- 問題文だけを出力すること（解説は不要）
+- 元の問題より少しだけ難しくするか、同程度の難易度にすること
+- 出力は問題文のみ（LaTeX形式可）
+- 「問題：」などのラベルは付けず、問題文だけを出力`;
+    }
+
+    async function generateSimilarProblem() {
+      const btn = document.getElementById('similarProblemBtn');
+      const btnText = document.getElementById('similarProblemBtnText');
+      const btnSpinner = document.getElementById('similarProblemBtnSpinner');
+
+      // ローディング状態
+      if (btn) {
+        btn.disabled = true;
+        if (btnText) btnText.classList.add('hidden');
+        if (btnSpinner) btnSpinner.classList.remove('hidden');
+      }
+
+      const geminiKey = safeStorage.getItem('gemini_api_key');
+      const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
+
+      if (!geminiKey) {
+        openSettings();
+        showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
+        // ボタン状態を復元
+        if (btn) {
+          btn.disabled = false;
+          if (btnText) btnText.classList.remove('hidden');
+          if (btnSpinner) btnSpinner.classList.add('hidden');
+        }
+        return;
+      }
+
+      try {
+        const prompt = buildSimilarProblemPrompt();
+
+        // 類題生成用APIコール（temperatureを0.7に設定して多様性を確保）
+        const res = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
+          temperature: 0.7,
+          maxOutputTokens: 512,
+          timeoutMs: 25000,
+          rawText: true
+        });
+
+        // レスポンスから問題文を抽出
+        let similarProblem = '';
+        if (typeof res === 'string') {
+          similarProblem = res.trim();
+        } else if (res) {
+          similarProblem = String(res).trim();
+        }
+
+        // 余分なテキスト（マークダウン、ラベル等）を除去
+        similarProblem = similarProblem
+          .replace(/^```[\s\S]*?\n/, '')
+          .replace(/```$/g, '')
+          .replace(/^(問題[：:]?\s*|類題[：:]?\s*|Question[：:]?\s*)/i, '')
+          .trim();
+
+        if (!similarProblem) {
+          throw new Error('類題の生成に失敗しました。');
+        }
+
+        // 問題文をテキスト入力欄に自動入力
+        const questionInput = document.getElementById('questionInput');
+        if (questionInput) {
+          questionInput.value = similarProblem;
+        }
+
+        // 画像をクリア（類題はテキストベース）
+        clearImage();
+
+        // 既存のsolveProblemフローを実行
+        await solveProblem();
+
+      } catch (err) {
+        if (isQuotaError(err)) {
+          showQuotaError(selectedModel);
+        } else {
+          const isTimeout = err.name === 'AbortError';
+          const errMsg = isTimeout
+            ? '⏱️ 類題生成がタイムアウトしました。もう一度お試しください。'
+            : `❌ 類題生成エラー: ${err.message}`;
+          showStatus(errMsg, 'red');
+        }
+      } finally {
+        // ボタン状態を復元
+        if (btn) {
+          btn.disabled = false;
+          if (btnText) btnText.classList.remove('hidden');
+          if (btnSpinner) btnSpinner.classList.add('hidden');
+        }
+      }
+    }
+
+    // アップロード進行バー制御
+    function setUploadProgress(percent, text) {
+      const progress = document.getElementById('uploadProgress');
+      const fill = document.getElementById('uploadProgressFill');
+      const status = document.getElementById('uploadStatusText');
+      const pct = document.getElementById('uploadPercent');
+
+      if (percent <= 0 && progress) {
+        progress.classList.add('hidden');
+        return;
+      }
+      if (progress) progress.classList.remove('hidden');
+      if (fill) fill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+      if (status && text) status.textContent = text;
+      if (pct) pct.textContent = `${Math.round(percent)}%`;
+    }
+
+    // セクション表示/非表示（フェードアニメーション）
+    function showSectionWithFade(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      // 表示直前に初期状態を設定（opacity 0, 下から上がってくる）
+      el.classList.add('opacity-0', 'translate-y-4', 'section-fade');
+      el.classList.remove('hidden', 'hidden-section');
+      // ブラウザがレイアウトを計算した後、アニメーション開始
+      requestAnimationFrame(() => {
+        el.classList.add('opacity-100', 'translate-y-0');
+        el.classList.remove('opacity-0', 'translate-y-4');
+      });
+    }
+
+    function hideSectionWithFade(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.add('opacity-0', 'translate-y-4');
+      el.classList.remove('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+        el.classList.add('hidden', 'hidden-section');
+      }, 350);
+    }
+
+    // =========================================================================
+    // 2. 初期化 及び PINロック解除
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      initDarkMode();
+      initTutorHistory();
+
+      // 埋め込み API キー（設定がある場合のみ）
+      if (!safeStorage.getItem('gemini_api_key') && EMBEDDED_GEMINI_API_KEY) {
+        safeStorage.setItem('gemini_api_key', EMBEDDED_GEMINI_API_KEY);
+      }
+
+      updateSafeArea();
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateSafeArea);
+      }
+      const savedModelsJson = safeStorage.getItem('available_gemini_models');
+      if (savedModelsJson) {
+        try { populateModelSelect(JSON.parse(savedModelsJson)); } catch (e) {}
+      }
+      const savedSelectedModel = safeStorage.getItem('selected_model');
+      if (savedSelectedModel) {
+        const selectEl = document.getElementById('modelSelect');
+        if ([...selectEl.options].some(o => o.value === savedSelectedModel)) {
+          selectEl.value = savedSelectedModel;
+        }
+      }
+      checkApiKeyWarning();
+      initVoiceSelect();
+
+      // モデルが未取得の場合、埋め込みAPIキーで自動取得を試行（初回起動時のみ）
+      const hasModels = safeStorage.getItem('available_gemini_models');
+      if (!hasModels) {
+        fetchAvailableModels().catch(() => {});
+      }
+    });
+
+    function unlockApp() {
+      const input = document.getElementById('pinInput').value.trim();
+      const savedPin = safeStorage.getItem('app_pin') || '1234';
+      if (input === savedPin) {
+        document.getElementById('pinModal').style.display = 'none';
+      } else {
+        document.getElementById('pinError').classList.remove('hidden');
+      }
+    }
+
+    function checkApiKeyWarning() {
+      const key = safeStorage.getItem('gemini_api_key');
+      const banner = document.getElementById('apiWarningBanner');
+      if (!key) banner.classList.remove('hidden');
+      else banner.classList.add('hidden');
+    }
+
+    // =========================================================================
+    // 3. 設定モーダル & [解決策 1] ListModels API 利用可能モデル自動取得
+    // =========================================================================
+    function openSettings() {
+      document.getElementById('geminiKeyInput').value = safeStorage.getItem('gemini_api_key') || '';
+      document.getElementById('customModelInput').value = safeStorage.getItem('custom_model_id') || '';
+      document.getElementById('groqKeyInput').value = safeStorage.getItem('groq_api_key') || '';
+      document.getElementById('openaiKeyInput').value = safeStorage.getItem('openai_api_key') || '';
+      document.getElementById('newPinInput').value = safeStorage.getItem('app_pin') || '1234';
+      const modal = document.getElementById('settingsModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeSettings() {
+      const modal = document.getElementById('settingsModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function saveSettings() {
+      const geminiKey = document.getElementById('geminiKeyInput').value.trim();
+      const customModel = document.getElementById('customModelInput').value.trim();
+      const groqKey = document.getElementById('groqKeyInput').value.trim();
+      const openaiKey = document.getElementById('openaiKeyInput').value.trim();
+      const newPin = document.getElementById('newPinInput').value.trim() || '1234';
+
+      safeStorage.setItem('gemini_api_key', geminiKey);
+      safeStorage.setItem('custom_model_id', customModel);
+      safeStorage.setItem('groq_api_key', groqKey);
+      safeStorage.setItem('openai_api_key', openaiKey);
+      safeStorage.setItem('app_pin', newPin);
+
+      if (customModel) {
+        addOrSelectModelOption(customModel, `${customModel} (カスタム指定)`);
+      }
+
+      checkApiKeyWarning();
+      closeSettings();
+    }
+
+    async function fetchAvailableModels() {
+      const key = document.getElementById('geminiKeyInput').value.trim() || safeStorage.getItem('gemini_api_key');
+      const statusEl = document.getElementById('modelFetchStatus');
+
+      if (!key) {
+        statusEl.innerHTML = `<span class="text-red-600 font-bold">⚠️ 先にGemini APIキーを入力してください。</span>`;
+        return;
+      }
+
+      statusEl.innerHTML = `<span class="text-blue-700 font-bold">🔄 Googleサーバーから利用可能なモデル一覧を照会中...</span>`;
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error?.message || `HTTP ${res.status}`);
+        }
+
+        // generateContent をサポートする Gemini モデルのみフィルタリング
+        const validModels = (data.models || [])
+          .filter(m =>
+            Array.isArray(m.supportedGenerationMethods) &&
+            m.supportedGenerationMethods.includes('generateContent') &&
+            m.name.includes('gemini') &&
+            !m.name.includes('embedding') &&
+            !m.name.includes('imagen') &&
+            !m.name.includes('tts')
+          )
+          .map(m => ({
+            id: m.name.replace(/^models\//, ''),
+            displayName: m.displayName || m.name.replace(/^models\//, '')
+          }));
+
+        if (validModels.length === 0) {
+          throw new Error('generateContentに対応したGeminiモデルが見つかりませんでした。');
+        }
+
+        // 最新 Flash / Pro モデルが上に来るようにソート
+        validModels.sort((a, b) => {
+          const score = id => (id.includes('flash') ? 2 : id.includes('pro') ? 1 : 0);
+          return score(b.id) - score(a.id) || b.id.localeCompare(a.id);
+        });
+
+        safeStorage.setItem('gemini_api_key', key);
+        safeStorage.setItem('available_gemini_models', JSON.stringify(validModels));
+        populateModelSelect(validModels);
+        checkApiKeyWarning();
+
+        statusEl.innerHTML = `<span class="text-emerald-700 font-bold">✅ 取得成功！利用可能な ${validModels.length} 個のモデルをドロップダウンに登録しました。</span>`;
+      } catch (err) {
+        statusEl.innerHTML = `<span class="text-red-600 font-bold">❌ モデル取得エラー: ${err.message}</span>`;
+      }
+    }
+
+    function populateModelSelect(models) {
+      const selectEl = document.getElementById('modelSelect');
+      selectEl.innerHTML = '';
+      models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = `${m.id}`;
+        selectEl.appendChild(opt);
+      });
+      // 追加プロバイダー オプションも下部に維持
+      if (safeStorage.getItem('groq_api_key')) {
+        const groqOpt = document.createElement('option');
+        groqOpt.value = 'groq:meta-llama/llama-4-scout-17b-16e-instruct';
+        groqOpt.textContent = 'Groq: Llama-4-Scout (Vision)';
+        selectEl.appendChild(groqOpt);
+      }
+      if (safeStorage.getItem('openai_api_key')) {
+        const oaOpt = document.createElement('option');
+        oaOpt.value = 'openai:gpt-4o-mini';
+        oaOpt.textContent = 'OpenAI: gpt-4o-mini';
+        selectEl.appendChild(oaOpt);
+      }
+      safeStorage.setItem('selected_model', selectEl.value);
+    }
+
+    function addOrSelectModelOption(modelId, label) {
+      const selectEl = document.getElementById('modelSelect');
+      let existing = [...selectEl.options].find(o => o.value === modelId);
+      if (!existing) {
+        existing = document.createElement('option');
+        existing.value = modelId;
+        existing.textContent = label || modelId;
+        selectEl.prepend(existing);
+      }
+      selectEl.value = modelId;
+      safeStorage.setItem('selected_model', modelId);
+    }
+
+    function onModelDropdownChange() {
+      const val = document.getElementById('modelSelect').value;
+      safeStorage.setItem('selected_model', val);
+      // ドロップダウンを直接変更すると Custom 入力欄の優先順位を解除し混乱を防ぐ
+      safeStorage.setItem('custom_model_id', '');
+      const customEl = document.getElementById('customModelInput');
+      if (customEl) customEl.value = '';
+    }
+
+    // =========================================================================
+    // 4. 画像アップロード & Canvas リサイズ圧縮（最大幅 1280px, JPEG 0.85）
+    // =========================================================================
+    function handleImageUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      setUploadProgress(25, 'ファイルを読み込み中…');
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        setUploadProgress(55, '画像を処理中…');
+        const img = new Image();
+        img.onload = function() {
+          setUploadProgress(80, 'サイズを最適化中…');
+          const MAX_WIDTH = 1280;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          currentImageBase64 = dataUrl.split(',')[1];
+
+          setUploadProgress(100, '準備完了');
+          setTimeout(() => setUploadProgress(0, ''), 600);
+
+          document.getElementById('imagePreview').src = dataUrl;
+          document.getElementById('imagePreviewContainer').classList.remove('hidden');
+          document.getElementById('imagePreviewContainer').classList.add('opacity-100', 'translate-y-0');
+          document.getElementById('imagePreviewContainer').classList.remove('opacity-0', 'translate-y-4');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+      currentImageBase64 = null;
+      document.getElementById('imagePreview').src = '';
+      document.getElementById('imagePreviewContainer').classList.add('hidden');
+      document.getElementById('imagePreviewContainer').classList.remove('opacity-100', 'translate-y-0');
+      document.getElementById('imagePreviewContainer').classList.add('opacity-0', 'translate-y-4');
+      setUploadProgress(0, '');
+      document.getElementById('imagePreviewContainer').classList.add('hidden');
+    }
+
+    // =========================================================================
+    // 5. 日本の高校1年生(数学I・A)チューター プロンプト & [解決策 3, 4] 25秒タイムアウト/自動再試行
+    // =========================================================================
+    // Gemini 構造化出力用スキーマ（JSONパース失敗を防ぐ）
+    const TUTOR_RESPONSE_SCHEMA = {
+      type: 'OBJECT',
+      properties: {
+        recognized_problem: { type: 'STRING' },
+        key_point: { type: 'STRING' },
+        steps: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              step_number: { type: 'INTEGER' },
+              title: { type: 'STRING' },
+              focus: { type: 'STRING' },
+              why: { type: 'STRING' },
+              display_math: { type: 'STRING' },
+              watch_out: { type: 'STRING' },
+              speech_ja: { type: 'STRING' }
+            },
+            required: ['step_number', 'title', 'display_math', 'speech_ja'],
+            propertyOrdering: ['step_number', 'title', 'focus', 'why', 'display_math', 'watch_out', 'speech_ja']
+          }
+        },
+        final_answer: { type: 'STRING' }
+      },
+      required: ['recognized_problem', 'key_point', 'steps', 'final_answer'],
+      propertyOrdering: ['recognized_problem', 'key_point', 'steps', 'final_answer']
+    };
+
+    const SIMPLIFY_RESPONSE_SCHEMA = {
+      type: 'OBJECT',
+      properties: {
+        title: { type: 'STRING' },
+        focus: { type: 'STRING' },
+        why: { type: 'STRING' },
+        display_math: { type: 'STRING' },
+        watch_out: { type: 'STRING' },
+        speech_ja: { type: 'STRING' }
+      },
+      required: ['title', 'display_math', 'speech_ja'],
+      propertyOrdering: ['title', 'focus', 'why', 'display_math', 'watch_out', 'speech_ja']
+    };
+
+    function buildSystemPrompt(unitHint) {
+      return `あなたは日本の高校1年生（数学I・数学A）を教える、あたたかくて説明上手なプロ講師です。
+生徒は数学が苦手で、「なぜその式が出てくるのか」が分からないと、そのまま暗記して終わってしまいます。
+だから、答えや式だけを並べるのではなく、先生が黒板の前で話すように「どこを見るか → なぜその道具を使うか → どう解くか」の順で説明してください。
+
+単元ヒント: ${unitHint}
+
+【授業の設計ルール】
+1. まず問題の「形」を見ます。何が問われているか、どの条件が隠れているかを最初に確認します。
+2. その形から使う道具（公式・定理・場合分け）を選び、なぜそれを選ぶのかを必ず言葉で説明します。
+3. 計算は1行ずつ。途中式を飛ばさない。
+4. 4〜6ステップ。最後のステップは「検算・答えの確認」にする。
+5. 生徒が自分で考えられるように、1ステップに1回は問いかけを入れる。
+6. 単元が違っても「形 → 道具」の考え方は同じです。
+
+【単元別・見るべきポイント（該当するものだけ使う）】
+■ 数と式
+- 展開：項の数、公式の形（(a+b)^2、(a+b)(a-b)）に当てはまるか
+- 因数分解：共通因数 → 公式 → たすき掛け。最高次の係数が1かどうかで方針が変わる
+- 実数：√の中が平方数か、分母の有理化が必要か
+- 1次不等式：負の数で割る瞬間に不等号が反転する
+■ 2次関数
+- 頂点・軸：まず平方完成。x^2の係数に文字があれば場合分け
+- 最大・最小：定義域の端と軸の位置関係を図で確認（軸が区間の左・中・右）
+- 2次方程式：判別式Dの符号 → 解の個数。解と係数の関係が使える形か
+■ 図形と計量
+- 正弦定理：向かい合う辺と角のペアがあるか
+- 余弦定理：2辺とその間の角、または3辺が分かっているか
+- 面積：2辺と間の角 → S = 1/2 × b × c × sinA
+■ データの分析
+- 平均 → 分散 → 標準偏差の順。単位をそろえる。相関係数は共分散 ÷ (標準偏差の積)
+■ 場合の数と確率
+- 順列か組合せか（順番を区別するか）を最初に決める
+- 並べる → P、選ぶ → C、同じものを含む → 階乗で割る
+- 確率：排反か独立か、余事象の方が楽ではないか
+■ 図形の性質
+- チェバ・メネラウス：比が一直線上か、三角形の辺上か
+- 方べきの定理：2本の弦や接線が1点で交わる形か
+■ 整数の性質
+- 互除法 → 1次不定方程式。特殊解を1組見つけてから一般解
+- n進法：各位の重み（n^0, n^1, ...）
+
+【音声台本 speech_ja の作り方（最重要）】
+- 実際に先生が口頭で話す言葉にしてください。です・ます調で、やさしく。
+- 1文は40文字以内。全体で100〜180文字。長いと生徒は聞き流してしまいます。
+- LaTeX記号（$, ^, _, \\frac, \\sqrt など）は絶対に入れない。読み言葉に変換する。
+  例：x^2 → エックスの2乗 ／ a≦2 → エーは2以下 ／ D>0 → ディーが0より大きい ／ 1/2 → 2分の1
+- 「ステップ1。」のような機械的な読み上げは不要。自然な話し言葉でつなぐ。
+- 声に出して読んだときに、先生が隣にいるように聞こえる文にしてください。
+
+【出力形式】
+必ず次のJSON形式のみを出力してください（マークダウンのコードブロックは不要）。
+{
+  "recognized_problem": "認識した問題文（数式は $...$ または $$...$$）",
+  "key_point": "この問題の着眼点。どこを見て、何を使うか（1〜2文、LaTeX可）",
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "短い見出し（例：平方完成をして頂点を求める）",
+      "focus": "このステップで問題のどこに注目するか（1文）",
+      "why": "なぜこの道具・方針を使うのか（1〜2文）",
+      "display_math": "黒板に書く解説と途中式（数式は必ず $...$ または $$...$$）",
+      "watch_out": "ここでつまずきやすい点（なければ空文字）",
+      "speech_ja": "音声で読み上げる台本。LaTeX禁止。100〜180文字"
+    }
+  ],
+  "final_answer": "最終的な答え（$$...$$ で明確に）"
+}
+
+【良い出力の例（因数分解）】
+生徒の問題：2x^2 + 5x - 3 を因数分解する
+{
+  "recognized_problem": "$2x^2+5x-3$ を因数分解する。",
+  "key_point": "最高次の係数が2なので、公式ではなく「たすき掛け」を使います。かけて $2\\times(-3)=-6$、たして $5$ になる2数を探すのがコツです。",
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "方針を決める",
+      "focus": "最高次の係数が1ではなく2であることに注目します。",
+      "why": "係数が1なら「かけて-3、たして5」で済みますが、今回は2があるので、両端の数を掛けた-6を使うたすき掛けが必要です。",
+      "display_math": "共通因数はありません。\\n最高次の係数が $2$ なので、たすき掛けで考えます。",
+      "watch_out": "いきなり「かけて-3」と決めつけると失敗します。",
+      "speech_ja": "まず、共通因数があるか見てみましょう。ありませんね。次に、エックスの2乗の係数が2であることに注目します。1ではないので、たすき掛けを使います。"
+    },
+    {
+      "step_number": 2,
+      "title": "たすき掛けの2数を見つける",
+      "focus": "$2\\times(-3)=-6$ と、$x$ の係数 $5$ の組み合わせを探します。",
+      "why": "かけて-6、たして5になる2数は6と-1です。これを使うと、真ん中の5xを6xと-xに分けられます。",
+      "display_math": "$2\\times(-3)=-6$、和が $5$ より\\n$6$ と $-1$\\n$2x^2+5x-3=2x^2+6x-x-3$",
+      "watch_out": "6と-1の符号を逆にしないこと。和が+5になるか必ず確認します。",
+      "speech_ja": "かけてマイナス6、たして5になる数を探します。6とマイナス1ですね。これで、真ん中の5エックスを、6エックスとマイナス1エックスに分けられます。ここで一度、自分で確かめてみましょう。"
+    },
+    {
+      "step_number": 3,
+      "title": "共通因数でくくる",
+      "focus": "前の2項と後ろの2項を、それぞれペアで見ます。",
+      "why": "2xでくくると(x+3)が出て、後ろも-1でくくると(x+3)が出ます。同じカッコが出たら成功の合図です。",
+      "display_math": "$2x(x+3)-(x+3)$\\n$=(x+3)(2x-1)$",
+      "watch_out": "後ろを-(x+3)とするとき、-1でくくることを忘れないようにします。",
+      "speech_ja": "前の2つを2エックスでくくると、エックスプラス3が出ます。後ろの2つをマイナス1でくくると、同じエックスプラス3が出ます。同じカッコが出たら、まとめられます。"
+    },
+    {
+      "step_number": 4,
+      "title": "検算する",
+      "focus": "答えを展開して、元の式に戻るか確認します。",
+      "why": "因数分解は展開の逆なので、展開して元に戻れば安心です。",
+      "display_math": "$(x+3)(2x-1)=2x^2-x+6x-3=2x^2+5x-3$",
+      "watch_out": "符号のミスは展開のときに見つかることが多いです。",
+      "speech_ja": "最後に検算しましょう。エックスプラス3と2エックスマイナス1を展開すると、2エックスの2乗プラス5エックスマイナス3に戻ります。正解です。"
+    }
+  ],
+  "final_answer": "$(x+3)(2x-1)$"
+}
+
+この例のように、「どこを見るか」「なぜその道具か」「つまずきポイント」「やさしい音声台本」を毎回そろえてください。
+問題が違っても、この姿勢を変えないでください。`;
+    }
+
+    async function fetchWithTimeout(url, options, timeoutMs = 25000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        return response;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function parseTutorJson(rawText) {
+      const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace === -1 || lastBrace === -1) {
+        throw new Error('AIの応答からJSONデータを抽出できませんでした。');
+      }
+      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+    }
+
+    async function callGeminiModel(modelId, apiKey, promptText, imageBase64, options = {}) {
+      const cleanModelId = String(modelId).replace(/^models\//, '').trim();
+      if (/^(groq|openai):/i.test(cleanModelId)) {
+        throw new Error(`「${cleanModelId}」はこの画面では未対応です。Gemini系のモデルを選んでください。`);
+      }
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cleanModelId)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const parts = [{ text: promptText }];
+      if (imageBase64) {
+        parts.push({
+          inline_data: { mime_type: 'image/jpeg', data: imageBase64 }
+        });
+      }
+
+      const temperature = options.temperature ?? 0.35;
+      const maxOutputTokens = options.maxOutputTokens ?? 8192;
+      const schema = options.schema || TUTOR_RESPONSE_SCHEMA;
+      const useJson = !options.rawText;
+
+      const buildPayload = (useStructured) => ({
+        contents: [{ role: 'user', parts }],
+        generationConfig: useStructured && useJson
+          ? { temperature, maxOutputTokens, responseMimeType: 'application/json', responseSchema: schema }
+          : { temperature: useStructured ? temperature : 0.3, maxOutputTokens }
+      });
+
+      const send = async (useStructured) => {
+        const res = await fetchWithTimeout(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildPayload(useStructured))
+        }, options.timeoutMs || 25000);
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = new Error(data.error?.message || `HTTP Error ${res.status}`);
+          err.status = res.status;
+          throw err;
+        }
+        return data;
+      };
+
+      let data;
+      try {
+        data = await send(true);
+      } catch (err) {
+        // 構造化出力（responseSchema）に未対応のモデル向けフォールバック
+        if (err.status === 400 && /response|schema|mime/i.test(err.message)) {
+          data = await send(false);
+        } else {
+          throw err;
+        }
+      }
+
+      const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('\n') || '';
+      if (!text) {
+        const blockReason = data.promptFeedback?.blockReason;
+        throw new Error(blockReason
+          ? `モデルが応答をブロックしました（${blockReason}）`
+          : 'モデルから空の応答が返されました。');
+      }
+      if (options.rawText) {
+        return text.trim();
+      }
+      return parseTutorJson(text);
+    }
+
+    async function solveProblem(overrideModelId = null) {
+      stopSpeech();
+      const geminiKey = safeStorage.getItem('gemini_api_key');
+      const customModel = safeStorage.getItem('custom_model_id');
+      const selectedModel = overrideModelId || customModel || document.getElementById('modelSelect').value;
+      const unitHint = document.getElementById('unitSelect').value;
+      const userText = document.getElementById('questionInput').value.trim();
+
+      if (!currentImageBase64 && !userText) {
+        showStatus('⚠️ 問題の写真をアップロードするか、テキストで質問を入力してください。', 'amber');
+        return;
+      }
+
+      if (!geminiKey) {
+        openSettings();
+        showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
+        return;
+      }
+
+      const userPrompt = userText
+        ? `【生徒からの質問・問題テキスト】\n${userText}`
+        : '添付された画像の問題を、写真の中の式を読み取りながら解説してください。';
+      const fullPrompt = `${buildSystemPrompt(unitHint)}\n\n${userPrompt}`;
+
+      currentModelId = selectedModel;
+      currentProblemText = userText || '添付画像の問題';
+
+      showStatus(`⏳ AI先生（モデル: <strong>${selectedModel}</strong>）が問題を解いています...（最大25秒）`, 'blue');
+      document.getElementById('solveBtn').disabled = true;
+      document.getElementById('solveBtnText').classList.add('hidden');
+      document.getElementById('solveBtnSpinner').classList.remove('hidden');
+      setUploadProgress(10, 'AIサーバーに送信中…');
+
+      try {
+        let resultData;
+        try {
+          resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, currentImageBase64);
+        } catch (firstErr) {
+          // 混雑・レート制限・タイムアウト時は3秒待って1回だけ自動再試行
+          const retryable = firstErr.name === 'AbortError' ||
+            [429, 500, 502, 503, 504].includes(firstErr.status) ||
+            /high demand|overloaded|rate limit|failed to fetch/i.test(firstErr.message || '');
+
+          if (retryable) {
+            showStatus(`⚠️ <strong>${selectedModel}</strong> が混雑しています。3秒後に自動で再試行します…`, 'amber');
+            await new Promise(r => setTimeout(r, 3000));
+            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, currentImageBase64, { timeoutMs: 35000 });
+          } else {
+            throw firstErr;
+          }
+        }
+
+        renderTutorResult(resultData);
+        hideStatus();
+      } catch (err) {
+        if (isQuotaError(err)) {
+          showQuotaError(selectedModel);
+        } else {
+          const isTimeout = err.name === 'AbortError';
+          const errMsg = isTimeout
+            ? '⏱️ 時間内に応答がありませんでした（サーバー混雑）。もう一度お試しください。'
+            : `❌ エラー: ${err.message}`;
+
+          const selectEl = document.getElementById('modelSelect');
+          const otherModels = [...selectEl.options]
+            .map(o => o.value)
+            .filter(v => v !== selectedModel)
+            .slice(0, 3);
+
+          const fallbackButtons = otherModels.map(m =>
+            `<button onclick="solveProblem('${m}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${m} で再試行</button>`
+          ).join('');
+
+          showStatus(`
+            <div class="space-y-2">
+              <div class="font-bold text-red-700">${errMsg}</div>
+              <div class="text-xs text-slate-600">「⚙️ 設定」の「モデル一覧を自動取得」を押すか、別のモデルに切り替えて再試行してください。</div>
+              <div class="pt-1">${fallbackButtons}
+                <button onclick="openSettings()" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
+              </div>
+            </div>
+          `, 'red');
+        }
+      } finally {
+        document.getElementById('solveBtn').disabled = false;
+        document.getElementById('solveBtnText').classList.remove('hidden');
+        document.getElementById('solveBtnSpinner').classList.add('hidden');
+        setUploadProgress(0, '');
+      }
+    }
+
+    // =========================================================================
+    // 6. KaTeX 数式レンダリング & 日本語 TTS(Web Speech API) ステップ別ハイライト朗読
+    // =========================================================================
+    function renderMathIn(el) {
+      if (typeof renderMathInElement === 'function') {
+        renderMathInElement(el, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ],
+          throwOnError: false
+        });
+      }
+    }
+
+    function renderTutorResult(data) {
+      showSectionWithFade('resultSection');
+
+      const probEl = document.getElementById('recognizedProblem');
+      probEl.textContent = data.recognized_problem || '';
+      renderMathIn(probEl);
+
+      const keyEl = document.getElementById('keyPoint');
+      keyEl.textContent = data.key_point || '';
+      renderMathIn(keyEl);
+
+      currentSteps = Array.isArray(data.steps) ? data.steps : [];
+      renderStepCards();
+
+      const finalEl = document.getElementById('finalAnswer');
+      finalEl.textContent = data.final_answer || '';
+      renderMathIn(finalEl);
+
+      document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      // 解説完了後 1ステップから自動で授業開始
+      if (currentSteps.length > 0) {
+        setTimeout(() => playAllSteps(), 600);
+      }
+
+      // ノート保存ボタン状態リセット
+      const saveBtn = document.getElementById('saveToNoteBtn');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '📁 この解説をマイノートに保存';
+        saveBtn.classList.replace('bg-emerald-100', 'bg-slate-100');
+        saveBtn.classList.replace('text-emerald-700', 'text-slate-700');
+        saveBtn.classList.replace('dark:bg-emerald-900/30', 'dark:bg-slate-800');
+        saveBtn.classList.replace('dark:text-emerald-400', 'dark:text-slate-200');
+      }
+
+      // 類題ボタン状態リセット
+      const similarBtn = document.getElementById('similarProblemBtn');
+      const similarBtnText = document.getElementById('similarProblemBtnText');
+      const similarBtnSpinner = document.getElementById('similarProblemBtnSpinner');
+      if (similarBtn) {
+        similarBtn.disabled = false;
+        if (similarBtnText) similarBtnText.classList.remove('hidden');
+        if (similarBtnSpinner) similarBtnSpinner.classList.add('hidden');
+      }
+    }
+
+    // 1ステップカードの HTML（focus / why / watch_out を視覚的に分離）
+    function stepCardHtml(step, idx) {
+      const focus = String(step.focus || '').trim();
+      const why = String(step.why || '').trim();
+      const watch = String(step.watch_out || '').trim();
+
+      return `
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex items-start gap-2 min-w-0">
+            <span class="shrink-0 bg-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-full mt-0.5">Step ${step.step_number || idx + 1}</span>
+            <h4 class="font-bold text-sm text-slate-800 leading-snug pt-0.5">${escapeHtml(step.title || '')}</h4>
+          </div>
+          <div class="shrink-0 flex flex-col items-stretch gap-1">
+            <button onclick="playSingleStep(${idx})"
+              class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-blue-200 transition">
+              🔊 もう一度聞く
+            </button>
+            <button onclick="simplifyStep(${idx})" id="simplify-btn-${idx}"
+              class="bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-700 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-fuchsia-200 transition">
+              🪄 もっとやさしく
+            </button>
+          </div>
+        </div>
+
+        ${focus ? `
+        <div class="flex gap-2 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+          <span class="text-base leading-none mt-0.5">💡</span>
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold text-amber-800 mb-0.5">着眼点（どこを見る？）</div>
+            <div id="step-focus-${idx}" class="text-xs text-amber-900 leading-relaxed"></div>
+          </div>
+        </div>` : ''}
+
+        ${why ? `
+        <div class="flex gap-2 bg-indigo-50 border border-indigo-200 rounded-xl p-2.5">
+          <span class="text-base leading-none mt-0.5">🧭</span>
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold text-indigo-800 mb-0.5">なぜこのやり方？</div>
+            <div id="step-why-${idx}" class="text-xs text-indigo-900 leading-relaxed"></div>
+          </div>
+        </div>` : ''}
+
+        <div id="step-math-${idx}" class="text-sm text-slate-800 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-3 whitespace-pre-wrap"></div>
+
+        ${watch ? `
+        <div class="flex gap-2 bg-rose-50 border border-rose-200 rounded-xl p-2.5">
+          <span class="text-base leading-none mt-0.5">⚠️</span>
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold text-rose-800 mb-0.5">ここでつまずきやすい</div>
+            <div id="step-watch-${idx}" class="text-xs text-rose-900 leading-relaxed"></div>
+          </div>
+        </div>` : ''}
+
+        <details class="text-[11px] text-slate-400 bg-slate-50 rounded-lg px-2.5 py-1.5">
+          <summary class="cursor-pointer select-none">🗣️ 音声ガイドの全文</summary>
+          <p id="step-speech-${idx}" class="mt-1.5 leading-relaxed whitespace-pre-wrap"></p>
+        </details>
+      `;
+    }
+
+    function renderStepCards() {
+      const stepsContainer = document.getElementById('stepsContainer');
+      stepsContainer.innerHTML = '';
+
+      currentSteps.forEach((step, idx) => {
+        const card = document.createElement('div');
+        card.id = `step-card-${idx}`;
+        card.className = 'step-card bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-2.5';
+        card.innerHTML = stepCardHtml(step, idx);
+        stepsContainer.appendChild(card);
+
+        const fill = (id, value, withMath) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.textContent = value || '';
+          if (withMath) renderMathIn(el);
+        };
+        fill(`step-focus-${idx}`, step.focus || '', true);
+        fill(`step-why-${idx}`, step.why || '', true);
+        fill(`step-math-${idx}`, step.display_math || '', true);
+        fill(`step-watch-${idx}`, step.watch_out || '', true);
+        fill(`step-speech-${idx}`, step.speech_ja || '', false);
+      });
+    }
+
+    // =========================================================================
+    // 6-2. 「もっとやさしく」：そのステップだけを、よりかみくだいて再生成
+    // =========================================================================
+    function buildSimplifyPrompt(step) {
+      return `あなたは日本の高校1年生に数学を教える、とてもやさしい先生です。
+生徒から「このステップがまだ難しい」と言われました。同じ内容を、もっとやさしく、かみくだいて説明し直してください。
+
+【問題】${currentProblemText}
+【ステップ】${step.title || ''}
+【今の説明】${step.display_math || ''}
+${step.why ? `【今の意図】${step.why}` : ''}
+
+【やさしくするコツ】
+- 難しい言葉を、中学生でもわかる言葉に置き換える。
+  例：平方完成 → 「式を (x+□)^2 の形に作り変えること」
+- 数字や具体例を1つ入れる。
+- 計算は1行ずつ、絶対に省略しない。
+- 「なぜそうなるか」を身近な例えで説明する。
+- 文章は短く。音声台本は120〜200文字。
+- focus / why / watch_out も、やさしい言葉にする。
+- speech_ja にLaTeX記号は入れない。読み言葉にする。
+
+【出力形式】JSONのみ。
+{
+  "title": "やさしい見出し",
+  "focus": "どこを見るか（やさしい言葉で1文）",
+  "why": "なぜこのやり方か（やさしい言葉で1〜2文）",
+  "display_math": "黒板の説明（数式は $...$）",
+  "watch_out": "つまずきポイント（なければ空文字）",
+  "speech_ja": "音声台本。LaTeX禁止。120〜200文字"
+}`;
+    }
+
+    async function simplifyStep(idx) {
+      const step = currentSteps[idx];
+      if (!step) return;
+
+      const key = safeStorage.getItem('gemini_api_key');
+      if (!key) {
+        openSettings();
+        showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
+        return;
+      }
+
+      const model = currentModelId || safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
+      const btn = document.getElementById(`simplify-btn-${idx}`);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ 考え中…';
+      }
+
+      stopSpeech();
+
+      try {
+        const data = await callGeminiModel(model, key, buildSimplifyPrompt(step), null, {
+          schema: SIMPLIFY_RESPONSE_SCHEMA,
+          temperature: 0.4,
+          maxOutputTokens: 4096,
+          timeoutMs: 30000
+        });
+
+        currentSteps[idx] = {
+          ...step,
+          title: data.title || step.title,
+          focus: data.focus || step.focus,
+          why: data.why || step.why,
+          display_math: data.display_math || step.display_math,
+          watch_out: (data.watch_out ?? step.watch_out) || '',
+          speech_ja: data.speech_ja || step.speech_ja
+        };
+
+        renderStepCards();
+        highlightStepCard(idx);
+
+        const simplified = currentSteps[idx];
+        setTimeout(() => {
+          highlightStepCard(idx);
+          speakJapanese(simplified.speech_ja || simplified.title || '', () => highlightStepCard(-1));
+        }, 350);
+      } catch (err) {
+        showStatus(`❌ やさしい説明の生成に失敗しました: ${err.message}`, 'red');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '🪄 もっとやさしく';
+        }
+      }
+    }
+
+    function highlightStepCard(activeIndex) {
+      currentSteps.forEach((_, idx) => {
+        const el = document.getElementById(`step-card-${idx}`);
+        if (!el) return;
+        if (idx === activeIndex) {
+          el.classList.add('step-active');
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          el.classList.remove('step-active');
+        }
+      });
+    }
+
+    // ===== 音声（Web Speech API / 端末内蔵音声）=====
+    let speechToken = 0;
+
+    function initVoiceSelect() {
+      if (!('speechSynthesis' in window)) {
+        showVoiceHint('⚠️ このブラウザは音声読み上げに対応していません。', true);
+        return;
+      }
+      populateVoiceSelect();
+      window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
+      [300, 1000, 2500, 5000].forEach(ms => setTimeout(populateVoiceSelect, ms));
+    }
+
+    function populateVoiceSelect() {
+      const sel = document.getElementById('voiceSelect');
+      if (!sel) return;
+
+      const voices = window.speechSynthesis.getVoices();
+      const jaVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('ja'));
+
+      if (voices.length > 0) {
+        sel.innerHTML = '<option value="">自動（おすすめ）</option>' + jaVoices.map(v =>
+          `<option value="${escapeHtml(v.voiceURI)}">${escapeHtml(v.name)}（${escapeHtml(v.lang || '')}）</option>`
+        ).join('');
+        const saved = safeStorage.getItem('preferred_voice_uri') || '';
+        if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
+      }
+
+      const hint = document.getElementById('voiceHint');
+      if (hint) {
+        if (!jaVoices.length) {
+          hint.textContent = '⚠️ この端末に日本語の音声が見つかりません。OSの音声設定で日本語音声を追加してください。';
+          hint.classList.remove('hidden');
+        } else {
+          hint.classList.add('hidden');
+        }
+      }
+    }
+
+    function showVoiceHint(message, show) {
+      const hint = document.getElementById('voiceHint');
+      if (hint) {
+        hint.textContent = message || '';
+        hint.classList.toggle('hidden', !show || !message);
+      }
+    }
+
+    function onVoiceChange() {
+      safeStorage.setItem('preferred_voice_uri', document.getElementById('voiceSelect').value);
+      testVoice();
+    }
+
+    // 音声選択優先順位：
+    // 1. Microsoft Natural / Online 系（Nanami, Keita 等「Natural」「Online」含む）
+    // 2. Apple 高品質音声（Kyoko, Otoya, Hattori 等）
+    // 3. Google 日本語音声
+    // 4. その他 ja-JP 音声
+    function getSelectedVoice() {
+      if (!('speechSynthesis' in window)) return null;
+      const voices = window.speechSynthesis.getVoices();
+      const saved = safeStorage.getItem('preferred_voice_uri');
+      if (saved) {
+        const found = voices.find(v => v.voiceURI === saved || v.name === saved);
+        if (found) return found;
+      }
+      const jaVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('ja'));
+      if (!jaVoices.length) return null;
+
+      return jaVoices.find(v => /natural|online/i.test(v.name)) ||
+        jaVoices.find(v => /kyoko|otoya|hattori/i.test(v.name)) ||
+        jaVoices.find(v => /google/i.test(v.name)) ||
+        jaVoices[0] || null;
+    }
+
+    function testVoice() {
+      speakJapanese('こんにちは。今日も一緒に、数学をがんばりましょう。');
+    }
+
+    // 読み上げ前に記号（*, #, $, \, _ 等）を除去または日本語読みに置換
+    function cleanTextForSpeech(text) {
+      return String(text || '')
+        .replace(/[*#$\\_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    // 文章を句読点・疑問符・感嘆符・改行単位で分割し、順次キューに入れる
+    function splitSpeech(text) {
+      const clean = cleanTextForSpeech(text);
+      if (!clean) return [];
+
+      const lines = clean.split(/\n+/);
+      const sentences = [];
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const parts = trimmed.match(/[^。！？!?\n]+[。！？!?\n]?/g) || [trimmed];
+        for (const p of parts) {
+          const s = p.trim();
+          if (s) sentences.push(s);
+        }
+      }
+
+      const chunks = [];
+      for (const s of sentences) {
+        let remaining = s;
+        while (remaining.length > 100) {
+          let cut = remaining.lastIndexOf('、', 80);
+          if (cut < 30) cut = 80;
+          chunks.push({ text: remaining.slice(0, cut + 1).trim(), pauseMs: 180 });
+          remaining = remaining.slice(cut + 1).trim();
+        }
+        if (remaining) {
+          const isQuestion = /[？?]$/.test(remaining);
+          chunks.push({ text: remaining, pauseMs: isQuestion ? 600 : 180 });
+        }
+      }
+
+      return chunks;
+    }
+
+    function speakJapanese(text, onEndCallback) {
+      if (!('speechSynthesis' in window)) {
+        if (onEndCallback) onEndCallback();
+        return;
+      }
+
+      const token = ++speechToken;
+      window.speechSynthesis.cancel();
+
+      const chunks = splitSpeech(text);
+      if (!chunks.length) {
+        if (onEndCallback) onEndCallback();
+        return;
+      }
+
+      const rate = parseFloat(document.getElementById('speechRate')?.value || '0.95');
+      const voice = getSelectedVoice();
+      let i = 0;
+
+      const speakNext = () => {
+        if (token !== speechToken) return;
+        if (i >= chunks.length) {
+          if (onEndCallback) onEndCallback();
+          return;
+        }
+
+        const chunk = chunks[i++];
+        const utter = new SpeechSynthesisUtterance(chunk.text);
+        utter.lang = 'ja-JP';
+        utter.rate = rate;
+        utter.pitch = 1.02;
+        if (voice) utter.voice = voice;
+
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          if (token !== speechToken) return;
+          setTimeout(speakNext, chunk.pauseMs);
+        };
+        utter.onend = finish;
+        utter.onerror = finish;
+        window.speechSynthesis.speak(utter);
+      };
+
+      setTimeout(speakNext, 100);
+    }
+
+        function playSingleStep(idx) {
+      isPlayingQueue = false;
+      const step = currentSteps[idx];
+      if (!step) return;
+      highlightStepCard(idx);
+      speakJapanese(step.speech_ja || step.title || '', () => {
+        highlightStepCard(-1);
+      });
+    }
+
+    function playAllSteps(startIndex = 0) {
+      if (!currentSteps.length) return;
+      isPlayingQueue = true;
+
+      function next(i) {
+        if (!isPlayingQueue || i >= currentSteps.length) {
+          highlightStepCard(-1);
+          isPlayingQueue = false;
+          return;
+        }
+        highlightStepCard(i);
+        // 「ステップ1。」のような機械的な前置きはしない（先生の話し言葉のまま）
+        const lead = i === startIndex && startIndex === 0 ? 'では、一緒に見ていきましょう。' : '';
+        speakJapanese(`${lead}${currentSteps[i].speech_ja || ''}`, () => next(i + 1));
+      }
+      next(startIndex);
+    }
+
+    function stopSpeech() {
+      isPlayingQueue = false;
+      speechToken++;
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      highlightStepCard(-1);
+    }
+
+    // ユーティリティ関数
+    function showStatus(html, color = 'blue') {
+      const box = document.getElementById('statusBox');
+      const styles = {
+        blue: 'bg-blue-50 border-blue-200 text-blue-900',
+        amber: 'bg-amber-50 border-amber-300 text-amber-900',
+        red: 'bg-red-50 border-red-300 text-red-900'
+      };
+      box.className = `rounded-2xl p-4 text-sm border ${styles[color] || styles.blue}`;
+      box.innerHTML = html;
+      box.classList.remove('hidden');
+    }
+
+    function hideStatus() {
+      document.getElementById('statusBox').classList.add('hidden');
+    }
+
+    // クォータ超過エラーの判定
+    function isQuotaError(err) {
+      const msg = (err?.message || '').toLowerCase();
+      return msg.includes('quota') || msg.includes('rate limit') || msg.includes('resource_exhausted') ||
+        msg.includes('billing') || msg.includes('limit: 0');
+    }
+
+    // クォータ超過時の推奨モデル一覧を取得
+    function getRecommendedModels() {
+      const selectEl = document.getElementById('modelSelect');
+      if (!selectEl) return [];
+      return [...selectEl.options]
+        .map(o => o.value)
+        .filter(v => v && !v.startsWith('groq:') && !v.startsWith('openai:'));
+    }
+
+    // クォータ超過エラー表示（モデル切り替えボタン付き）
+    function showQuotaError(selectedModel, targetBtnId) {
+      const otherModels = getRecommendedModels()
+        .filter(v => v !== selectedModel)
+        .slice(0, 4);
+
+      const fallbackButtons = otherModels.map(m =>
+        `<button onclick="solveProblem('${m}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${m} で再試行</button>`
+      ).join('');
+
+      showStatus(`
+        <div class="space-y-2">
+          <div class="font-bold text-red-700">⚠️ このモデル（${escapeHtml(selectedModel)}）の無料枠が上限に達しました。</div>
+          <div class="text-xs text-slate-600">別のモデルに切り替えるか、「⚙️ 設定」から「モデル一覧を自動取得」を押して、利用可能なモデルを確認してください。</div>
+          <div class="pt-1">${fallbackButtons}
+            <button onclick="openSettings()" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
+          </div>
+        </div>
+      `, 'red');
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+  </script>
+</body>
+</html>
