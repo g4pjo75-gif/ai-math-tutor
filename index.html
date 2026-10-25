@@ -151,7 +151,7 @@
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
             <h1 class="font-bold text-sm sm:text-base leading-tight truncate">高校数学I・A AI家庭教師</h1>
-            <span class="bg-amber-400 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0 shadow-sm">β-Test v1.4</span>
+            <span class="bg-amber-400 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0 shadow-sm">β-Test v1.5</span>
           </div>
           <p class="text-[10px] sm:text-[11px] text-emerald-200 truncate">チャート式準拠・音声解説付きステップ授業</p>
         </div>
@@ -190,7 +190,7 @@
         <span class="animate-pulse text-amber-300">🧪</span>
         <span class="font-bold text-emerald-200">先行ベータテスト版 (Beta Test Edition)</span>
       </div>
-      <span class="text-[10px] text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded font-bold">v1.4-beta</span>
+      <span class="text-[10px] text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded font-bold">v1.5-beta</span>
     </div>
 
     <!-- APIキー未設定アナウンスバナー -->
@@ -411,7 +411,7 @@
 
   <!-- フッター（バージョン表示） -->
   <footer class="max-w-3xl mx-auto px-4 py-6 text-center text-xs text-slate-400 space-y-1">
-    <p class="font-medium text-slate-500 dark:text-slate-400">高校数学I・A AI家庭教師 | 先行ベータテスト版 (Beta Test v1.4)</p>
+    <p class="font-medium text-slate-500 dark:text-slate-400">高校数学I・A AI家庭教師 | 先行ベータテスト版 (Beta Test v1.5)</p>
     <p class="text-[11px] text-slate-400 dark:text-slate-500 font-mono">Build: 2026.10-beta • High-Quality Audio Engine</p>
   </footer>
 
@@ -421,7 +421,7 @@
       <div class="flex items-center justify-between border-b pb-3">
         <div class="flex items-center gap-2">
           <h3 class="font-bold text-base text-slate-800 dark:text-slate-100">⚙️ API設定 ＆ モデル選択</h3>
-          <span class="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">Beta v1.4</span>
+          <span class="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">Beta v1.5</span>
         </div>
         <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-700 text-lg font-bold">✕</button>
       </div>
@@ -2121,45 +2121,50 @@ ${step.why ? `【今の意図】${step.why}` : ''}
     function highlightStepCard(activeIndex) {
       currentSteps.forEach((_, idx) => {
         const el = document.getElementById(`step-card-${idx}`);
+        const speechEl = document.getElementById(`step-speech-${idx}`);
         if (!el) return;
         if (idx === activeIndex) {
           el.classList.add('step-active');
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (speechEl) {
+            speechEl.classList.add('bg-amber-100', 'dark:bg-amber-950/60', 'p-2', 'rounded-lg', 'font-medium', 'text-amber-950', 'dark:text-amber-100', 'border', 'border-amber-300', 'dark:border-amber-700');
+          }
         } else {
           el.classList.remove('step-active');
+          if (speechEl) {
+            speechEl.classList.remove('bg-amber-100', 'dark:bg-amber-950/60', 'p-2', 'rounded-lg', 'font-medium', 'text-amber-950', 'dark:text-amber-100', 'border', 'border-amber-300', 'dark:border-amber-700');
+          }
         }
       });
     }
 
-    // ===== 音声（Web Speech API & クラウド高音質 Audio ハイブリッド再生）=====
+    // ===== 音声（端末内蔵 高品質日本語音声 Web Speech API）=====
     let speechToken = 0;
-    let currentAudioEl = null;
 
     function initVoiceSelect() {
+      if (!('speechSynthesis' in window)) return;
       populateVoiceSelect();
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
-        [300, 1000, 2500, 5000].forEach(ms => setTimeout(populateVoiceSelect, ms));
-      }
+      window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
+      [300, 1000, 2500, 5000].forEach(ms => setTimeout(populateVoiceSelect, ms));
     }
 
     function populateVoiceSelect() {
       const sel = document.getElementById('voiceSelect');
-      if (!sel) return;
+      if (!sel || !('speechSynthesis' in window)) return;
 
-      const voices = ('speechSynthesis' in window) ? window.speechSynthesis.getVoices() : [];
+      const voices = window.speechSynthesis.getVoices();
       const jaVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('ja'));
 
-      let optionsHtml = '<option value="cloud:google" selected>☁️ 高音質クラウド音声（iOS推奨）</option>';
+      let optionsHtml = '<option value="" selected>自動（端末推奨・Kyoko等）</option>';
       if (jaVoices.length > 0) {
-        optionsHtml += '<optgroup label="端末内蔵音声 (Web Speech)">' + jaVoices.map(v =>
+        optionsHtml += jaVoices.map(v =>
           `<option value="${escapeHtml(v.voiceURI)}">${escapeHtml(v.name)}（${escapeHtml(v.lang || '')}）</option>`
-        ).join('') + '</optgroup>';
+        ).join('');
       }
 
       sel.innerHTML = optionsHtml;
-      const saved = safeStorage.getItem('preferred_voice_uri') || 'cloud:google';
-      if ([...sel.options].some(o => o.value === saved)) {
+      const saved = safeStorage.getItem('preferred_voice_uri') || '';
+      if (saved && [...sel.options].some(o => o.value === saved)) {
         sel.value = saved;
       }
     }
@@ -2174,14 +2179,21 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       if (!('speechSynthesis' in window)) return null;
       const voices = window.speechSynthesis.getVoices();
       const saved = safeStorage.getItem('preferred_voice_uri');
-      if (saved && !saved.startsWith('cloud:')) {
+      if (saved) {
         const found = voices.find(v => v.voiceURI === saved || v.name === saved);
         if (found) return found;
       }
+
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      // iOS Safari에서는 수동 선택이 없으면 null 반환 -> lang='ja-JP'로 내장 Kyoko 등 표준 음성 자동 매핑
+      if (isIOS && !saved) return null;
+
       const jaVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('ja'));
       if (!jaVoices.length) return null;
-      return jaVoices.find(v => /natural|online/i.test(v.name)) ||
-        jaVoices.find(v => /kyoko|otoya|hattori/i.test(v.name)) ||
+
+      return jaVoices.find(v => /kyoko|otoya|hattori/i.test(v.name)) ||
+        jaVoices.find(v => /natural|online/i.test(v.name)) ||
         jaVoices.find(v => /google/i.test(v.name)) ||
         jaVoices[0] || null;
     }
@@ -2234,10 +2246,18 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       return chunks;
     }
 
-    // メイン音声読み上げ関数（クラウド高音質 Audio 優先 ＆ Web Speech API フォールバック）
+    // メイン音声読み上げ関数（単一エンジン・重複なし・安定発話）
     function speakJapanese(text, onEndCallback) {
+      if (!('speechSynthesis' in window)) {
+        if (onEndCallback) onEndCallback();
+        return;
+      }
+
       const token = ++speechToken;
-      stopSpeechAudioOnly();
+      try {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+      } catch (e) {}
 
       const chunks = splitSpeech(text);
       if (!chunks.length) {
@@ -2245,81 +2265,6 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         return;
       }
 
-      const voiceSetting = safeStorage.getItem('preferred_voice_uri') || 'cloud:google';
-      const useCloud = voiceSetting.startsWith('cloud:') || !('speechSynthesis' in window);
-
-      if (useCloud) {
-        playCloudTtsQueue(chunks, token, onEndCallback);
-      } else {
-        playWebSpeechQueue(chunks, token, onEndCallback);
-      }
-    }
-
-    function stopSpeechAudioOnly() {
-      if (currentAudioEl) {
-        try {
-          currentAudioEl.pause();
-          currentAudioEl.currentTime = 0;
-          currentAudioEl.src = '';
-        } catch (e) {}
-        currentAudioEl = null;
-      }
-      if ('speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.resume();
-        } catch (e) {}
-      }
-    }
-
-    // 1. クラウド高音質 Audio 再生（iOS 消音モード貫通・安定性最高）
-    function playCloudTtsQueue(chunks, token, onEndCallback) {
-      let idx = 0;
-
-      const playNextChunk = () => {
-        if (token !== speechToken) return;
-        if (idx >= chunks.length) {
-          if (onEndCallback) onEndCallback();
-          return;
-        }
-
-        const chunk = chunks[idx++];
-        const encoded = encodeURIComponent(chunk.text);
-        const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=ja&client=tw-ob&q=${encoded}`;
-
-        const audio = new Audio();
-        audio.preload = 'auto';
-        currentAudioEl = audio;
-
-        let finished = false;
-        const next = () => {
-          if (finished) return;
-          finished = true;
-          if (token !== speechToken) return;
-          setTimeout(playNextChunk, chunk.pauseMs || 150);
-        };
-
-        audio.onended = next;
-        audio.onerror = (e) => {
-          console.warn('Cloud TTS error, trying WebSpeech for chunk:', e);
-          playSingleWebSpeechChunk(chunk.text, next);
-        };
-
-        audio.src = url;
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(err => {
-            console.warn('Audio play rejected (autoplay block?), trying WebSpeech:', err);
-            playSingleWebSpeechChunk(chunk.text, next);
-          });
-        }
-      };
-
-      playNextChunk();
-    }
-
-    // 2. 端末内蔵 Web Speech API 再生
-    function playWebSpeechQueue(chunks, token, onEndCallback) {
       const rate = parseFloat(document.getElementById('speechRate')?.value || '0.95');
       const voice = getSelectedVoice();
       let idx = 0;
@@ -2343,12 +2288,12 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           if (finished) return;
           finished = true;
           if (token !== speechToken) return;
-          setTimeout(speakNextChunk, chunk.pauseMs);
+          setTimeout(speakNextChunk, chunk.pauseMs || 150);
         };
 
         utter.onend = finish;
         utter.onerror = (e) => {
-          console.warn('WebSpeech error:', e);
+          console.warn('WebSpeech chunk error:', e);
           finish();
         };
 
@@ -2361,23 +2306,6 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       };
 
       speakNextChunk();
-    }
-
-    function playSingleWebSpeechChunk(text, onEnd) {
-      if (!('speechSynthesis' in window)) {
-        if (onEnd) onEnd();
-        return;
-      }
-      try {
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = 'ja-JP';
-        utter.rate = 0.95;
-        utter.onend = onEnd;
-        utter.onerror = onEnd;
-        window.speechSynthesis.speak(utter);
-      } catch (e) {
-        if (onEnd) onEnd();
-      }
     }
 
     function playSingleStep(idx) {
@@ -2410,7 +2338,9 @@ ${step.why ? `【今の意図】${step.why}` : ''}
     function stopSpeech() {
       isPlayingQueue = false;
       speechToken++;
-      stopSpeechAudioOnly();
+      if ('speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+      }
       highlightStepCard(-1);
     }
 
