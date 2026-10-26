@@ -17,6 +17,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="stylesheet" href="shared/ui.css?v=20261027" />
   <!-- Tailwind CSS (dark mode: class) -->
   <script>
     tailwind.config = {
@@ -203,6 +204,11 @@
       <button onclick="unlockApp()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 rounded-xl transition">
         ロック解除して始める
       </button>
+      <div class="pt-3">
+        <a href="english/" class="text-xs text-slate-400 hover:text-emerald-400 transition underline underline-offset-4">
+          🇬🇧 AI英語チューターへ切り替え
+        </a>
+      </div>
     </div>
   </div>
 
@@ -229,6 +235,9 @@
           <option value="gemini-2.0-flash">gemini-2.0-flash (安定版)</option>
           <option value="gemini-flash-latest">gemini-flash-latest (最新自動)</option>
         </select>
+        <a href="english/" class="bg-blue-600/70 hover:bg-blue-600/90 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1 border border-blue-400/30 transition text-white" title="英語チューターへ移動">
+          <span>🇬🇧</span><span class="hidden xs:inline">英語</span>
+        </a>
         <button onclick="openSettings()" class="bg-white/10 hover:bg-white/20 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1" title="API設定・モデル検索">
           <span>⚙️</span><span class="inline">設定</span>
         </button>
@@ -600,36 +609,77 @@
     </div>
   </div>
 
+  <!-- Shared Modules -->
+  <script src="shared/storage.js?v=20261027"></script>
+  <script src="shared/core.js?v=20261027"></script>
+  <script src="shared/speech.js?v=20261027"></script>
+  <script src="shared/ui.js?v=20261027"></script>
+
   <script>
     // =========================================================================
-    // 1. 安全ストレージラッパー (safeStorage - amt_ プレフィックス & 旧キー互換移行)
+    // 1. 安全ストレージラッパー (sharedStore + mathStore による共有キー連携)
     // =========================================================================
-    const STORAGE_PREFIX = 'amt_';
-    const memoryStore = {};
+    const sharedStore = window.TutorStorage
+      ? window.TutorStorage.create({ prefix: 'tutor_', legacyPrefixes: ['amt_'] })
+      : null;
+    const mathStore = window.TutorStorage
+      ? window.TutorStorage.create({ prefix: 'amt_', legacyPrefixes: [''] })
+      : null;
+
+    // 共通キー（数学・英語・保護者画面で共有）
+    const COMMON_STORAGE_KEYS = new Set(['gemini_api_key', 'app_pin', 'dark_mode']);
+
+    const memoryFallback = {};
     const safeStorage = {
-      _key(key) {
-        return key.startsWith(STORAGE_PREFIX) ? key : `${STORAGE_PREFIX}${key}`;
-      },
       getItem(key) {
-        const prefixed = this._key(key);
+        if (COMMON_STORAGE_KEYS.has(key) && sharedStore) {
+          const sharedVal = sharedStore.getItem(key);
+          if (sharedVal !== null && sharedVal !== undefined) return sharedVal;
+        }
+        if (mathStore) {
+          return mathStore.getItem(key);
+        }
         try {
+          const prefixed = `amt_${key}`;
           const val = localStorage.getItem(prefixed) ?? localStorage.getItem(key);
           if (val !== null && val !== undefined) return val;
-          return memoryStore[prefixed] ?? memoryStore[key] ?? null;
+          return memoryFallback[prefixed] ?? memoryFallback[key] ?? null;
         } catch (e) {
-          return memoryStore[prefixed] ?? memoryStore[key] ?? null;
+          return memoryFallback[`amt_${key}`] ?? memoryFallback[key] ?? null;
         }
       },
       setItem(key, val) {
-        const prefixed = this._key(key);
+        let ok = true;
         const strVal = String(val);
-        memoryStore[prefixed] = strVal;
-        try {
-          localStorage.setItem(prefixed, strVal);
-          return true;
-        } catch (e) {
-          console.warn('localStorage.setItem failed:', e);
-          return false;
+        if (COMMON_STORAGE_KEYS.has(key) && sharedStore) {
+          sharedStore.setItem(key, strVal);
+        }
+        if (mathStore) {
+          ok = mathStore.setItem(key, strVal);
+        } else {
+          memoryFallback[`amt_${key}`] = strVal;
+          try {
+            localStorage.setItem(`amt_${key}`, strVal);
+          } catch (e) {
+            console.warn('localStorage.setItem failed:', e);
+            ok = false;
+          }
+        }
+        return ok;
+      },
+      removeItem(key) {
+        if (COMMON_STORAGE_KEYS.has(key) && sharedStore) {
+          sharedStore.removeItem(key);
+        }
+        if (mathStore) {
+          mathStore.removeItem(key);
+        } else {
+          delete memoryFallback[`amt_${key}`];
+          delete memoryFallback[key];
+          try {
+            localStorage.removeItem(`amt_${key}`);
+            localStorage.removeItem(key);
+          } catch (e) {}
         }
       }
     };

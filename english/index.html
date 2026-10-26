@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ja" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>AI 英語チューター | 読んで聞いて身につく高校英語</title>
+
+  <!-- PWA & iOS Safari Home Screen Meta -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="AI英語" />
+  <meta name="theme-color" content="#1e3a5f" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+
+  <!-- Tailwind CSS -->
+  <script>
+    tailwind = {
+      config: {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              english: {
+                dark: '#0f172a',
+                mid: '#1e3a5f',
+                light: '#2563eb'
+              }
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Common UI Stylesheet -->
+  <link rel="stylesheet" href="../shared/ui.css?v=20261027" />
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+      overscroll-behavior: contain;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
+
+  <!-- PIN Unlock Modal -->
+  <div id="pinModal" class="fixed inset-0 z-50 bg-slate-950/80 modal-backdrop flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl text-center space-y-4">
+      <div class="w-16 h-16 bg-blue-100 dark:bg-blue-950/80 rounded-2xl mx-auto flex items-center justify-center text-3xl shadow-inner">
+        📖
+      </div>
+      <div>
+        <h2 class="text-xl font-black text-slate-900 dark:text-white">AI 英語チューター</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">暗証番号（PIN）を入力してスタート</p>
+      </div>
+      <div class="space-y-2">
+        <input id="pinInput" type="password" maxlength="8" inputmode="numeric" placeholder="PINコード (初期: 1234)"
+          class="w-full text-center text-2xl tracking-widest font-mono font-bold py-3 border-2 border-blue-200 dark:border-blue-900/60 rounded-2xl focus:border-blue-600 focus:outline-none dark:bg-slate-900 dark:text-white"
+          onkeydown="if(event.key==='Enter') unlockApp()" />
+        <p id="pinError" class="text-xs text-rose-500 font-bold hidden">⚠️ PINコードが違います</p>
+      </div>
+      <button onclick="unlockApp()" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-3 rounded-2xl transition shadow-lg shadow-blue-600/30">
+        ロック解除
+      </button>
+      <div class="pt-2">
+        <a href="../" class="text-xs text-slate-400 hover:text-blue-500 transition underline underline-offset-4">
+          📐 AI数学チューターへ戻る
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-30 bg-[#1e3a5f] text-white shadow-md pt-safe">
+    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-500/30 flex items-center justify-center text-xl shadow-inner border border-blue-400/20">
+          🇬🇧
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-black tracking-wide">AI 英語チューター</h1>
+            <span class="text-[10px] bg-blue-400/20 text-blue-200 font-bold px-1.5 py-0.5 rounded border border-blue-300/30">v0.1</span>
+          </div>
+          <p class="text-[11px] text-blue-200/80">長文読解・文法・語彙・英作文</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="../" title="数学チューターへ移動" class="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl text-white font-bold transition flex items-center gap-1 border border-white/15">
+          <span>📐</span>
+          <span class="hidden sm:inline">数学</span>
+        </a>
+        <button id="darkModeToggle" onclick="toggleDarkMode()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition border border-white/15">
+          🌙
+        </button>
+        <button onclick="openSettings()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition border border-white/15">
+          ⚙️
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1 space-y-6">
+
+    <!-- Mode Selector Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+      <button class="mode-btn active bg-blue-600 text-white p-3 rounded-2xl text-left shadow-sm transition border-2 border-blue-600">
+        <div class="text-lg">📖</div>
+        <div class="text-xs font-bold mt-1">長文読解</div>
+        <div class="text-[10px] opacity-80">Reading & 訳</div>
+      </button>
+      <button class="mode-btn bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700/50 p-3 rounded-2xl text-left shadow-sm transition border-2 border-transparent">
+        <div class="text-lg">🧩</div>
+        <div class="text-xs font-bold mt-1 text-slate-800 dark:text-slate-200">英文法</div>
+        <div class="text-[10px] text-slate-400">Grammar</div>
+      </button>
+      <button class="mode-btn bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700/50 p-3 rounded-2xl text-left shadow-sm transition border-2 border-transparent">
+        <div class="text-lg">🔤</div>
+        <div class="text-xs font-bold mt-1 text-slate-800 dark:text-slate-200">単語・語彙</div>
+        <div class="text-[10px] text-slate-400">Vocabulary</div>
+      </button>
+      <button class="mode-btn bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700/50 p-3 rounded-2xl text-left shadow-sm transition border-2 border-transparent">
+        <div class="text-lg">✍️</div>
+        <div class="text-xs font-bold mt-1 text-slate-800 dark:text-slate-200">英作文</div>
+        <div class="text-[10px] text-slate-400">Writing</div>
+      </button>
+    </div>
+
+    <!-- Input Section: Photo Upload + Question Text -->
+    <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200/80 dark:border-slate-700/60 space-y-4">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-700 dark:text-slate-300">📷 教科書や問題集の写真を撮る</span>
+        <span class="text-[11px] text-slate-400">スマホカメラ・アルバム対応</span>
+      </div>
+
+      <!-- Upload Dropzone / Button -->
+      <div class="relative border-2 border-dashed border-blue-200 dark:border-slate-600 hover:border-blue-500 rounded-2xl p-6 text-center cursor-pointer transition bg-blue-50/30 dark:bg-slate-900/40"
+        onclick="document.getElementById('fileInput').click()">
+        <input id="fileInput" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
+        <div id="uploadPrompt" class="space-y-2">
+          <div class="w-12 h-12 bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-full mx-auto flex items-center justify-center text-2xl">
+            📷
+          </div>
+          <p class="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">ここをタップして写真を選択 または 撮影</p>
+          <p class="text-[11px] text-slate-400">英語の長文・問題・単語帳のページを撮影してください</p>
+        </div>
+        <img id="imagePreview" class="hidden max-h-56 mx-auto rounded-xl shadow border border-slate-200 dark:border-slate-700" alt="Preview" />
+      </div>
+
+      <!-- Optional Text Prompt -->
+      <div class="space-y-1.5">
+        <label class="text-xs font-bold text-slate-600 dark:text-slate-400">💬 追加の質問や気になる部分（任意）</label>
+        <textarea id="questionInput" rows="2" placeholder="例: 3行目のwhichの先行詞がわかりません / この段落の日本語訳と重要単語を教えて"
+          class="w-full text-xs sm:text-sm p-3 border border-slate-200 dark:border-slate-600 rounded-xl dark:bg-slate-900 dark:text-white focus:outline-none focus:border-blue-600"></textarea>
+      </div>
+
+      <!-- Action Button -->
+      <button id="solveBtn" onclick="analyzeEnglishProblem()"
+        class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold py-3.5 rounded-2xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2">
+        <span>✨</span>
+        <span>AI先生に英語を解説してもらう</span>
+      </button>
+    </div>
+
+    <!-- Status Box -->
+    <div id="statusBox" class="hidden rounded-2xl p-4 text-xs font-bold border transition"></div>
+
+    <!-- Result Skeleton Section -->
+    <div id="resultSection" class="hidden space-y-4">
+      <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 shadow-sm border border-slate-200/80 dark:border-slate-700/60 space-y-4">
+        <div class="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-700">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">📖</span>
+            <h2 class="text-sm font-bold text-slate-800 dark:text-slate-200">英文読解・解説</h2>
+          </div>
+          <button onclick="playEnglishSpeech()" class="text-xs bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-300 font-bold px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition flex items-center gap-1.5">
+            <span>🔊</span>
+            <span>ネイティブ音声で聞く (en-US)</span>
+          </button>
+        </div>
+        <div id="resultContent" class="space-y-4 text-xs sm:text-sm leading-relaxed">
+          <!-- AI generated result goes here -->
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 z-50 bg-slate-950/80 modal-backdrop hidden items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b pb-3 dark:border-slate-700">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <span>⚙️</span>
+          <span>設定</span>
+        </h3>
+        <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-bold text-slate-700 dark:text-slate-300 block mb-1">🔑 Google Gemini API キー</label>
+          <input id="geminiKeyInput" type="password" placeholder="AIzaSy..."
+            class="w-full p-2.5 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white font-mono" />
+          <p class="text-[10px] text-slate-400 mt-1">※ 数学チューターと自動共有されます。</p>
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 dark:text-slate-300 block mb-1">🔒 保護者PINコード</label>
+          <input id="newPinInput" type="password" maxlength="8" placeholder="1234"
+            class="w-full p-2.5 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white font-mono" />
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 dark:text-slate-300 block mb-1">🔊 英語音声の速度</label>
+          <select id="speechRateSelect" class="w-full p-2.5 border rounded-xl dark:bg-slate-900 dark:border-slate-700 dark:text-white">
+            <option value="0.85">ゆっくり (0.85x)</option>
+            <option value="0.95" selected>標準 (0.95x)</option>
+            <option value="1.05">少し速め (1.05x)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t dark:border-slate-700 flex gap-2">
+        <button onclick="closeSettings()" class="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold text-slate-600 dark:text-slate-300">
+          キャンセル
+        </button>
+        <button onclick="saveSettings()" class="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-md shadow-blue-600/30">
+          保存する
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shared Toast Notification Container -->
+  <div id="toastNotification" class="hidden"></div>
+
+  <!-- Shared Scripts -->
+  <script src="../shared/storage.js?v=20261027"></script>
+  <script src="../shared/core.js?v=20261027"></script>
+  <script src="../shared/speech.js?v=20261027"></script>
+  <script src="../shared/ui.js?v=20261027"></script>
+
+  <!-- English App Logic -->
+  <script>
+    // 共有ストレージの初期化（共通設定 + 英語専用 aet_ prefix）
+    const sharedStore = window.TutorStorage ? window.TutorStorage.create({ prefix: 'tutor_', legacyPrefixes: ['amt_'] }) : null;
+    const engStore = window.TutorStorage ? window.TutorStorage.create({ prefix: 'aet_', legacyPrefixes: [''] }) : null;
+
+    // 英語音声エンジン (en-US 優先)
+    const englishSpeech = window.TutorSpeech ? window.TutorSpeech.create({
+      lang: 'en-US',
+      defaultRate: 0.95,
+      voicePriority: [/samantha|ava|daniel/i, /google us english/i, /natural|online/i]
+    }) : null;
+
+    let currentImageBase64 = null;
+    let lastPassageText = '';
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // ダークモード初期化
+      if (window.TutorUI) {
+        window.TutorUI.initDarkMode({ storage: sharedStore, key: 'dark_mode' });
+        window.TutorUI.updateSafeArea();
+      }
+
+      // PINモーダル制御
+      const savedPin = sharedStore ? sharedStore.getItem('pin') : null;
+      if (!savedPin && sessionStorage.getItem('aet_unlocked') === '1') {
+        document.getElementById('pinModal').style.display = 'none';
+      }
+
+      // 音声速度復元
+      const savedRate = engStore ? engStore.getItem('speech_rate') : null;
+      if (savedRate && document.getElementById('speechRateSelect')) {
+        document.getElementById('speechRateSelect').value = savedRate;
+      }
+
+      // PWA Service Worker 登録 (English scope)
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+        navigator.serviceWorker.register('./sw.js').catch((e) => {
+          console.warn('English SW registration error:', e);
+        });
+      }
+    });
+
+    function unlockApp() {
+      const input = document.getElementById('pinInput').value.trim();
+      const savedPin = (sharedStore ? sharedStore.getItem('pin') : null) || '1234';
+      if (input === savedPin) {
+        document.getElementById('pinModal').style.display = 'none';
+        sessionStorage.setItem('aet_unlocked', '1');
+      } else {
+        document.getElementById('pinError').classList.remove('hidden');
+      }
+    }
+
+    function toggleDarkMode() {
+      if (window.TutorUI) {
+        window.TutorUI.toggleDarkMode({ storage: sharedStore, key: 'dark_mode' });
+      }
+    }
+
+    function openSettings() {
+      const key = sharedStore ? sharedStore.getItem('gemini_api_key') : '';
+      const pin = sharedStore ? (sharedStore.getItem('pin') || '1234') : '1234';
+      document.getElementById('geminiKeyInput').value = key || '';
+      document.getElementById('newPinInput').value = pin;
+      window.TutorUI.openModal('settingsModal');
+    }
+
+    function closeSettings() {
+      window.TutorUI.closeModal('settingsModal');
+    }
+
+    function saveSettings() {
+      const key = document.getElementById('geminiKeyInput').value.trim();
+      const pin = document.getElementById('newPinInput').value.trim() || '1234';
+      const rate = document.getElementById('speechRateSelect').value;
+
+      if (sharedStore) {
+        sharedStore.setItem('gemini_api_key', key);
+        sharedStore.setItem('pin', pin);
+      }
+      if (engStore) {
+        engStore.setItem('speech_rate', rate);
+      }
+
+      closeSettings();
+      window.TutorUI.showToast('✅ 設定を保存しました。', 'green');
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          // リサイズ（最大1400px）
+          const maxDim = 1400;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          currentImageBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+
+          document.getElementById('uploadPrompt').classList.add('hidden');
+          const preview = document.getElementById('imagePreview');
+          preview.src = canvas.toDataURL('image/jpeg', 0.85);
+          preview.classList.remove('hidden');
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    async function analyzeEnglishProblem() {
+      const geminiKey = sharedStore ? sharedStore.getItem('gemini_api_key') : null;
+      if (!geminiKey) {
+        openSettings();
+        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
+        return;
+      }
+
+      const userText = document.getElementById('questionInput').value.trim();
+      if (!currentImageBase64 && !userText) {
+        window.TutorUI.showToast('⚠️ 写真を撮影するか、質問テキストを入力してください。', 'amber');
+        return;
+      }
+
+      const statusBox = document.getElementById('statusBox');
+      statusBox.className = 'rounded-2xl p-4 text-xs font-bold border bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-100';
+      statusBox.innerHTML = '⏳ AI英語先生が英文を解析しています…（最大20秒）';
+      statusBox.classList.remove('hidden');
+
+      const prompt = `あなたは日本の高校生向けに教える優秀で親切なAI英語チューターです。
+添付された画像または質問テキストを解析し、以下の構造で分かりやすく解説してください：
+1. 英文の書き起こし（Passage / Problem）
+2. 自然で分かりやすい日本語全訳（Translation）
+3. 重要語彙・イディオム（Vocabulary & Idioms）: 単語、品詞、意味、例文
+4. 重要文法・構文のポイント（Grammar Focus）: 構文の解説と注意点
+5. 類題または確認クイズ（Quick Check）
+
+出力はマークダウン形式で、親しみやすい丁寧な語り口（です・ます調）で回答してください。`;
+
+      try {
+        const responseText = await window.TutorCore.callGeminiModel({
+          modelId: 'gemini-2.5-flash',
+          apiKey: geminiKey,
+          promptText: `${prompt}\n\n生徒の追加質問: ${userText || 'なし'}`,
+          imageBase64: currentImageBase64,
+          rawText: true,
+          temperature: 0.4
+        });
+
+        lastPassageText = responseText;
+        statusBox.classList.add('hidden');
+
+        const resultContent = document.getElementById('resultContent');
+        resultContent.innerHTML = `<div class="whitespace-pre-wrap font-sans text-xs sm:text-sm bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">${escapeHtml(responseText)}</div>`;
+        document.getElementById('resultSection').classList.remove('hidden');
+        window.TutorUI.showToast('✨ 英語の解説が完成しました！', 'green');
+      } catch (err) {
+        console.error(err);
+        statusBox.className = 'rounded-2xl p-4 text-xs font-bold border bg-red-50 border-red-200 text-red-900 dark:bg-red-950/60 dark:border-red-800 dark:text-red-100';
+        statusBox.textContent = `❌ エラーが発生しました: ${err.message || '通信エラー'}`;
+      }
+    }
+
+    function playEnglishSpeech() {
+      if (!englishSpeech || !lastPassageText) {
+        window.TutorUI.showToast('⚠️ 読み上げる英文がありません。', 'amber');
+        return;
+      }
+      const rate = parseFloat(document.getElementById('speechRateSelect')?.value || '0.95');
+      englishSpeech.speak(lastPassageText, { rate });
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+  </script>
+</body>
+</html>
