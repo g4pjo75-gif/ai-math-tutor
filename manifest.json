@@ -1,8 +1,10 @@
 {
+  "id": "./",
   "name": "AI 数学I・A チューター",
   "short_name": "AI数学",
   "description": "見て聞いてわかる黒板授業 - 日本高校 数学I・A AI家庭教師",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#142820",
   "theme_color": "#1e3a2f",

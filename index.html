@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>AI 数学I・A チューター | 見て聞いてわかる黒板授業</title>
   
   <!-- PWA & iOS Safari Home Screen Meta -->
@@ -40,10 +40,11 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
   <style>
     :root {
-      --safe-area-inset-top: 0px;
-      --safe-area-inset-bottom: 0px;
-      --safe-area-inset-left: 0px;
-      --safe-area-inset-right: 0px;
+      --safe-area-inset-top: env(safe-area-inset-top, 0px);
+      --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-area-inset-left: env(safe-area-inset-left, 0px);
+      --safe-area-inset-right: env(safe-area-inset-right, 0px);
+      --keyboard-height: 0px;
     }
     body {
       font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo', 'Noto Sans JP', sans-serif;
@@ -71,12 +72,19 @@
       box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.15);
       transform: scale(1.01);
     }
-    .chalkboard-header { background: linear-gradient(135deg, #1e3a2f 0%, #142820 100%); }
+    .chalkboard-header {
+      background: linear-gradient(135deg, #1e3a2f 0%, #142820 100%);
+      padding-top: env(safe-area-inset-top, 0px);
+    }
     .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.5rem 0; }
 
     /* ダークモード色のオーバーライド */
     .dark body { background-color: #0f172a; color: #f1f5f9; }
-    .dark .step-active { background-color: #0f172a !important; }
+    .dark .step-active {
+      border-left-color: #3b82f6;
+      background-color: #1e293b !important;
+      box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.25);
+    }
     .dark .katex-display { }
 
     @keyframes stepFadeIn {
@@ -129,14 +137,14 @@
 
   <!-- 1. 初期 PIN ログインモーダル (初期パスワード: 1234) -->
   <div id="pinModal" class="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
-      <div class="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold">📐</div>
-      <h2 class="text-xl font-bold text-slate-800 mb-1">AI 数学チューター ロック解除</h2>
-      <p class="text-xs text-slate-500 mb-4">4桁のPINコードを入力してください（初期値: 1234）</p>
+    <div class="bg-white dark:bg-slate-900 dark:border dark:border-slate-700 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
+      <div class="w-14 h-14 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold">📐</div>
+      <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">AI 数学チューター ロック解除</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">4桁のPINコードを入力してください（初期値: 1234）</p>
       <input id="pinInput" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
-        class="w-full text-center text-2xl tracking-widest font-bold border-2 border-slate-300 rounded-xl py-3 mb-3 focus:outline-none focus:border-emerald-600"
-        onkeydown="if(event.key==='Enter') unlockApp()" />
-      <p id="pinError" class="text-xs text-red-600 mb-3 hidden">PINコードが正しくありません。</p>
+        class="w-full text-center text-2xl tracking-widest font-bold border-2 border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-xl py-3 mb-3 focus:outline-none focus:border-emerald-600"
+        onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) unlockApp()" />
+      <p id="pinError" class="text-xs text-red-600 dark:text-red-400 mb-3 hidden">PINコードが正しくありません。</p>
       <button onclick="unlockApp()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 rounded-xl transition">
         ロック解除して始める
       </button>
@@ -151,7 +159,7 @@
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
             <h1 class="font-bold text-sm sm:text-base leading-tight truncate">高校数学I・A AI家庭教師</h1>
-            <span class="bg-amber-400 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0 shadow-sm">β-Test v1.5</span>
+            <span class="bg-amber-400 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded-full shrink-0 shadow-sm">β-Test v1.6</span>
           </div>
           <p class="text-[10px] sm:text-[11px] text-emerald-200 truncate">チャート式準拠・音声解説付きステップ授業</p>
         </div>
@@ -161,10 +169,10 @@
       <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <select id="modelSelect" onchange="onModelDropdownChange()"
           class="bg-slate-800/90 text-white text-[11px] sm:text-xs rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 border border-emerald-500/40 focus:outline-none max-w-[85px] xs:max-w-[120px] sm:max-w-[180px] truncate">
-          <option value="gemini-3-flash-preview" selected>gemini-3-flash-preview (おすすめ・最新)</option>
-          <option value="gemini-flash-latest">gemini-flash-latest (標準)</option>
+          <option value="gemini-2.5-flash" selected>gemini-2.5-flash (おすすめ・高速)</option>
+          <option value="gemini-2.5-pro">gemini-2.5-pro (高精度)</option>
           <option value="gemini-2.0-flash">gemini-2.0-flash (安定版)</option>
-          <option value="gemini-1.5-pro">gemini-1.5-pro (高精度)</option>
+          <option value="gemini-flash-latest">gemini-flash-latest (最新自動)</option>
         </select>
         <button onclick="openSettings()" class="bg-white/10 hover:bg-white/20 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1" title="API設定・モデル検索">
           <span>⚙️</span><span class="inline">設定</span>
@@ -190,15 +198,15 @@
         <span class="animate-pulse text-amber-300">🧪</span>
         <span class="font-bold text-emerald-200">先行ベータテスト版 (Beta Test Edition)</span>
       </div>
-      <span class="text-[10px] text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded font-bold">v1.5-beta</span>
+      <span class="text-[10px] text-amber-300 font-mono bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded font-bold">v1.6-beta</span>
     </div>
 
     <!-- APIキー未設定アナウンスバナー -->
-    <div id="apiWarningBanner" class="bg-amber-50 border border-amber-300 rounded-xl p-3.5 flex items-center justify-between gap-3 hidden">
-      <div class="text-xs text-amber-900">
+    <div id="apiWarningBanner" class="bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 rounded-xl p-3.5 flex items-center justify-between gap-3 hidden">
+      <div class="text-xs text-amber-900 dark:text-amber-200">
         <strong>🔑 APIキーが未設定です：</strong> 右上の「⚙️ 設定」からGemini APIキーを登録し、「利用可能なモデルを自動取得」を押してください。
       </div>
-      <button onclick="openSettings()" class="shrink-0 bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">設定を開く</button>
+      <button onclick="openSettings()" class="shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">設定を開く</button>
     </div>
 
     <!-- 問題入力 & 画像アップロードカード -->
@@ -290,7 +298,7 @@
             ▶ 声を聞く
           </button>
           <span class="ml-1">🔊 速度:</span>
-          <select id="speechRate" class="bg-slate-700 text-white rounded-lg px-2 py-1 border border-slate-600 dark:bg-slate-800 dark:border-slate-600">
+          <select id="speechRate" onchange="onSpeechRateChange()" class="bg-slate-700 text-white rounded-lg px-2 py-1 border border-slate-600 dark:bg-slate-800 dark:border-slate-600">
             <option value="0.8">0.8x (とてもゆっくり)</option>
             <option value="0.9">0.9x (ゆっくり)</option>
             <option value="0.95" selected>0.95x (おすすめ)</option>
@@ -301,7 +309,6 @@
         <p class="w-full text-[11px] text-slate-300 dark:text-slate-400">
           💡 iPhoneで声が聞こえない時は、本体横の<strong>消音スイッチ（マナーモード）</strong>を解除し、音量を上げてください。
         </p>
-        <p id="voiceHint" class="hidden w-full text-[11px] text-amber-200 bg-amber-900/40 border border-amber-500/40 rounded-lg px-2.5 py-1.5"></p>
       </div>
 
       <!-- 複数問題切り替えタブ（小問が2問以上ある場合に表示） -->
@@ -392,7 +399,7 @@
             <input type="text" id="studentAnswerInput"
               placeholder="例: -3 <= y <= 3 または (x+2)(2x-1)"
               class="flex-1 text-sm border-2 border-emerald-500/50 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-emerald-600 bg-white dark:bg-slate-800 dark:text-white"
-              onkeydown="if(event.key==='Enter') submitStudentAnswer()" />
+              onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) submitStudentAnswer()" />
             <button onclick="submitStudentAnswer()" id="submitAnswerBtn"
               class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow flex items-center gap-1.5 shrink-0">
               <span id="submitAnswerBtnText">採点する 🚀</span>
@@ -411,73 +418,68 @@
 
   <!-- フッター（バージョン表示） -->
   <footer class="max-w-3xl mx-auto px-4 py-6 text-center text-xs text-slate-400 space-y-1">
-    <p class="font-medium text-slate-500 dark:text-slate-400">高校数学I・A AI家庭教師 | 先行ベータテスト版 (Beta Test v1.5)</p>
+    <p class="font-medium text-slate-500 dark:text-slate-400">高校数学I・A AI家庭教師 | 先行ベータテスト版 (Beta Test v1.6)</p>
     <p class="text-[11px] text-slate-400 dark:text-slate-500 font-mono">Build: 2026.10-beta • High-Quality Audio Engine</p>
   </footer>
 
+  <!-- トースト通知バー（画面下部固定・スクロール位置に関係なく視認可能） -->
+  <div id="toastNotification" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden max-w-[92vw] sm:max-w-md px-4 py-3 rounded-2xl shadow-2xl border text-xs sm:text-sm font-bold transition-all duration-300"></div>
+
   <!-- 5. 設定モーダル（APIキー保存 + ListModels自動取得 + カスタムモデル入力） -->
   <div id="settingsModal" class="fixed inset-0 bg-slate-900/85 z-40 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto dark:bg-slate-900">
-      <div class="flex items-center justify-between border-b pb-3">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto dark:bg-slate-900 dark:border dark:border-slate-700">
+      <div class="flex items-center justify-between border-b dark:border-slate-700 pb-3">
         <div class="flex items-center gap-2">
           <h3 class="font-bold text-base text-slate-800 dark:text-slate-100">⚙️ API設定 ＆ モデル選択</h3>
-          <span class="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">Beta v1.5</span>
+          <span class="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">Beta v1.6</span>
         </div>
-        <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-700 text-lg font-bold">✕</button>
+        <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg font-bold">✕</button>
       </div>
 
       <!-- Gemini APIキー入力 -->
       <div class="space-y-1.5">
-        <label class="text-xs font-bold text-slate-700">🔑 Google Gemini API キー (AI Studio)</label>
+        <label class="text-xs font-bold text-slate-700 dark:text-slate-300">🔑 Google Gemini API キー (AI Studio)</label>
         <input id="geminiKeyInput" type="password" placeholder="AIzaSy..."
-          class="w-full text-sm border border-slate-300 rounded-xl p-2.5 focus:outline-none focus:border-emerald-600" />
+          class="w-full text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-xl p-2.5 focus:outline-none focus:border-emerald-600" />
       </div>
 
       <!-- [解決策 1] 自分のAPIキーで利用可能なモデルを自動取得するボタン -->
-      <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
+      <div class="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 space-y-2">
         <div class="flex items-center justify-between gap-2">
-          <span class="text-xs font-bold text-emerald-900">🔍 APIキーで利用可能なモデルを自動検索</span>
+          <span class="text-xs font-bold text-emerald-900 dark:text-emerald-200">🔍 APIキーで利用可能なモデルを自動検索</span>
           <button onclick="fetchAvailableModels()"
             class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
             モデル一覧を自動取得
           </button>
         </div>
-        <p id="modelFetchStatus" class="text-[11px] text-emerald-800">
+        <p id="modelFetchStatus" class="text-[11px] text-emerald-800 dark:text-emerald-300">
           ボタンを押すと <code>v1beta/models</code> を照会し、現在のAPIキーで100%動作するモデルのみを上部ドロップダウンに登録します。
         </p>
       </div>
 
       <!-- [解決策 2] モデル名を直接入力（カスタムモデルID） -->
       <div class="space-y-1.5">
-        <label class="text-xs font-bold text-slate-700">✏️ カスタムモデルIDの直接指定（任意・最優先）</label>
-        <input id="customModelInput" type="text" placeholder="例: gemini-2.5-flash / gemini-3.8-flash / gemini-2.0-flash"
-          class="w-full text-xs border border-slate-300 rounded-xl p-2.5 focus:outline-none focus:border-blue-600" />
-        <p class="text-[11px] text-slate-500">
+        <label class="text-xs font-bold text-slate-700 dark:text-slate-300">✏️ カスタムモデルIDの直接指定（任意・最優先）</label>
+        <input id="customModelInput" type="text" placeholder="例: gemini-2.5-flash / gemini-2.5-pro / gemini-2.0-flash"
+          class="w-full text-xs border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-600" />
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">
           ※ 空欄の場合は上部ドロップダウンで選択されたモデルが使用されます。Googleのモデル名変更時に直接入力して即座に対応できます。
         </p>
       </div>
 
-      <!-- (補助) Groq / OpenAI APIキー 及び PIN変更 -->
-      <details class="text-xs border-t pt-3">
-        <summary class="font-bold text-slate-600 cursor-pointer">➕ 予備プロバイダ (Groq / OpenAI) ＆ PINコード変更</summary>
+      <!-- (補助) PIN変更 -->
+      <details class="text-xs border-t dark:border-slate-700 pt-3">
+        <summary class="font-bold text-slate-600 dark:text-slate-300 cursor-pointer">🔒 ロック解除 PINコード変更</summary>
         <div class="mt-3 space-y-2.5">
           <div>
-            <label class="block font-semibold mb-1">Groq API Key (無料 Llama Vision 予備用)</label>
-            <input id="groqKeyInput" type="password" placeholder="gsk_..." class="w-full border rounded-lg p-2" />
-          </div>
-          <div>
-            <label class="block font-semibold mb-1">OpenAI API Key (gpt-4o-mini 等)</label>
-            <input id="openaiKeyInput" type="password" placeholder="sk-..." class="w-full border rounded-lg p-2" />
-          </div>
-          <div>
-            <label class="block font-semibold mb-1">ロック解除 PINコード変更 (初期値: 1234)</label>
-            <input id="newPinInput" type="text" placeholder="1234" class="w-full border rounded-lg p-2" />
+            <label class="block font-semibold mb-1 dark:text-slate-300">ロック解除 PINコード変更 (初期値: 1234)</label>
+            <input id="newPinInput" type="text" placeholder="1234" class="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg p-2" />
           </div>
         </div>
       </details>
 
-      <div class="flex justify-end gap-2 pt-2 border-t">
-        <button onclick="closeSettings()" class="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl">閉じる</button>
+      <div class="flex justify-end gap-2 pt-2 border-t dark:border-slate-700">
+        <button onclick="closeSettings()" class="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl">閉じる</button>
         <button onclick="saveSettings()" class="px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl">💾 保存する</button>
       </div>
     </div>
@@ -502,17 +504,35 @@
 
   <script>
     // =========================================================================
-    // 1. 安全ストレージラッパー (safeStorage - file:// 及び Safari プライベートモード対応)
+    // 1. 安全ストレージラッパー (safeStorage - amt_ プレフィックス & 旧キー互換移行)
     // =========================================================================
+    const STORAGE_PREFIX = 'amt_';
     const memoryStore = {};
     const safeStorage = {
+      _key(key) {
+        return key.startsWith(STORAGE_PREFIX) ? key : `${STORAGE_PREFIX}${key}`;
+      },
       getItem(key) {
-        try { return localStorage.getItem(key) ?? memoryStore[key] ?? null; }
-        catch (e) { return memoryStore[key] ?? null; }
+        const prefixed = this._key(key);
+        try {
+          const val = localStorage.getItem(prefixed) ?? localStorage.getItem(key);
+          if (val !== null && val !== undefined) return val;
+          return memoryStore[prefixed] ?? memoryStore[key] ?? null;
+        } catch (e) {
+          return memoryStore[prefixed] ?? memoryStore[key] ?? null;
+        }
       },
       setItem(key, val) {
-        memoryStore[key] = String(val);
-        try { localStorage.setItem(key, String(val)); } catch (e) {}
+        const prefixed = this._key(key);
+        const strVal = String(val);
+        memoryStore[prefixed] = strVal;
+        try {
+          localStorage.setItem(prefixed, strVal);
+          return true;
+        } catch (e) {
+          console.warn('localStorage.setItem failed:', e);
+          return false;
+        }
       }
     };
 
@@ -523,6 +543,8 @@
     let currentQuizData = null;      // 自分で解く類題データ { problem, answer, hint }
     let currentSteps = [];
     let isPlayingQueue = false;
+    let autoPlayTimer = null;        // 自動再生用タイマーID（タブ切替時の重複防止）
+    let toastTimer = null;           // トースト表示用タイマーID
     let currentModelId = null;       // 「もっとやさしく」再生成で使う
     let currentProblemText = '';     // 同上（問題文のコンテキスト）
     let tutorHistory = [];           // マイノート（過去の解説記録）
@@ -554,12 +576,10 @@
       }
     }
 
-    // セイフエリア値の更新（iOSノッチ/ホームインジケーター対応）
+    // セイフエリア・仮想キーボード高さの更新（iOSノッチを上書きしない）
     function updateSafeArea() {
-      document.documentElement.style.setProperty('--safe-area-inset-top', `${window.innerHeight - window.visualViewport?.height || 0}px`);
-      document.documentElement.style.setProperty('--safe-area-inset-bottom', `env(safe-area-inset-bottom)`);
-      document.documentElement.style.setProperty('--safe-area-inset-left', `env(safe-area-inset-left)`);
-      document.documentElement.style.setProperty('--safe-area-inset-right', `env(safe-area-inset-right)`);
+      const kbHeight = Math.max(0, window.innerHeight - (window.visualViewport?.height || window.innerHeight));
+      document.documentElement.style.setProperty('--keyboard-height', `${kbHeight}px`);
     }
 
     // =========================================================================
@@ -569,7 +589,8 @@
       const saved = safeStorage.getItem('tutor_history');
       if (saved) {
         try {
-          tutorHistory = JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          tutorHistory = Array.isArray(parsed) ? parsed : [];
         } catch (e) {
           tutorHistory = [];
         }
@@ -581,11 +602,11 @@
         id: Date.now().toString(),
         savedAt: new Date().toISOString(),
         unitHint: data.unitHint || '自動判定',
+        problem_label: data.problem_label || '',
         recognized_problem: data.recognized_problem || '',
         key_point: data.key_point || '',
         steps: Array.isArray(data.steps) ? data.steps : [],
-        final_answer: data.final_answer || '',
-        isBookmarked: false
+        final_answer: data.final_answer || ''
       };
 
       // 最大100件まで保持、古いものから削除
@@ -594,8 +615,13 @@
         tutorHistory = tutorHistory.slice(0, 100);
       }
 
-      safeStorage.setItem('tutor_history', JSON.stringify(tutorHistory));
-      return entry.id;
+      let ok = safeStorage.setItem('tutor_history', JSON.stringify(tutorHistory));
+      // ストレージ容量超過時は古い履歴を削って再試行
+      if (!ok && tutorHistory.length > 10) {
+        tutorHistory = tutorHistory.slice(0, Math.max(10, Math.floor(tutorHistory.length / 2)));
+        ok = safeStorage.setItem('tutor_history', JSON.stringify(tutorHistory));
+      }
+      return ok ? entry.id : null;
     }
 
     function deleteFromTutorHistory(id) {
@@ -618,28 +644,31 @@
         return;
       }
 
-      container.innerHTML = tutorHistory.map((item, idx) => {
-        const date = new Date(item.savedAt);
-        const dateStr = date.toLocaleDateString('ja-JP', {
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit'
-        });
-        const problemPreview = (item.recognized_problem || '').replace(/\$/g, '').slice(0, 40);
+      container.innerHTML = tutorHistory.map((item) => {
+        const parsedDate = item.savedAt ? new Date(item.savedAt) : null;
+        const dateStr = (parsedDate && !isNaN(parsedDate.getTime()))
+          ? parsedDate.toLocaleDateString('ja-JP', {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit'
+            })
+          : '日時不明';
+        const labelBadge = item.problem_label ? `[${item.problem_label}] ` : '';
+        const problemPreview = `${labelBadge}${(item.recognized_problem || '').replace(/\$/g, '')}`.slice(0, 45);
         return `
           <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 mb-3 shadow-sm">
             <div class="flex items-start justify-between gap-2 mb-1.5">
               <div class="flex-1 min-w-0">
-                <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-0.5">${escapeHtml(item.unitHint)}</div>
-                <div class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">${escapeHtml(problemPreview)}${problemPreview.length >= 40 ? '…' : ''}</div>
-                <div class="text-[10px] text-slate-500 dark:text-slate-500 mt-1">${dateStr}</div>
+                <div class="text-xs font-bold text-emerald-700 dark:text-emerald-400 mb-0.5">${escapeHtml(item.unitHint || '自動判定')}</div>
+                <div class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">${escapeHtml(problemPreview)}${problemPreview.length >= 45 ? '…' : ''}</div>
+                <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">${escapeHtml(dateStr)}</div>
               </div>
               <div class="flex items-start gap-1">
                 <button onclick="restoreFromHistory('${escapeJsString(item.id)}')" 
-                  class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-blue-200 transition">
+                  class="bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 transition">
                   🔄 もう一度見る
                 </button>
                 <button onclick="deleteFromTutorHistory('${escapeJsString(item.id)}')" 
-                  class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-rose-200 transition">
+                  class="bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 transition">
                   🗑️ 削除
                 </button>
               </div>
@@ -650,12 +679,19 @@
     }
 
     function escapeJsString(str) {
-      return String(str).replace(/\\/g, '\\\\').replace(/'/g, '\\\'').replace(/\n/g, '\\n');
+      return String(str).replace(/\\/g, '\\\\').replace(/'/g, '\\\'').replace(/"/g, '&quot;').replace(/\n/g, '\\n').replace(/\r/g, '');
     }
 
     async function restoreFromHistory(id) {
       const item = tutorHistory.find(it => it.id === id);
       if (!item) return;
+
+      if (item.unitHint) {
+        const unitSel = document.getElementById('unitSelect');
+        if (unitSel && [...unitSel.options].some(o => o.value === item.unitHint)) {
+          unitSel.value = item.unitHint;
+        }
+      }
 
       closeTutorHistoryModal();
       renderTutorResult(item);
@@ -684,23 +720,33 @@
 
       const unitHint = document.getElementById('unitSelect').value;
       const currentProb = currentProblems[currentProblemIndex] || {};
+      const recEl = document.getElementById('recognizedProblem');
+      const keyEl = document.getElementById('keyPoint');
+      const ansEl = document.getElementById('finalAnswer');
+
+      // P0-1: KaTeXレンダリング後のtextContentではなく、必ず元のLaTeX文字列を保存する
       const data = {
         unitHint: unitHint,
         problem_label: currentProb.problem_label || '',
-        recognized_problem: document.getElementById('recognizedProblem').textContent || '',
-        key_point: document.getElementById('keyPoint').textContent || '',
+        recognized_problem: currentProb.recognized_problem || recEl?.dataset?.rawMath || currentProblemText || '',
+        key_point: currentProb.key_point || keyEl?.dataset?.rawMath || '',
         steps: currentSteps,
-        final_answer: document.getElementById('finalAnswer').textContent || ''
+        final_answer: currentProb.final_answer || ansEl?.dataset?.rawMath || ''
       };
 
-      const id = saveTutorHistory(data);
+      const savedId = saveTutorHistory(data);
+      if (!savedId) {
+        showStatus('⚠️ ブラウザの保存容量が不足しているため、マイノートに保存できませんでした。不要な履歴を削除してください。', 'amber');
+        return;
+      }
+
       const btn = document.getElementById('saveToNoteBtn');
       if (btn) {
         btn.textContent = '✅ マイノートに保存済み';
         btn.classList.replace('bg-slate-100', 'bg-emerald-100');
         btn.classList.replace('text-slate-700', 'text-emerald-700');
         btn.classList.replace('dark:bg-slate-800', 'dark:bg-emerald-900/30');
-        btn.classList.replace('dark:text-slate-200', 'dark:text-emerald-400');
+        btn.classList.replace('dark:text-slate-300', 'dark:text-emerald-400');
         btn.disabled = true;
       }
 
@@ -712,9 +758,10 @@
     // =========================================================================
     function buildSimilarProblemPrompt() {
       const unitHint = document.getElementById('unitSelect').value;
-      const recognizedProblem = document.getElementById('recognizedProblem').textContent || '';
-      const keyPoint = document.getElementById('keyPoint').textContent || '';
-      const currentProblem = currentProblemText || recognizedProblem;
+      const currentProb = currentProblems[currentProblemIndex] || {};
+      const recognizedProblem = currentProb.recognized_problem || document.getElementById('recognizedProblem')?.dataset?.rawMath || '';
+      const keyPoint = currentProb.key_point || document.getElementById('keyPoint')?.dataset?.rawMath || '';
+      const currentProblem = recognizedProblem || currentProblemText;
 
       return `あなたは数学の問題作成者です。
 以下の問題と同じ単元・同じ解法パターンの「類題（数字や条件だけ変えた問題）」を1問作ってください。
@@ -767,7 +814,7 @@ ${keyPoint}
         const prompt = buildSimilarProblemPrompt();
         const res = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
           temperature: 0.7,
-          maxOutputTokens: 512,
+          maxOutputTokens: 1024,
           timeoutMs: 25000,
           rawText: true
         });
@@ -797,7 +844,7 @@ ${keyPoint}
           const isTimeout = err.name === 'AbortError';
           const errMsg = isTimeout
             ? '⏱️ 類題生成がタイムアウトしました。もう一度お試しください。'
-            : `❌ 類題生成エラー: ${err.message}`;
+            : `❌ 類題生成エラー: ${escapeHtml(err.message)}`;
           showStatus(errMsg, 'red');
         }
       } finally {
@@ -836,8 +883,9 @@ ${keyPoint}
       }
 
       const unitHint = document.getElementById('unitSelect').value;
-      const currentProblem = currentProblemText || document.getElementById('recognizedProblem').textContent || '';
-      const keyPoint = document.getElementById('keyPoint').textContent || '';
+      const currentProb = currentProblems[currentProblemIndex] || {};
+      const currentProblem = currentProb.recognized_problem || document.getElementById('recognizedProblem')?.dataset?.rawMath || currentProblemText || '';
+      const keyPoint = currentProb.key_point || document.getElementById('keyPoint')?.dataset?.rawMath || '';
 
       const QUIZ_GEN_SCHEMA = {
         type: 'OBJECT',
@@ -901,7 +949,11 @@ ${keyPoint}
 
         speakJapanese('では、数字を変えた類題に挑戦してみましょう！ノートに解いて、答えを入力してくださいね。');
       } catch (err) {
-        showStatus(`❌ 類題出題エラー: ${err.message}`, 'red');
+        if (isQuotaError(err)) {
+          showQuotaError(selectedModel);
+        } else {
+          showStatus(`❌ 類題出題エラー: ${escapeHtml(err.message)}`, 'red');
+        }
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -930,8 +982,17 @@ ${keyPoint}
       const studentAns = (inputEl.value || '').trim();
 
       if (!studentAns) {
-        alert('答えを入力してから「採点する」を押してください。');
+        showStatus('⚠️ 答えを入力してから「採点する」を押してください。', 'amber');
         inputEl.focus();
+        return;
+      }
+
+      const geminiKey = safeStorage.getItem('gemini_api_key');
+      const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
+
+      if (!geminiKey) {
+        openSettings();
+        showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
         return;
       }
 
@@ -944,9 +1005,6 @@ ${keyPoint}
         if (btnText) btnText.classList.add('hidden');
         if (btnSpinner) btnSpinner.classList.remove('hidden');
       }
-
-      const geminiKey = safeStorage.getItem('gemini_api_key');
-      const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
 
       const JUDGE_SCHEMA = {
         type: 'OBJECT',
@@ -985,7 +1043,11 @@ ${studentAns}
 
         renderQuizResult(judge, studentAns);
       } catch (err) {
-        alert('採点エラー: ' + err.message);
+        if (isQuotaError(err)) {
+          showQuotaError(selectedModel);
+        } else {
+          showStatus(`❌ 採点エラー: ${escapeHtml(err.message)}`, 'red');
+        }
       } finally {
         if (btn) {
           btn.disabled = false;
@@ -1006,6 +1068,8 @@ ${studentAns}
 
       box.className = `rounded-xl p-4 space-y-3 border shadow-sm ${bgClass}`;
 
+      const correctAnsText = sanitizeMathString(judge.correct_answer || currentQuizData?.answer || '');
+
       box.innerHTML = `
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -1016,12 +1080,13 @@ ${studentAns}
 
         <div class="text-xs sm:text-sm leading-relaxed p-3 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-current/20">
           <div class="font-bold mb-1">【先生からの講評】</div>
-          <div id="quizJudgeComment">${escapeHtml(sanitizeMathString(judge.comment || ''))}</div>
+          <div id="quizJudgeComment"></div>
         </div>
 
-        ${!isCorrect ? `
-        <div class="text-xs p-2.5 rounded-lg bg-amber-100/70 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200">
-          <strong>ヒント：</strong> 符号や不等号の向き、定義域の端の値をもう一度確認してみましょう！
+        ${isCorrect && correctAnsText ? `
+        <div class="text-xs sm:text-sm p-3 rounded-lg bg-emerald-100/70 dark:bg-emerald-900/40 text-emerald-950 dark:text-emerald-100 border border-emerald-300/60 dark:border-emerald-700/60">
+          <span class="font-bold">🎯 模範解答：</span>
+          <span id="quizCorrectAnswer" class="font-bold ml-1"></span>
         </div>
         ` : ''}
 
@@ -1042,7 +1107,18 @@ ${studentAns}
       `;
 
       box.classList.remove('hidden');
-      renderMathIn(document.getElementById('quizJudgeComment'));
+
+      const commentEl = document.getElementById('quizJudgeComment');
+      if (commentEl) {
+        commentEl.textContent = sanitizeMathString(judge.comment || '');
+        renderMathIn(commentEl);
+      }
+
+      const correctAnsEl = document.getElementById('quizCorrectAnswer');
+      if (correctAnsEl) {
+        correctAnsEl.textContent = correctAnsText;
+        renderMathIn(correctAnsEl);
+      }
 
       if (judge.speech_ja) {
         speakJapanese(judge.speech_ja);
@@ -1074,15 +1150,19 @@ ${studentAns}
             title: '類題チャレンジ 正解達成',
             focus: '自力で解法を導き出しました！',
             why: '学んだ考え方を数字が変わった類題に正しく応用できました。',
-            display_math: `生徒の解答: ${document.getElementById('studentAnswerInput').value}\\n正解: ${currentQuizData.answer}`,
+            display_math: `生徒の解答: ${document.getElementById('studentAnswerInput').value}\n正解: ${currentQuizData.answer}`,
             watch_out: '',
             speech_ja: '類題チャレンジ、見事に正解できましたね！素晴らしいです。'
           }
         ],
         final_answer: currentQuizData.answer
       };
-      saveTutorHistory(data);
-      showStatus('✅ 類題チャレンジの正解記録をマイノートに保存しました！', 'blue');
+      const savedId = saveTutorHistory(data);
+      if (savedId) {
+        showStatus('✅ 類題チャレンジの正解記録をマイノートに保存しました！', 'blue');
+      } else {
+        showStatus('⚠️ 保存容量が不足しているため、マイノートに保存できませんでした。', 'amber');
+      }
     }
 
     // アップロード進行バー制御
@@ -1102,28 +1182,16 @@ ${studentAns}
       if (pct) pct.textContent = `${Math.round(percent)}%`;
     }
 
-    // セクション表示/非表示（フェードアニメーション）
+    // セクション表示（フェードアニメーション）
     function showSectionWithFade(id) {
       const el = document.getElementById(id);
       if (!el) return;
-      // 表示直前に初期状態を設定（opacity 0, 下から上がってくる）
       el.classList.add('opacity-0', 'translate-y-4', 'section-fade');
       el.classList.remove('hidden', 'hidden-section');
-      // ブラウザがレイアウトを計算した後、アニメーション開始
       requestAnimationFrame(() => {
         el.classList.add('opacity-100', 'translate-y-0');
         el.classList.remove('opacity-0', 'translate-y-4');
       });
-    }
-
-    function hideSectionWithFade(id) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.classList.add('opacity-0', 'translate-y-4');
-      el.classList.remove('opacity-100', 'translate-y-0');
-      setTimeout(() => {
-        el.classList.add('hidden', 'hidden-section');
-      }, 350);
     }
 
     // =========================================================================
@@ -1146,20 +1214,36 @@ ${studentAns}
       if (savedModelsJson) {
         try { populateModelSelect(JSON.parse(savedModelsJson)); } catch (e) {}
       }
+      const savedCustomModel = safeStorage.getItem('custom_model_id');
       const savedSelectedModel = safeStorage.getItem('selected_model');
-      if (savedSelectedModel) {
+      if (savedCustomModel) {
+        addOrSelectModelOption(savedCustomModel, `${savedCustomModel} (カスタム指定)`);
+      } else if (savedSelectedModel) {
         const selectEl = document.getElementById('modelSelect');
         if ([...selectEl.options].some(o => o.value === savedSelectedModel)) {
           selectEl.value = savedSelectedModel;
         }
       }
+
+      // 音声速度の復元
+      const savedRate = safeStorage.getItem('speech_rate');
+      const rateEl = document.getElementById('speechRate');
+      if (savedRate && rateEl && [...rateEl.options].some(o => o.value === savedRate)) {
+        rateEl.value = savedRate;
+      }
+
       checkApiKeyWarning();
       initVoiceSelect();
 
-      // モデルが未取得の場合、埋め込みAPIキーで自動取得を試行（初回起動時のみ）
+      // モデルが未取得かつAPIキーがある場合、自動取得を試行
       const hasModels = safeStorage.getItem('available_gemini_models');
-      if (!hasModels) {
+      if (!hasModels && safeStorage.getItem('gemini_api_key')) {
         fetchAvailableModels().catch(() => {});
+      }
+
+      // PWA Service Worker 登録
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
       }
     });
 
@@ -1186,8 +1270,6 @@ ${studentAns}
     function openSettings() {
       document.getElementById('geminiKeyInput').value = safeStorage.getItem('gemini_api_key') || '';
       document.getElementById('customModelInput').value = safeStorage.getItem('custom_model_id') || '';
-      document.getElementById('groqKeyInput').value = safeStorage.getItem('groq_api_key') || '';
-      document.getElementById('openaiKeyInput').value = safeStorage.getItem('openai_api_key') || '';
       document.getElementById('newPinInput').value = safeStorage.getItem('app_pin') || '1234';
       const modal = document.getElementById('settingsModal');
       modal.classList.remove('hidden');
@@ -1203,14 +1285,11 @@ ${studentAns}
     function saveSettings() {
       const geminiKey = document.getElementById('geminiKeyInput').value.trim();
       const customModel = document.getElementById('customModelInput').value.trim();
-      const groqKey = document.getElementById('groqKeyInput').value.trim();
-      const openaiKey = document.getElementById('openaiKeyInput').value.trim();
       const newPin = document.getElementById('newPinInput').value.trim() || '1234';
 
+      const prevKey = safeStorage.getItem('gemini_api_key');
       safeStorage.setItem('gemini_api_key', geminiKey);
       safeStorage.setItem('custom_model_id', customModel);
-      safeStorage.setItem('groq_api_key', groqKey);
-      safeStorage.setItem('openai_api_key', openaiKey);
       safeStorage.setItem('app_pin', newPin);
 
       if (customModel) {
@@ -1219,22 +1298,35 @@ ${studentAns}
 
       checkApiKeyWarning();
       closeSettings();
+      showStatus('✅ 設定を保存しました。', 'blue');
+
+      if (geminiKey && geminiKey !== prevKey) {
+        fetchAvailableModels().catch(() => {});
+      }
     }
 
     async function fetchAvailableModels() {
-      const key = document.getElementById('geminiKeyInput').value.trim() || safeStorage.getItem('gemini_api_key');
+      const keyInputEl = document.getElementById('geminiKeyInput');
+      const key = (keyInputEl ? keyInputEl.value.trim() : '') || safeStorage.getItem('gemini_api_key');
       const statusEl = document.getElementById('modelFetchStatus');
 
       if (!key) {
-        statusEl.innerHTML = `<span class="text-red-600 font-bold">⚠️ 先にGemini APIキーを入力してください。</span>`;
+        if (statusEl) {
+          statusEl.innerHTML = `<span class="text-red-600 dark:text-red-400 font-bold">⚠️ 先にGemini APIキーを入力してください。</span>`;
+        }
         return;
       }
 
-      statusEl.innerHTML = `<span class="text-blue-700 font-bold">🔄 Googleサーバーから利用可能なモデル一覧を照会中...</span>`;
+      if (statusEl) {
+        statusEl.innerHTML = `<span class="text-blue-700 dark:text-blue-300 font-bold">🔄 Googleサーバーから利用可能なモデル一覧を照会中...</span>`;
+      }
 
       try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
-        const data = await res.json();
+        const res = await fetchWithTimeout('https://generativelanguage.googleapis.com/v1beta/models', {
+          method: 'GET',
+          headers: { 'x-goog-api-key': key }
+        }, 15000);
+        const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
           throw new Error(data.error?.message || `HTTP ${res.status}`);
@@ -1270,9 +1362,13 @@ ${studentAns}
         populateModelSelect(validModels);
         checkApiKeyWarning();
 
-        statusEl.innerHTML = `<span class="text-emerald-700 font-bold">✅ 取得成功！利用可能な ${validModels.length} 個のモデルをドロップダウンに登録しました。</span>`;
+        if (statusEl) {
+          statusEl.innerHTML = `<span class="text-emerald-700 dark:text-emerald-300 font-bold">✅ 取得成功！利用可能な ${validModels.length} 個のモデルをドロップダウンに登録しました。</span>`;
+        }
       } catch (err) {
-        statusEl.innerHTML = `<span class="text-red-600 font-bold">❌ モデル取得エラー: ${err.message}</span>`;
+        if (statusEl) {
+          statusEl.innerHTML = `<span class="text-red-600 dark:text-red-400 font-bold">❌ モデル取得エラー: ${escapeHtml(err.message)}</span>`;
+        }
       }
     }
 
@@ -1285,20 +1381,12 @@ ${studentAns}
         opt.textContent = `${m.id}`;
         selectEl.appendChild(opt);
       });
-      // 追加プロバイダー オプションも下部に維持
-      if (safeStorage.getItem('groq_api_key')) {
-        const groqOpt = document.createElement('option');
-        groqOpt.value = 'groq:meta-llama/llama-4-scout-17b-16e-instruct';
-        groqOpt.textContent = 'Groq: Llama-4-Scout (Vision)';
-        selectEl.appendChild(groqOpt);
+      const customModel = safeStorage.getItem('custom_model_id');
+      if (customModel) {
+        addOrSelectModelOption(customModel, `${customModel} (カスタム指定)`);
+      } else {
+        safeStorage.setItem('selected_model', selectEl.value);
       }
-      if (safeStorage.getItem('openai_api_key')) {
-        const oaOpt = document.createElement('option');
-        oaOpt.value = 'openai:gpt-4o-mini';
-        oaOpt.textContent = 'OpenAI: gpt-4o-mini';
-        selectEl.appendChild(oaOpt);
-      }
-      safeStorage.setItem('selected_model', selectEl.value);
     }
 
     function addOrSelectModelOption(modelId, label) {
@@ -1327,40 +1415,67 @@ ${studentAns}
     // 4. 画像アップロード & Canvas リサイズ圧縮（最大幅 1280px, JPEG 0.85）
     // =========================================================================
     function handleImageUpload(event) {
-      const file = event.target.files?.[0];
+      const inputEl = event.target;
+      const file = inputEl?.files?.[0];
+      // P0-5: 同じ写真を再選択できるよう input.value を即リセット
+      if (inputEl) inputEl.value = '';
       if (!file) return;
+
+      const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+      if (file.size > MAX_FILE_SIZE) {
+        showStatus('⚠️ 画像ファイルが大きすぎます（最大20MBまで）。別の画像を選択してください。', 'amber');
+        return;
+      }
 
       setUploadProgress(25, 'ファイルを読み込み中…');
 
       const reader = new FileReader();
+      reader.onerror = function() {
+        setUploadProgress(0, '');
+        showStatus('❌ 画像ファイルの読み込みに失敗しました。もう一度お試しください。', 'red');
+      };
       reader.onload = function(e) {
         setUploadProgress(55, '画像を処理中…');
         const img = new Image();
+        img.onerror = function() {
+          setUploadProgress(0, '');
+          showStatus('❌ この画像形式は読み込めませんでした。JPEGまたはPNG画像を選択してください。', 'red');
+        };
         img.onload = function() {
-          setUploadProgress(80, 'サイズを最適化中…');
-          const MAX_WIDTH = 1280;
-          let width = img.width;
-          let height = img.height;
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
+          try {
+            setUploadProgress(80, 'サイズを最適化中…');
+            const MAX_DIM = 1280;
+            let width = img.width;
+            let height = img.height;
+            if (width > MAX_DIM || height > MAX_DIM) {
+              if (width >= height) {
+                height = Math.round((height * MAX_DIM) / width);
+                width = MAX_DIM;
+              } else {
+                width = Math.round((width * MAX_DIM) / height);
+                height = MAX_DIM;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            currentImageBase64 = dataUrl.split(',')[1];
+
+            setUploadProgress(100, '準備完了');
+            setTimeout(() => setUploadProgress(0, ''), 600);
+
+            document.getElementById('imagePreview').src = dataUrl;
+            const previewContainer = document.getElementById('imagePreviewContainer');
+            previewContainer.classList.remove('hidden', 'opacity-0', 'translate-y-4');
+            previewContainer.classList.add('opacity-100', 'translate-y-0');
+          } catch (err) {
+            setUploadProgress(0, '');
+            showStatus(`❌ 画像の圧縮処理に失敗しました: ${escapeHtml(err.message)}`, 'red');
           }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          currentImageBase64 = dataUrl.split(',')[1];
-
-          setUploadProgress(100, '準備完了');
-          setTimeout(() => setUploadProgress(0, ''), 600);
-
-          document.getElementById('imagePreview').src = dataUrl;
-          document.getElementById('imagePreviewContainer').classList.remove('hidden');
-          document.getElementById('imagePreviewContainer').classList.add('opacity-100', 'translate-y-0');
-          document.getElementById('imagePreviewContainer').classList.remove('opacity-0', 'translate-y-4');
         };
         img.src = e.target.result;
       };
@@ -1370,11 +1485,10 @@ ${studentAns}
     function clearImage() {
       currentImageBase64 = null;
       document.getElementById('imagePreview').src = '';
-      document.getElementById('imagePreviewContainer').classList.add('hidden');
-      document.getElementById('imagePreviewContainer').classList.remove('opacity-100', 'translate-y-0');
-      document.getElementById('imagePreviewContainer').classList.add('opacity-0', 'translate-y-4');
+      const previewContainer = document.getElementById('imagePreviewContainer');
+      previewContainer.classList.add('hidden', 'opacity-0', 'translate-y-4');
+      previewContainer.classList.remove('opacity-100', 'translate-y-0');
       setUploadProgress(0, '');
-      document.getElementById('imagePreviewContainer').classList.add('hidden');
     }
 
     // =========================================================================
@@ -1603,10 +1717,7 @@ ${studentAns}
 
     async function callGeminiModel(modelId, apiKey, promptText, imageBase64, options = {}) {
       const cleanModelId = String(modelId).replace(/^models\//, '').trim();
-      if (/^(groq|openai):/i.test(cleanModelId)) {
-        throw new Error(`「${cleanModelId}」はこの画面では未対応です。Gemini系のモデルを選んでください。`);
-      }
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cleanModelId)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cleanModelId)}:generateContent`;
 
       const parts = [{ text: promptText }];
       if (imageBase64) {
@@ -1616,7 +1727,7 @@ ${studentAns}
       }
 
       const temperature = options.temperature ?? 0.35;
-      const maxOutputTokens = options.maxOutputTokens ?? 8192;
+      const maxOutputTokens = options.maxOutputTokens ?? 16384;
       const schema = options.schema || TUTOR_RESPONSE_SCHEMA;
       const useJson = !options.rawText;
 
@@ -1630,9 +1741,12 @@ ${studentAns}
       const send = async (useStructured) => {
         const res = await fetchWithTimeout(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+          },
           body: JSON.stringify(buildPayload(useStructured))
-        }, options.timeoutMs || 25000);
+        }, options.timeoutMs || 30000);
 
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -1655,17 +1769,26 @@ ${studentAns}
         }
       }
 
-      const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('\n') || '';
+      const candidate = data.candidates?.[0];
+      const finishReason = candidate?.finishReason;
+      const text = candidate?.content?.parts?.map(p => p.text || '').join('\n') || '';
       if (!text) {
-        const blockReason = data.promptFeedback?.blockReason;
+        const blockReason = data.promptFeedback?.blockReason || finishReason;
         throw new Error(blockReason
-          ? `モデルが応答をブロックしました（${blockReason}）`
+          ? `モデルが応答を中断しました（理由: ${blockReason}）`
           : 'モデルから空の応答が返されました。');
       }
       if (options.rawText) {
         return text.trim();
       }
-      return parseTutorJson(text);
+      try {
+        return parseTutorJson(text);
+      } catch (parseErr) {
+        if (finishReason === 'MAX_TOKENS') {
+          throw new Error('問題数が多いためAIの回答が途中で切れました（トークン上限）。写真を1〜2問ずつ切り取ってアップロードしてください。');
+        }
+        throw parseErr;
+      }
     }
 
     async function solveProblem(overrideModelId = null) {
@@ -1695,7 +1818,7 @@ ${studentAns}
       currentModelId = selectedModel;
       currentProblemText = userText || '添付画像の問題';
 
-      showStatus(`⏳ AI先生（モデル: <strong>${selectedModel}</strong>）が問題を解いています...（最大25秒）`, 'blue');
+      showStatus(`⏳ AI先生（モデル: <strong>${escapeHtml(selectedModel)}</strong>）が問題を解いています...（最大30秒）`, 'blue');
       document.getElementById('solveBtn').disabled = true;
       document.getElementById('solveBtnText').classList.add('hidden');
       document.getElementById('solveBtnSpinner').classList.remove('hidden');
@@ -1712,16 +1835,18 @@ ${studentAns}
             /high demand|overloaded|rate limit|failed to fetch/i.test(firstErr.message || '');
 
           if (retryable) {
-            showStatus(`⚠️ <strong>${selectedModel}</strong> が混雑しています。3秒後に自動で再試行します…`, 'amber');
+            showStatus(`⚠️ <strong>${escapeHtml(selectedModel)}</strong> が混雑しています。3秒後に自動で再試行します…`, 'amber');
             await new Promise(r => setTimeout(r, 3000));
-            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, currentImageBase64, { timeoutMs: 35000 });
+            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, currentImageBase64, { timeoutMs: 40000 });
           } else {
             throw firstErr;
           }
         }
 
-        renderTutorResult(resultData);
-        hideStatus();
+        const renderedOk = renderTutorResult(resultData);
+        if (renderedOk) {
+          hideStatus();
+        }
       } catch (err) {
         if (isQuotaError(err)) {
           showQuotaError(selectedModel);
@@ -1729,7 +1854,7 @@ ${studentAns}
           const isTimeout = err.name === 'AbortError';
           const errMsg = isTimeout
             ? '⏱️ 時間内に応答がありませんでした（サーバー混雑）。もう一度お試しください。'
-            : `❌ エラー: ${err.message}`;
+            : `❌ エラー: ${escapeHtml(err.message)}`;
 
           const selectEl = document.getElementById('modelSelect');
           const otherModels = [...selectEl.options]
@@ -1738,13 +1863,13 @@ ${studentAns}
             .slice(0, 3);
 
           const fallbackButtons = otherModels.map(m =>
-            `<button onclick="solveProblem('${m}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${m} で再試行</button>`
+            `<button onclick="solveProblem('${escapeJsString(m)}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${escapeHtml(m)} で再試行</button>`
           ).join('');
 
           showStatus(`
             <div class="space-y-2">
-              <div class="font-bold text-red-700">${errMsg}</div>
-              <div class="text-xs text-slate-600">「⚙️ 設定」の「モデル一覧を自動取得」を押すか、別のモデルに切り替えて再試行してください。</div>
+              <div class="font-bold text-red-700 dark:text-red-300">${errMsg}</div>
+              <div class="text-xs text-slate-600 dark:text-slate-300">「⚙️ 設定」の「モデル一覧を自動取得」を押すか、別のモデルに切り替えて再試行してください。</div>
               <div class="pt-1">${fallbackButtons}
                 <button onclick="openSettings()" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
               </div>
@@ -1776,7 +1901,10 @@ ${studentAns}
     function renderMathIn(el) {
       if (!el) return;
       if (typeof el === 'object' && el.textContent) {
-        el.textContent = sanitizeMathString(el.textContent);
+        const cleaned = sanitizeMathString(el.textContent);
+        // P0-1: KaTeXレンダリング前の生LaTeX文字列を data-raw-math に保持
+        el.dataset.rawMath = cleaned;
+        el.textContent = cleaned;
       }
       if (typeof renderMathInElement === 'function') {
         renderMathInElement(el, {
@@ -1865,12 +1993,19 @@ ${studentAns}
     function switchProblemTab(index) {
       if (index < 0 || index >= currentProblems.length) return;
       stopSpeech();
+      closeQuizSection();
+      currentQuizData = null;
       currentProblemIndex = index;
       renderProblemTabs();
       displayCurrentProblem(true);
     }
 
     function displayCurrentProblem(autoPlay = true) {
+      if (autoPlayTimer) {
+        clearTimeout(autoPlayTimer);
+        autoPlayTimer = null;
+      }
+
       const prob = currentProblems[currentProblemIndex];
       if (!prob) return;
 
@@ -1905,31 +2040,41 @@ ${studentAns}
       const similarBtnText = document.getElementById('similarProblemBtnText');
       if (similarBtnText) {
         const label = prob.problem_label ? `${prob.problem_label} の` : '';
-        similarBtnText.textContent = `🔄 ${label}数字を変えた類題を解く`;
+        similarBtnText.textContent = `📖 ${label}類題の解説を見る`;
       }
 
       // ノート保存ボタン状態リセット
       const saveBtn = document.getElementById('saveToNoteBtn');
       if (saveBtn) {
         saveBtn.disabled = false;
-        saveBtn.textContent = '📁 この解説をマイノートに保存';
+        saveBtn.textContent = '📁 ノートに保存';
         saveBtn.classList.replace('bg-emerald-100', 'bg-slate-100');
         saveBtn.classList.replace('text-emerald-700', 'text-slate-700');
         saveBtn.classList.replace('dark:bg-emerald-900/30', 'dark:bg-slate-800');
-        saveBtn.classList.replace('dark:text-emerald-400', 'dark:text-slate-200');
+        saveBtn.classList.replace('dark:text-emerald-400', 'dark:text-slate-300');
       }
 
       if (autoPlay && currentSteps.length > 0) {
-        setTimeout(() => playAllSteps(), 600);
+        autoPlayTimer = setTimeout(() => {
+          autoPlayTimer = null;
+          playAllSteps();
+        }, 600);
       }
     }
 
     function renderTutorResult(data) {
-      showSectionWithFade('resultSection');
+      const normalized = normalizeTutorResult(data);
+      if (normalized.length === 0) {
+        showStatus('⚠️ AIから有効な解説データを受け取れませんでした。もう一度お試しください。', 'amber');
+        return false;
+      }
 
-      currentProblems = normalizeTutorResult(data);
+      closeQuizSection();
+      currentQuizData = null;
+      currentProblems = normalized;
       currentProblemIndex = 0;
 
+      showSectionWithFade('resultSection');
       renderProblemTabs();
       displayCurrentProblem(true);
 
@@ -1937,15 +2082,15 @@ ${studentAns}
 
       // 類題ボタン状態リセット
       const similarBtn = document.getElementById('similarProblemBtn');
-      const similarBtnText = document.getElementById('similarProblemBtnText');
       const similarBtnSpinner = document.getElementById('similarProblemBtnSpinner');
       if (similarBtn) {
         similarBtn.disabled = false;
         if (similarBtnSpinner) similarBtnSpinner.classList.add('hidden');
       }
+      return true;
     }
 
-    // 1ステップカードの HTML（focus / why / watch_out を視覚的に分離）
+    // 1ステップカードの HTML（focus / why / watch_out を視覚的に分離 + ダークモード完全対応）
     function stepCardHtml(step, idx) {
       const focus = String(step.focus || '').trim();
       const why = String(step.why || '').trim();
@@ -1954,51 +2099,51 @@ ${studentAns}
       return `
         <div class="flex items-start justify-between gap-2">
           <div class="flex items-start gap-2 min-w-0">
-            <span class="shrink-0 bg-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-full mt-0.5">Step ${step.step_number || idx + 1}</span>
-            <h4 class="font-bold text-sm text-slate-800 leading-snug pt-0.5">${escapeHtml(step.title || '')}</h4>
+            <span class="shrink-0 bg-emerald-700 dark:bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded-full mt-0.5">Step ${step.step_number || idx + 1}</span>
+            <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 leading-snug pt-0.5">${escapeHtml(step.title || '')}</h4>
           </div>
           <div class="shrink-0 flex flex-col items-stretch gap-1">
             <button onclick="playSingleStep(${idx})"
-              class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-blue-200 transition">
+              class="bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 transition">
               🔊 もう一度聞く
             </button>
             <button onclick="simplifyStep(${idx})" id="simplify-btn-${idx}"
-              class="bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-700 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-fuchsia-200 transition">
+              class="bg-fuchsia-50 hover:bg-fuchsia-100 dark:bg-fuchsia-950/60 dark:hover:bg-fuchsia-900/80 text-fuchsia-700 dark:text-fuchsia-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-fuchsia-200 dark:border-fuchsia-800 transition">
               🪄 もっとやさしく
             </button>
           </div>
         </div>
 
         ${focus ? `
-        <div class="flex gap-2 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+        <div class="flex gap-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-xl p-2.5">
           <span class="text-base leading-none mt-0.5">💡</span>
           <div class="min-w-0">
-            <div class="text-[11px] font-bold text-amber-800 mb-0.5">着眼点（どこを見る？）</div>
-            <div id="step-focus-${idx}" class="text-xs text-amber-900 leading-relaxed"></div>
+            <div class="text-[11px] font-bold text-amber-800 dark:text-amber-300 mb-0.5">着眼点（どこを見る？）</div>
+            <div id="step-focus-${idx}" class="text-xs text-amber-900 dark:text-amber-100 leading-relaxed"></div>
           </div>
         </div>` : ''}
 
         ${why ? `
-        <div class="flex gap-2 bg-indigo-50 border border-indigo-200 rounded-xl p-2.5">
+        <div class="flex gap-2 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 rounded-xl p-2.5">
           <span class="text-base leading-none mt-0.5">🧭</span>
           <div class="min-w-0">
-            <div class="text-[11px] font-bold text-indigo-800 mb-0.5">なぜこのやり方？</div>
-            <div id="step-why-${idx}" class="text-xs text-indigo-900 leading-relaxed"></div>
+            <div class="text-[11px] font-bold text-indigo-800 dark:text-indigo-300 mb-0.5">なぜこのやり方？</div>
+            <div id="step-why-${idx}" class="text-xs text-indigo-900 dark:text-indigo-100 leading-relaxed"></div>
           </div>
         </div>` : ''}
 
-        <div id="step-math-${idx}" class="text-sm text-slate-800 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-3 whitespace-pre-wrap"></div>
+        <div id="step-math-${idx}" class="text-sm text-slate-800 dark:text-slate-100 leading-relaxed bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700 rounded-xl p-3 whitespace-pre-wrap"></div>
 
         ${watch ? `
-        <div class="flex gap-2 bg-rose-50 border border-rose-200 rounded-xl p-2.5">
+        <div class="flex gap-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 rounded-xl p-2.5">
           <span class="text-base leading-none mt-0.5">⚠️</span>
           <div class="min-w-0">
-            <div class="text-[11px] font-bold text-rose-800 mb-0.5">ここでつまずきやすい</div>
-            <div id="step-watch-${idx}" class="text-xs text-rose-900 leading-relaxed"></div>
+            <div class="text-[11px] font-bold text-rose-800 dark:text-rose-300 mb-0.5">ここでつまずきやすい</div>
+            <div id="step-watch-${idx}" class="text-xs text-rose-900 dark:text-rose-100 leading-relaxed"></div>
           </div>
         </div>` : ''}
 
-        <details class="text-[11px] text-slate-400 bg-slate-50 rounded-lg px-2.5 py-1.5">
+        <details id="step-speech-details-${idx}" class="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5">
           <summary class="cursor-pointer select-none">🗣️ 音声ガイドの全文</summary>
           <p id="step-speech-${idx}" class="mt-1.5 leading-relaxed whitespace-pre-wrap"></p>
         </details>
@@ -2012,7 +2157,7 @@ ${studentAns}
       currentSteps.forEach((step, idx) => {
         const card = document.createElement('div');
         card.id = `step-card-${idx}`;
-        card.className = 'step-card bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-2.5';
+        card.className = 'step-card bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 space-y-2.5';
         card.innerHTML = stepCardHtml(step, idx);
         stepsContainer.appendChild(card);
 
@@ -2100,6 +2245,9 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           watch_out: (data.watch_out ?? step.watch_out) || '',
           speech_ja: data.speech_ja || step.speech_ja
         };
+        if (currentProblems[currentProblemIndex]) {
+          currentProblems[currentProblemIndex].steps = currentSteps;
+        }
 
         renderStepCards();
         highlightStepCard(idx);
@@ -2110,7 +2258,11 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           speakJapanese(simplified.speech_ja || simplified.title || '', () => highlightStepCard(-1));
         }, 350);
       } catch (err) {
-        showStatus(`❌ やさしい説明の生成に失敗しました: ${err.message}`, 'red');
+        if (isQuotaError(err)) {
+          showQuotaError(model);
+        } else {
+          showStatus(`❌ やさしい説明の生成に失敗しました: ${escapeHtml(err.message)}`, 'red');
+        }
         if (btn) {
           btn.disabled = false;
           btn.textContent = '🪄 もっとやさしく';
@@ -2122,10 +2274,12 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       currentSteps.forEach((_, idx) => {
         const el = document.getElementById(`step-card-${idx}`);
         const speechEl = document.getElementById(`step-speech-${idx}`);
+        const detailsEl = document.getElementById(`step-speech-details-${idx}`);
         if (!el) return;
         if (idx === activeIndex) {
           el.classList.add('step-active');
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (detailsEl) detailsEl.open = true;
           if (speechEl) {
             speechEl.classList.add('bg-amber-100', 'dark:bg-amber-950/60', 'p-2', 'rounded-lg', 'font-medium', 'text-amber-950', 'dark:text-amber-100', 'border', 'border-amber-300', 'dark:border-amber-700');
           }
@@ -2140,6 +2294,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 
     // ===== 音声（端末内蔵 高品質日本語音声 Web Speech API）=====
     let speechToken = 0;
+    let chunkWatchdogTimer = null;
 
     function initVoiceSelect() {
       if (!('speechSynthesis' in window)) return;
@@ -2175,6 +2330,11 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       testVoice();
     }
 
+    function onSpeechRateChange() {
+      const val = document.getElementById('speechRate')?.value || '0.95';
+      safeStorage.setItem('speech_rate', val);
+    }
+
     function getSelectedVoice() {
       if (!('speechSynthesis' in window)) return null;
       const voices = window.speechSynthesis.getVoices();
@@ -2186,7 +2346,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      // iOS Safari에서는 수동 선택이 없으면 null 반환 -> lang='ja-JP'로 내장 Kyoko 등 표준 음성 자동 매핑
+      // iOS Safariでは手動選択がなければnullを返し、lang='ja-JP'で標準音声(Kyoko等)に自動マッピング
       if (isIOS && !saved) return null;
 
       const jaVoices = voices.filter(v => (v.lang || '').toLowerCase().startsWith('ja'));
@@ -2246,7 +2406,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       return chunks;
     }
 
-    // メイン音声読み上げ関数（単一エンジン・重複なし・安定発話）
+    // メイン音声読み上げ関数（単一エンジン・重複なし・iOS onend 欠落対策 watchdog 付き）
     function speakJapanese(text, onEndCallback) {
       if (!('speechSynthesis' in window)) {
         if (onEndCallback) onEndCallback();
@@ -2254,6 +2414,10 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       }
 
       const token = ++speechToken;
+      if (chunkWatchdogTimer) {
+        clearTimeout(chunkWatchdogTimer);
+        chunkWatchdogTimer = null;
+      }
       try {
         window.speechSynthesis.cancel();
         window.speechSynthesis.resume();
@@ -2287,9 +2451,17 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         const finish = () => {
           if (finished) return;
           finished = true;
+          if (chunkWatchdogTimer) {
+            clearTimeout(chunkWatchdogTimer);
+            chunkWatchdogTimer = null;
+          }
           if (token !== speechToken) return;
           setTimeout(speakNextChunk, chunk.pauseMs || 150);
         };
+
+        // P1-12: iOS Safari 等で onend が発火しない場合の Watchdog タイマー
+        const estimatedMs = Math.max(4000, Math.ceil((chunk.text.length * 260) / Math.max(0.5, rate)) + 2000);
+        chunkWatchdogTimer = setTimeout(finish, estimatedMs);
 
         utter.onend = finish;
         utter.onerror = (e) => {
@@ -2338,23 +2510,58 @@ ${step.why ? `【今の意図】${step.why}` : ''}
     function stopSpeech() {
       isPlayingQueue = false;
       speechToken++;
+      if (autoPlayTimer) {
+        clearTimeout(autoPlayTimer);
+        autoPlayTimer = null;
+      }
+      if (chunkWatchdogTimer) {
+        clearTimeout(chunkWatchdogTimer);
+        chunkWatchdogTimer = null;
+      }
       if ('speechSynthesis' in window) {
         try { window.speechSynthesis.cancel(); } catch (e) {}
       }
       highlightStepCard(-1);
     }
 
-    // ユーティリティ関数
+    // ユーティリティ関数（上部ステータスボックス + 画面下部トースト通知で常時視認可能）
+    function showToast(text, color = 'blue') {
+      const toast = document.getElementById('toastNotification');
+      if (!toast) return;
+      const styles = {
+        blue: 'bg-slate-900/95 text-white border-emerald-500/60 dark:bg-slate-800 dark:text-slate-100',
+        amber: 'bg-amber-600/95 text-white border-amber-300',
+        red: 'bg-red-600/95 text-white border-red-300'
+      };
+      toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[92vw] sm:max-w-md px-4 py-3 rounded-2xl shadow-2xl border text-xs sm:text-sm font-bold transition-all duration-300 ${styles[color] || styles.blue}`;
+      toast.textContent = text;
+      toast.classList.remove('hidden');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 4000);
+    }
+
     function showStatus(html, color = 'blue') {
       const box = document.getElementById('statusBox');
       const styles = {
-        blue: 'bg-blue-50 border-blue-200 text-blue-900',
-        amber: 'bg-amber-50 border-amber-300 text-amber-900',
-        red: 'bg-red-50 border-red-300 text-red-900'
+        blue: 'bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-100',
+        amber: 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-100',
+        red: 'bg-red-50 border-red-300 text-red-900 dark:bg-red-950/60 dark:border-red-800 dark:text-red-100'
       };
       box.className = `rounded-2xl p-4 text-sm border ${styles[color] || styles.blue}`;
       box.innerHTML = html;
       box.classList.remove('hidden');
+
+      // ページ下部にスクロールしている場合でも気づけるようトーストを表示＆エラー時はスクロール
+      const plainText = box.textContent?.replace(/\s+/g, ' ').trim() || '';
+      if (plainText && !plainText.startsWith('⏳')) {
+        showToast(plainText.slice(0, 80), color);
+      }
+      if (color === 'red') {
+        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     }
 
     function hideStatus() {
@@ -2374,23 +2581,23 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       if (!selectEl) return [];
       return [...selectEl.options]
         .map(o => o.value)
-        .filter(v => v && !v.startsWith('groq:') && !v.startsWith('openai:'));
+        .filter(Boolean);
     }
 
     // クォータ超過エラー表示（モデル切り替えボタン付き）
-    function showQuotaError(selectedModel, targetBtnId) {
+    function showQuotaError(selectedModel) {
       const otherModels = getRecommendedModels()
         .filter(v => v !== selectedModel)
         .slice(0, 4);
 
       const fallbackButtons = otherModels.map(m =>
-        `<button onclick="solveProblem('${m}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${m} で再試行</button>`
+        `<button onclick="solveProblem('${escapeJsString(m)}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${escapeHtml(m)} で再試行</button>`
       ).join('');
 
       showStatus(`
         <div class="space-y-2">
-          <div class="font-bold text-red-700">⚠️ このモデル（${escapeHtml(selectedModel)}）の無料枠が上限に達しました。</div>
-          <div class="text-xs text-slate-600">別のモデルに切り替えるか、「⚙️ 設定」から「モデル一覧を自動取得」を押して、利用可能なモデルを確認してください。</div>
+          <div class="font-bold text-red-700 dark:text-red-300">⚠️ このモデル（${escapeHtml(selectedModel)}）の無料枠が上限に達しました。</div>
+          <div class="text-xs text-slate-600 dark:text-slate-300">別のモデルに切り替えるか、「⚙️ 設定」から「モデル一覧を自動取得」を押して、利用可能なモデルを確認してください。</div>
           <div class="pt-1">${fallbackButtons}
             <button onclick="openSettings()" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
           </div>

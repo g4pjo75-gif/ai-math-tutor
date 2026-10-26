@@ -1,6 +1,6 @@
 # 📘 高校数学I・A AI家庭教師 (AI Math Tutor) - プロジェクト開発仕様書
 
-> **최종 갱신일**: 2026년 10월 25일 (버전: `v1.5-beta`)  
+> **최종 갱신일**: 2026년 10월 27일 (버전: `v1.6-beta`)  
 > **공개 배포 URL**: [https://g4pjo75-gif.github.io/ai-math-tutor/](https://g4pjo75-gif.github.io/ai-math-tutor/)  
 > **GitHub 저장소**: [https://github.com/g4pjo75-gif/ai-math-tutor](https://github.com/g4pjo75-gif/ai-math-tutor)
 
@@ -33,8 +33,8 @@
 | 4 | **일본어 음성 낭독 & 카라오케 대본 싱크** | • Apple iOS 표준 고음질 일본어 음성(`Kyoko`, `Otoya`) 우선 매핑<br>• 낭독 중인 단계 카드로 화면 자동 스크롤 및 음성 대본 **형광펜 하이라이트(자막 싱크)**<br>• 진동 모드로 소리가 꺼져 있어도 눈으로 실시간 낭독 구간 확인 가능 | ✅ 완료 |
 | 5 | **🎯 類題チャレンジ (직접 풀기 & AI 채점)** | • **스스로 풀기 모드**: 숫자/조건을 바꾼 쌍둥이 문제 출제 + 답안 입력창<br>• **힌트 아코디언**: 풀다가 막힐 때 착안점 힌트 열람 지원<br>• **AI 자동 채점**: 수학적 동치 판정, ⭕ 정답 칭찬 / ❌ 오답 시 원인 분석 힌트 제공<br>• **완전 해설 연동**: 오답 시 [完全なステップ解説を見る]로 즉시 칠판 해설 전환 | ✅ 완료 |
 | 6 | **오답 노트 (`📁 マイノート`)** | • `localStorage` 기반 과거 해설 및 類題 정답 기록 영구 보관<br>• 상단 헤더 📁 버튼으로 언제든 다시 복습 및 모달 열람 | ✅ 완료 |
-| 7 | **모바일 PWA & UI 최적화** | • 카메라 촬영 사진 Canvas 1280px 리사이즈/JPEG 압축 전송<br>• iOS Safari 홈 화면 추가 시 전체화면 네이티브 앱 실행 메타태그<br>• 전용 칠판 테마 앱 아이콘(`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`)<br>• 모바일 헤더 버튼 찌그러짐 방지(`whitespace-nowrap shrink-0`) | ✅ 완료 |
-| 8 | **캐시 방지 & 버전 추적** | • `Cache-Control: no-cache` 메타태그 및 상단 노란색 뱃지(`β-Test v1.5`) 표기 | ✅ 완료 |
+| 7 | **모바일 PWA & UI 최적화** | • 카메라 촬영 사진 Canvas 1280px 리사이즈/JPEG 압축 전송 + 동일 파일 재선택/에러 가드<br>• iOS Safari 홈 화면 추가 시 상단 노치 Safe Area 보호 및 Service Worker(`sw.js`) 등록<br>• 다크모드(`dark:`) 전 단계 카드 및 모달 완벽 대응<br>• 하단 플로팅 토스트 알림바로 스크롤 위치 무관 피드백 제공 | ✅ 완료 |
+| 8 | **품질 감사(Audit) 21개 항목 전수 패치** | • P0(마이노트 LaTeX 원본 보존, 다중 소문제 토큰/빈 배열 가드, 미사용 프로바이더 입력란 제거, 채점 키/Quota 체크, 저장 실패 감지)<br>• P1(iOS 노치, 다크모드, 토스트 알림, 탭 전환 타이머/퀴즈 정리, 일본어 IME Enter 보호, 음성 Watchdog 및 `<details>` 자동 펼침, 속도 저장)<br>• P2~P3(프롬프트 원본 수식 전달, 히스토리 단원/라벨 복원, XSS 이스케이프, `x-goog-api-key` 헤더 전송, `amt_` 스토리지 프리픽스 및 하위호환) | ✅ 완료 |
 
 ---
 
@@ -76,8 +76,9 @@
 ```text
 ai-math-tutor/
 ├── PROJECT_SPEC.md         # [본 문서] 전체 프로젝트 사양 및 개발 로드맵
-├── index.html              # 현재 운영 중인 반응형 PWA 단일 웹앱 (v1.5-beta)
-├── manifest.json           # PWA 웹 매니페스트
+├── index.html              # 현재 운영 중인 반응형 PWA 단일 웹앱 (v1.6-beta)
+├── manifest.json           # PWA 웹 매니페스트 (id, scope 포함)
+├── sw.js                   # PWA 네트워크 우선(Network-first) 서비스 워커
 ├── apple-touch-icon.png    # iOS 홈화면 전용 고해상도 앱 아이콘
 ├── icon-192.png            # PWA 아이콘 (192x192)
 ├── icon-512.png            # PWA 아이콘 (512x512)
