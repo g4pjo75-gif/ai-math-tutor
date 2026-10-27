@@ -69,7 +69,7 @@
       throw new Error('Gemini APIキーが設定されていません。');
     }
 
-    const cleanModelId = String(modelId || 'gemini-2.5-flash').replace(/^models\//, '').trim();
+    const cleanModelId = String(modelId || 'gemini-3.8-flash').replace(/^models\//, '').trim();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cleanModelId)}:generateContent`;
 
     const parts = [{ text: effectivePrompt || '' }];

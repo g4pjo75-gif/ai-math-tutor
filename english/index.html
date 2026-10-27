@@ -440,7 +440,7 @@
 5. 類題または確認クイズ（quick_check）: 問題、解答`;
 
       try {
-        const selectedModel = (sharedStore ? sharedStore.getItem('selected_model') : null) || 'gemini-2.5-flash';
+        const selectedModel = (sharedStore ? sharedStore.getItem('selected_model') : null) || 'gemini-3.8-flash';
         const data = await window.TutorCore.callGeminiModel({
           modelId: selectedModel,
           apiKey: geminiKey,

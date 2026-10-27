@@ -230,7 +230,7 @@
       <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <select id="modelSelect" onchange="onModelDropdownChange()"
           class="bg-slate-800/90 text-white text-[11px] sm:text-xs rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 border border-emerald-500/40 focus:outline-none max-w-[110px] xs:max-w-[140px] sm:max-w-[180px] truncate">
-          <option value="gemini-2.5-flash" selected>gemini-2.5-flash (標準・高速)</option>
+          <option value="gemini-3.8-flash" selected>gemini-3.8-flash (標準・高速)</option>
         </select>
         <a href="english/" target="_blank" rel="noopener" class="bg-blue-600/70 hover:bg-blue-600/90 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1 border border-blue-400/30 transition text-white" title="英語チューターへ移動">
           <span>🇬🇧</span><span class="hidden xs:inline">英語</span>
@@ -564,7 +564,7 @@
       <!-- [解決策 2] モデル名を直接入力（カスタムモデルID） -->
       <div class="space-y-1.5">
         <label class="text-xs font-bold text-slate-700 dark:text-slate-300">✏️ カスタムモデルIDの直接指定（任意・最優先）</label>
-        <input id="customModelInput" type="text" placeholder="例: gemini-2.5-flash / gemini-2.5-pro / gemini-2.0-flash"
+        <input id="customModelInput" type="text" placeholder="例: gemini-3.8-flash / gemini-3.5-flash-lite / gemini-3.8-pro"
           class="w-full text-xs border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-600" />
         <p class="text-[11px] text-slate-500 dark:text-slate-400">
           ※ 空欄の場合は上部ドロップダウンで選択されたモデルが使用されます。Googleのモデル名変更時に直接入力して即座に対応できます。
@@ -1574,9 +1574,9 @@ ${studentAns}
         addOrSelectModelOption(savedCustomModel, `${savedCustomModel} (カスタム指定)`);
       } else {
         if (selectEl) {
-          selectEl.innerHTML = '<option value="gemini-2.5-flash" selected>gemini-2.5-flash (標準・高速)</option>';
+          selectEl.innerHTML = '<option value="gemini-3.8-flash" selected>gemini-3.8-flash (標準・高速)</option>';
         }
-        safeStorage.setItem('selected_model', 'gemini-2.5-flash');
+        safeStorage.setItem('selected_model', 'gemini-3.8-flash');
       }
 
       // 音声速度の復元
@@ -1729,12 +1729,12 @@ ${studentAns}
     function populateModelSelect(models) {
       const selectEl = document.getElementById('modelSelect');
       if (!selectEl) return;
-      selectEl.innerHTML = '<option value="gemini-2.5-flash" selected>gemini-2.5-flash (標準・高速)</option>';
+      selectEl.innerHTML = '<option value="gemini-3.8-flash" selected>gemini-3.8-flash (標準・高速)</option>';
       const customModel = safeStorage.getItem('custom_model_id');
-      if (customModel && customModel !== 'gemini-2.5-flash') {
+      if (customModel && customModel !== 'gemini-3.8-flash') {
         addOrSelectModelOption(customModel, `${customModel} (カスタム指定)`);
       } else {
-        safeStorage.setItem('selected_model', 'gemini-2.5-flash');
+        safeStorage.setItem('selected_model', 'gemini-3.8-flash');
       }
     }
 
