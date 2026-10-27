@@ -19,6 +19,7 @@
   <link rel="icon" type="image/png" href="icon-192.png" />
   <link rel="stylesheet" href="shared/ui.css?v=20261027" />
   <!-- Tailwind CSS (dark mode: class) -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -32,9 +33,8 @@
           }
         }
       }
-    }
+    };
   </script>
-  <script src="https://cdn.tailwindcss.com"></script>
   <!-- KaTeX for Math Rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -159,7 +159,7 @@
     }
     .dark .choice-btn.selected {
       border-color: #10b981 !important;
-      background-color: #064e3b/50 !important;
+      background-color: rgba(6, 78, 59, 0.5) !important;
       color: #a7f3d0 !important;
     }
     .math-palette-btn {
@@ -205,8 +205,8 @@
         ロック解除して始める
       </button>
       <div class="pt-3">
-        <a href="english/" class="text-xs text-slate-400 hover:text-emerald-400 transition underline underline-offset-4">
-          🇬🇧 AI英語チューターへ切り替え
+        <a href="english/" target="_blank" rel="noopener" class="text-xs text-slate-400 hover:text-emerald-400 transition underline underline-offset-4">
+          🇬🇧 AI英語チューターへ切り替え (別ウィンドウ)
         </a>
       </div>
     </div>
@@ -229,13 +229,10 @@
       <!-- モデル選択ドロップダウン & 設定ボタン -->
       <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <select id="modelSelect" onchange="onModelDropdownChange()"
-          class="bg-slate-800/90 text-white text-[11px] sm:text-xs rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 border border-emerald-500/40 focus:outline-none max-w-[85px] xs:max-w-[120px] sm:max-w-[180px] truncate">
-          <option value="gemini-2.5-flash" selected>gemini-2.5-flash (おすすめ・高速)</option>
-          <option value="gemini-2.5-pro">gemini-2.5-pro (高精度)</option>
-          <option value="gemini-2.0-flash">gemini-2.0-flash (安定版)</option>
-          <option value="gemini-flash-latest">gemini-flash-latest (最新自動)</option>
+          class="bg-slate-800/90 text-white text-[11px] sm:text-xs rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 border border-emerald-500/40 focus:outline-none max-w-[110px] xs:max-w-[140px] sm:max-w-[180px] truncate">
+          <option value="gemini-2.5-flash" selected>gemini-2.5-flash (標準・高速)</option>
         </select>
-        <a href="english/" class="bg-blue-600/70 hover:bg-blue-600/90 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1 border border-blue-400/30 transition text-white" title="英語チューターへ移動">
+        <a href="english/" target="_blank" rel="noopener" class="bg-blue-600/70 hover:bg-blue-600/90 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1 border border-blue-400/30 transition text-white" title="英語チューターへ移動">
           <span>🇬🇧</span><span class="hidden xs:inline">英語</span>
         </a>
         <button onclick="openSettings()" class="bg-white/10 hover:bg-white/20 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1" title="API設定・モデル検索">
@@ -1055,14 +1052,19 @@ ${keyPoint}
       inputEl.setSelectionRange(nextPos, nextPos);
     }
 
-    function shuffleChoices(choices, correctIndex) {
-      const indexed = choices.map((c, i) => ({ text: c, isCorrect: i === correctIndex }));
+    function shuffleChoices(choices, correctIndex, choiceFeedback = []) {
+      const indexed = choices.map((c, i) => ({
+        text: c,
+        feedback: Array.isArray(choiceFeedback) ? (choiceFeedback[i] || '') : '',
+        isCorrect: i === correctIndex
+      }));
       for (let i = indexed.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
       }
       return {
         shuffled: indexed.map(item => item.text),
+        shuffledFeedback: indexed.map(item => item.feedback),
         newCorrectIndex: indexed.findIndex(item => item.isCorrect)
       };
     }
@@ -1214,35 +1216,65 @@ ${keyPoint}
           timeoutMs: 30000
         });
 
-        let rawChoices = Array.isArray(res.choices) ? res.choices.map(c => sanitizeMathString(c)) : [];
-        let correctIdx = typeof res.correct_index === 'number' ? res.correct_index : 0;
+        const isValidQuiz = (q) => {
+          if (!q || !Array.isArray(q.choices) || q.choices.length !== 4) return false;
+          const cleaned = q.choices.map(c => sanitizeMathString(c).trim());
+          if (cleaned.some(c => !c)) return false;
+          if (new Set(cleaned).size !== 4) return false;
+          if (typeof q.correct_index !== 'number' || !Number.isInteger(q.correct_index) || q.correct_index < 0 || q.correct_index > 3) return false;
+          return true;
+        };
 
-        // 4択が不正な場合はフォールバック
-        if (rawChoices.length < 4) {
-          rawChoices = [
-            sanitizeMathString(res.answer || ''),
-            '0',
-            '-1',
-            '解なし'
-          ];
-          correctIdx = 0;
+        let quizRes = res;
+        if (!isValidQuiz(quizRes)) {
+          try {
+            quizRes = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
+              schema: QUIZ_GEN_SCHEMA,
+              temperature: 0.7,
+              timeoutMs: 30000
+            });
+          } catch (retryErr) {}
         }
 
-        const shuffledData = shuffleChoices(rawChoices.slice(0, 4), correctIdx);
+        const valid = isValidQuiz(quizRes);
+        let rawChoices = valid ? quizRes.choices.map(c => sanitizeMathString(c).trim()) : [];
+        let correctIdx = valid ? quizRes.correct_index : 0;
+        let rawFeedback = (valid && Array.isArray(quizRes.choice_feedback))
+          ? quizRes.choice_feedback.map(f => sanitizeMathString(f))
+          : [];
 
-        currentQuizData = {
-          problem: sanitizeMathString(res.problem || ''),
-          answer: sanitizeMathString(res.answer || ''),
-          hint: sanitizeMathString(res.hint || ''),
-          explanation: sanitizeMathString(res.explanation || ''),
-          wrongHint: sanitizeMathString(res.wrong_hint || ''),
-          choiceFeedback: Array.isArray(res.choice_feedback) ? res.choice_feedback.map(f => sanitizeMathString(f)) : [],
-          speechCorrect: res.speech_ja_correct || '正解です！素晴らしい！',
-          speechWrong: res.speech_ja_wrong || '惜しい！もう一歩です。',
-          rawChoices: rawChoices,
-          displayChoices: shuffledData.shuffled,
-          displayCorrectIndex: shuffledData.newCorrectIndex
-        };
+        if (!valid) {
+          currentQuizData = {
+            problem: sanitizeMathString(quizRes?.problem || '類題の生成に失敗しました。もう一度お試しください。'),
+            answer: sanitizeMathString(quizRes?.answer || ''),
+            hint: sanitizeMathString(quizRes?.hint || ''),
+            explanation: sanitizeMathString(quizRes?.explanation || ''),
+            wrongHint: sanitizeMathString(quizRes?.wrong_hint || ''),
+            choiceFeedback: [],
+            speechCorrect: quizRes?.speech_ja_correct || '正解です！素晴らしい！',
+            speechWrong: quizRes?.speech_ja_wrong || '惜しい！もう一歩です。',
+            rawChoices: [],
+            displayChoices: [],
+            displayCorrectIndex: -1
+          };
+          setQuizInputMode('text');
+        } else {
+          const shuffledData = shuffleChoices(rawChoices, correctIdx, rawFeedback);
+          currentQuizData = {
+            problem: sanitizeMathString(quizRes.problem || ''),
+            answer: sanitizeMathString(quizRes.answer || ''),
+            hint: sanitizeMathString(quizRes.hint || ''),
+            explanation: sanitizeMathString(quizRes.explanation || ''),
+            wrongHint: sanitizeMathString(quizRes.wrong_hint || ''),
+            choiceFeedback: shuffledData.shuffledFeedback,
+            speechCorrect: quizRes.speech_ja_correct || '正解です！素晴らしい！',
+            speechWrong: quizRes.speech_ja_wrong || '惜しい！もう一歩です。',
+            rawChoices: rawChoices,
+            displayChoices: shuffledData.shuffled,
+            displayCorrectIndex: shuffledData.newCorrectIndex
+          };
+          setQuizInputMode(safeStorage.getItem('quiz_input_mode') || 'choice');
+        }
 
         selectedChoiceIndex = -1;
 
@@ -1405,9 +1437,9 @@ ${studentAns}
           <div id="quizJudgeComment"></div>
         </div>
 
-        ${isCorrect && correctAnsText ? `
-        <div class="text-xs sm:text-sm p-3 rounded-lg bg-emerald-100/70 dark:bg-emerald-900/40 text-emerald-950 dark:text-emerald-100 border border-emerald-300/60 dark:border-emerald-700/60">
-          <span class="font-bold">🎯 模範解答：</span>
+        ${correctAnsText ? `
+        <div class="text-xs sm:text-sm p-3 rounded-lg ${isCorrect ? 'bg-emerald-100/70 dark:bg-emerald-900/40 text-emerald-950 dark:text-emerald-100 border border-emerald-300/60 dark:border-emerald-700/60' : 'bg-amber-100/70 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 border border-amber-300/60 dark:border-amber-700/60'}">
+          <span class="font-bold">🎯 正解・模範解答：</span>
           <span id="quizCorrectAnswer" class="font-bold ml-1"></span>
         </div>
         ` : ''}
@@ -1461,6 +1493,10 @@ ${studentAns}
     function saveQuizToHistory() {
       if (!currentQuizData) return;
       const unitHint = document.getElementById('unitSelect').value;
+      const studentAnsText = quizInputMode === 'choice' && currentQuizData.displayChoices && selectedChoiceIndex >= 0
+        ? currentQuizData.displayChoices[selectedChoiceIndex]
+        : (document.getElementById('studentAnswerInput')?.value || '');
+
       const data = {
         unitHint: unitHint,
         problem_label: '類題チャレンジ (正解)',
@@ -1472,7 +1508,7 @@ ${studentAns}
             title: '類題チャレンジ 正解達成',
             focus: '自力で解法を導き出しました！',
             why: '学んだ考え方を数字が変わった類題に正しく応用できました。',
-            display_math: `生徒の解答: ${document.getElementById('studentAnswerInput').value}\n正解: ${currentQuizData.answer}`,
+            display_math: `生徒の解答: ${studentAnsText}\n正解: ${currentQuizData.answer}`,
             watch_out: '',
             speech_ja: '類題チャレンジ、見事に正解できましたね！素晴らしいです。'
           }
@@ -1532,19 +1568,15 @@ ${studentAns}
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', updateSafeArea);
       }
-      const savedModelsJson = safeStorage.getItem('available_gemini_models');
-      if (savedModelsJson) {
-        try { populateModelSelect(JSON.parse(savedModelsJson)); } catch (e) {}
-      }
+      const selectEl = document.getElementById('modelSelect');
       const savedCustomModel = safeStorage.getItem('custom_model_id');
-      const savedSelectedModel = safeStorage.getItem('selected_model');
       if (savedCustomModel) {
         addOrSelectModelOption(savedCustomModel, `${savedCustomModel} (カスタム指定)`);
-      } else if (savedSelectedModel) {
-        const selectEl = document.getElementById('modelSelect');
-        if ([...selectEl.options].some(o => o.value === savedSelectedModel)) {
-          selectEl.value = savedSelectedModel;
+      } else {
+        if (selectEl) {
+          selectEl.innerHTML = '<option value="gemini-2.5-flash" selected>gemini-2.5-flash (標準・高速)</option>';
         }
+        safeStorage.setItem('selected_model', 'gemini-2.5-flash');
       }
 
       // 音声速度の復元
@@ -1696,18 +1728,13 @@ ${studentAns}
 
     function populateModelSelect(models) {
       const selectEl = document.getElementById('modelSelect');
-      selectEl.innerHTML = '';
-      models.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = `${m.id}`;
-        selectEl.appendChild(opt);
-      });
+      if (!selectEl) return;
+      selectEl.innerHTML = '<option value="gemini-2.5-flash" selected>gemini-2.5-flash (標準・高速)</option>';
       const customModel = safeStorage.getItem('custom_model_id');
-      if (customModel) {
+      if (customModel && customModel !== 'gemini-2.5-flash') {
         addOrSelectModelOption(customModel, `${customModel} (カスタム指定)`);
       } else {
-        safeStorage.setItem('selected_model', selectEl.value);
+        safeStorage.setItem('selected_model', 'gemini-2.5-flash');
       }
     }
 
@@ -2458,6 +2485,14 @@ ${studentAns}
       currentSteps = Array.isArray(prob.steps) ? prob.steps : [];
       currentProblemText = prob.recognized_problem || '';
 
+      // ステップ別Q&A履歴の復元 (Hydrate)
+      currentSteps.forEach((step, sIdx) => {
+        const cKey = `${currentProblemIndex}:${sIdx}`;
+        if (Array.isArray(step.followups) && step.followups.length > 0 && !stepChats[cKey]) {
+          stepChats[cKey] = [...step.followups];
+        }
+      });
+
       const badge = document.getElementById('currentProblemBadge');
       if (badge) {
         if (currentProblems.length > 1) {
@@ -2517,6 +2552,9 @@ ${studentAns}
 
       closeQuizSection();
       currentQuizData = null;
+      stepChats = {};
+      stepChatBusy = {};
+      stepQuotes = {};
       currentProblems = normalized;
       currentProblemIndex = 0;
 
@@ -2747,6 +2785,11 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           timeoutMs: 30000
         });
 
+        const existingVisual = step.visual;
+        const newVisual = (data.visual && data.visual.type && data.visual.type !== 'none')
+          ? data.visual
+          : (existingVisual && existingVisual.type !== 'none' ? existingVisual : null);
+
         currentSteps[idx] = {
           ...step,
           title: data.title || step.title,
@@ -2754,8 +2797,9 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           why: data.why || step.why,
           display_math: data.display_math || step.display_math,
           watch_out: (data.watch_out ?? step.watch_out) || '',
-          visual: data.visual || step.visual || null,
-          speech_ja: data.speech_ja || step.speech_ja
+          visual: newVisual,
+          speech_ja: data.speech_ja || step.speech_ja,
+          followups: []
         };
         if (currentProblems[currentProblemIndex]) {
           currentProblems[currentProblemIndex].steps = currentSteps;
@@ -2763,9 +2807,8 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 
         // 質問履歴をリセットして古い文脈との混線を防止
         const chatKey = `${currentProblemIndex}:${idx}`;
-        if (stepChats[chatKey] && stepChats[chatKey].length > 0) {
-          stepChats[chatKey] = [];
-        }
+        stepChats[chatKey] = [];
+        delete stepQuotes[chatKey];
 
         renderStepCards();
         highlightStepCard(idx);
@@ -3260,19 +3303,19 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 
       // 3. 点線ガイド (guides)
       if (Array.isArray(visual.guides)) {
-        visual.guides.forEach(g => {
+        visual.guides.filter(Boolean).forEach(g => {
           const guideLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
           if (g.orientation === 'vertical') {
             const sx = toSvgX(g.value);
             guideLine.setAttribute('x1', sx);
-            guideLine.setAttribute('y1', toSvgY(g.from || yMin));
+            guideLine.setAttribute('y1', toSvgY(g.from ?? yMin));
             guideLine.setAttribute('x2', sx);
-            guideLine.setAttribute('y2', toSvgY(g.to || 0));
+            guideLine.setAttribute('y2', toSvgY(g.to ?? 0));
           } else {
             const sy = toSvgY(g.value);
-            guideLine.setAttribute('x1', toSvgX(g.from || xMin));
+            guideLine.setAttribute('x1', toSvgX(g.from ?? xMin));
             guideLine.setAttribute('y1', sy);
-            guideLine.setAttribute('x2', toSvgX(g.to || 0));
+            guideLine.setAttribute('x2', toSvgX(g.to ?? 0));
             guideLine.setAttribute('y2', sy);
           }
           guideLine.setAttribute('class', 'viz-guide stroke-slate-400 dark:stroke-slate-500');
@@ -3282,7 +3325,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 
       // 4. 関数グラフ曲線 (curves)
       if (Array.isArray(visual.curves)) {
-        visual.curves.forEach((curve, cIdx) => {
+        visual.curves.filter(Boolean).forEach((curve, cIdx) => {
           const kind = curve.kind || 'linear';
           const a = Number(curve.a ?? (kind === 'linear' ? 1 : 0));
           const b = Number(curve.b ?? 0);
@@ -3310,6 +3353,18 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           const strokeColor = cIdx === 0 ? 'stroke-emerald-600 dark:stroke-emerald-400' : 'stroke-blue-600 dark:stroke-blue-400';
           path.setAttribute('class', `viz-curve ${strokeColor}`);
           svg.appendChild(path);
+
+          // 曲線ラベル
+          if (curve.label) {
+            const midX = (dMin + dMax) / 2;
+            const midY = fn(midX);
+            const clbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            clbl.setAttribute('x', toSvgX(midX) + 6);
+            clbl.setAttribute('y', toSvgY(midY) - 6);
+            clbl.setAttribute('class', 'viz-text font-bold fill-emerald-700 dark:fill-emerald-300 text-[10px]');
+            clbl.textContent = curve.label;
+            svg.appendChild(clbl);
+          }
 
           // 端点 (domain_min, domain_max) の丸印描画
           if (curve.domain_min !== undefined) {
@@ -3343,7 +3398,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 
       // 5. 特徴点ラベル (points)
       if (Array.isArray(visual.points)) {
-        visual.points.forEach(p => {
+        visual.points.filter(Boolean).forEach(p => {
           const px = toSvgX(p.x);
           const py = toSvgY(p.y);
           const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -3445,6 +3500,29 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           svg.appendChild(c2);
         });
       }
+
+      // 単独マーク (marks)
+      if (Array.isArray(nl.marks)) {
+        nl.marks.filter(Boolean).forEach(m => {
+          const mx = toSvgX(m.value);
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('cx', mx);
+          circle.setAttribute('cy', centerY);
+          circle.setAttribute('r', '4.5');
+          circle.setAttribute('class', m.closed ? 'fill-emerald-600 dark:fill-emerald-400' : 'fill-white stroke-emerald-600 stroke-2');
+          svg.appendChild(circle);
+
+          if (m.label) {
+            const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            txt.setAttribute('x', mx);
+            txt.setAttribute('y', centerY - 10);
+            txt.setAttribute('text-anchor', 'middle');
+            txt.setAttribute('class', 'viz-text font-bold fill-slate-800 dark:fill-slate-200');
+            txt.textContent = m.label;
+            svg.appendChild(txt);
+          }
+        });
+      }
     }
 
     // =========================================================================
@@ -3475,6 +3553,9 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       else if (partKey === 'why') quoteText = `【理由】${step.why || ''}`;
       else if (partKey === 'math') quoteText = `【計算式】${step.display_math || ''}`;
       else if (partKey === 'watch') quoteText = `【注意点】${step.watch_out || ''}`;
+
+      const chatKey = `${currentProblemIndex}:${stepIdx}`;
+      stepQuotes[chatKey] = quoteText;
 
       if (quoteEl && quoteText) {
         quoteEl.textContent = `引用: ${quoteText.slice(0, 80)}${quoteText.length > 80 ? '…' : ''}`;
@@ -3543,6 +3624,17 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       const chatKey = `${currentProblemIndex}:${stepIdx}`;
       if (stepChatBusy[chatKey]) return;
 
+      if (!stepChats[chatKey]) stepChats[chatKey] = [];
+      const userTurnCount = stepChats[chatKey].filter(m => m.role === 'user').length;
+      if (userTurnCount >= 6) {
+        showToast('⚠️ このステップへの質問は上限（6回）に達しました。次のステップに進むか、新しい問題で質問してください。', 'amber');
+        inputEl.disabled = true;
+        inputEl.placeholder = 'このステップの質問上限に達しました';
+        const sendBtn = document.getElementById(`step-chat-btn-${stepIdx}`);
+        if (sendBtn) sendBtn.disabled = true;
+        return;
+      }
+
       const geminiKey = safeStorage.getItem('gemini_api_key');
       const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
 
@@ -3555,7 +3647,6 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       const step = currentSteps[stepIdx] || {};
       const unitHint = document.getElementById('unitSelect').value;
 
-      if (!stepChats[chatKey]) stepChats[chatKey] = [];
       stepChats[chatKey].push({ role: 'user', text: question, createdAt: Date.now() });
 
       inputEl.value = '';
@@ -3570,6 +3661,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 
       // 過去2ターンの会話コンテキスト
       const pastMessages = stepChats[chatKey].slice(-4).map(m => `${m.role === 'user' ? '生徒' : '先生'}: ${m.text}`).join('\n');
+      const activeQuote = stepQuotes[chatKey] ? `【生徒が疑問に思ってハイライトした部分】\n${stepQuotes[chatKey]}\n\n` : '';
 
       const prompt = `あなたは日本の高校1年生に数学を教える優しい先生です。生徒が以下の【該当ステップ】の一部について質問しています。問題全体を最初から解き直すのではなく、このステップの疑問点に対してピンポイントで、中学生でも分かるように優しく答えてください。
 
@@ -3582,7 +3674,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 数式・黒板: ${step.display_math || ''}
 つまずきやすい点: ${step.watch_out || ''}
 
-【これまでの会話】
+${activeQuote}【これまでの会話】
 ${pastMessages}
 
 【生徒の質問】
@@ -3616,6 +3708,16 @@ ${question}
           speech_ja: res.speech_ja || '',
           createdAt: Date.now()
         });
+
+        // step.followups に保存（ノート保存・復元と同期）
+        step.followups = stepChats[chatKey].slice(-8);
+        if (currentProblems[currentProblemIndex] && currentProblems[currentProblemIndex].steps[stepIdx]) {
+          currentProblems[currentProblemIndex].steps[stepIdx].followups = step.followups;
+        }
+
+        delete stepQuotes[chatKey];
+        const quoteEl = document.getElementById(`step-chat-quote-${stepIdx}`);
+        if (quoteEl) quoteEl.classList.add('hidden');
 
         renderStepChatLogs(stepIdx);
         if (res.speech_ja) {

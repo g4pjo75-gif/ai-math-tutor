@@ -19,25 +19,23 @@
   <link rel="icon" type="image/png" href="icon-192.png" />
 
   <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind = {
-      config: {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              english: {
-                dark: '#0f172a',
-                mid: '#1e3a5f',
-                light: '#2563eb'
-              }
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            english: {
+              dark: '#0f172a',
+              mid: '#1e3a5f',
+              light: '#2563eb'
             }
           }
         }
       }
     };
   </script>
-  <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Common UI Stylesheet -->
   <link rel="stylesheet" href="../shared/ui.css?v=20261027" />
@@ -71,8 +69,8 @@
         ロック解除
       </button>
       <div class="pt-2">
-        <a href="../" class="text-xs text-slate-400 hover:text-blue-500 transition underline underline-offset-4">
-          📐 AI数学チューターへ戻る
+        <a href="../" target="_blank" rel="noopener" class="text-xs text-slate-400 hover:text-blue-500 transition underline underline-offset-4">
+          📐 AI数学チューターへ戻る (別ウィンドウ)
         </a>
       </div>
     </div>
@@ -94,7 +92,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <a href="../" title="数学チューターへ移動" class="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl text-white font-bold transition flex items-center gap-1 border border-white/15">
+        <a href="../" target="_blank" rel="noopener" title="数学チューターへ移動" class="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl text-white font-bold transition flex items-center gap-1 border border-white/15">
           <span>📐</span>
           <span class="hidden sm:inline">数学</span>
         </a>
@@ -262,7 +260,46 @@
     }) : null;
 
     let currentImageBase64 = null;
-    let lastPassageText = '';
+    let lastPassageEn = '';
+
+    const ENGLISH_SCHEMA = {
+      type: 'object',
+      properties: {
+        passage_en: { type: 'string', description: '英語の本文または書き起こしテキスト' },
+        translation_ja: { type: 'string', description: '自然でわかりやすい日本語訳' },
+        vocabulary: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              word: { type: 'string' },
+              meaning: { type: 'string' },
+              example: { type: 'string' }
+            },
+            required: ['word', 'meaning']
+          }
+        },
+        grammar_points: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              explanation: { type: 'string' }
+            },
+            required: ['title', 'explanation']
+          }
+        },
+        quick_check: {
+          type: 'object',
+          properties: {
+            question: { type: 'string' },
+            answer: { type: 'string' }
+          }
+        }
+      },
+      required: ['passage_en', 'translation_ja']
+    };
 
     window.addEventListener('DOMContentLoaded', () => {
       // ダークモード初期化
@@ -271,9 +308,8 @@
         window.TutorUI.updateSafeArea();
       }
 
-      // PINモーダル制御
-      const savedPin = sharedStore ? sharedStore.getItem('pin') : null;
-      if (!savedPin && sessionStorage.getItem('aet_unlocked') === '1') {
+      // PINモーダル制御 (セッションで解錠済みならスキップ)
+      if (sessionStorage.getItem('aet_unlocked') === '1') {
         document.getElementById('pinModal').style.display = 'none';
       }
 
@@ -293,7 +329,7 @@
 
     function unlockApp() {
       const input = document.getElementById('pinInput').value.trim();
-      const savedPin = (sharedStore ? sharedStore.getItem('pin') : null) || '1234';
+      const savedPin = (sharedStore ? (sharedStore.getItem('app_pin') || sharedStore.getItem('pin')) : null) || '1234';
       if (input === savedPin) {
         document.getElementById('pinModal').style.display = 'none';
         sessionStorage.setItem('aet_unlocked', '1');
@@ -310,7 +346,7 @@
 
     function openSettings() {
       const key = sharedStore ? sharedStore.getItem('gemini_api_key') : '';
-      const pin = sharedStore ? (sharedStore.getItem('pin') || '1234') : '1234';
+      const pin = sharedStore ? (sharedStore.getItem('app_pin') || sharedStore.getItem('pin') || '1234') : '1234';
       document.getElementById('geminiKeyInput').value = key || '';
       document.getElementById('newPinInput').value = pin;
       window.TutorUI.openModal('settingsModal');
@@ -327,6 +363,7 @@
 
       if (sharedStore) {
         sharedStore.setItem('gemini_api_key', key);
+        sharedStore.setItem('app_pin', pin);
         sharedStore.setItem('pin', pin);
       }
       if (engStore) {
@@ -345,7 +382,6 @@
       reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
-          // リサイズ（最大1400px）
           const maxDim = 1400;
           let w = img.width;
           let h = img.height;
@@ -397,29 +433,27 @@
 
       const prompt = `あなたは日本の高校生向けに教える優秀で親切なAI英語チューターです。
 添付された画像または質問テキストを解析し、以下の構造で分かりやすく解説してください：
-1. 英文の書き起こし（Passage / Problem）
-2. 自然で分かりやすい日本語全訳（Translation）
-3. 重要語彙・イディオム（Vocabulary & Idioms）: 単語、品詞、意味、例文
-4. 重要文法・構文のポイント（Grammar Focus）: 構文の解説と注意点
-5. 類題または確認クイズ（Quick Check）
-
-出力はマークダウン形式で、親しみやすい丁寧な語り口（です・ます調）で回答してください。`;
+1. 英文の書き起こし（passage_en）
+2. 自然で分かりやすい日本語全訳（translation_ja）
+3. 重要語彙・イディオム（vocabulary）: 単語、意味、例文
+4. 重要文法・構文のポイント（grammar_points）: タイトル、解説
+5. 類題または確認クイズ（quick_check）: 問題、解答`;
 
       try {
-        const responseText = await window.TutorCore.callGeminiModel({
-          modelId: 'gemini-2.5-flash',
+        const selectedModel = (sharedStore ? sharedStore.getItem('selected_model') : null) || 'gemini-2.5-flash';
+        const data = await window.TutorCore.callGeminiModel({
+          modelId: selectedModel,
           apiKey: geminiKey,
           promptText: `${prompt}\n\n生徒の追加質問: ${userText || 'なし'}`,
           imageBase64: currentImageBase64,
-          rawText: true,
-          temperature: 0.4
+          schema: ENGLISH_SCHEMA,
+          temperature: 0.35
         });
 
-        lastPassageText = responseText;
+        lastPassageEn = data.passage_en || '';
         statusBox.classList.add('hidden');
 
-        const resultContent = document.getElementById('resultContent');
-        resultContent.innerHTML = `<div class="whitespace-pre-wrap font-sans text-xs sm:text-sm bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">${escapeHtml(responseText)}</div>`;
+        renderEnglishResult(data);
         document.getElementById('resultSection').classList.remove('hidden');
         window.TutorUI.showToast('✨ 英語の解説が完成しました！', 'green');
       } catch (err) {
@@ -429,13 +463,101 @@
       }
     }
 
+    function renderEnglishResult(data) {
+      const resultContent = document.getElementById('resultContent');
+      if (!resultContent) return;
+
+      const vocabList = (data.vocabulary || []).map(v => `
+        <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60">
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="font-bold text-blue-700 dark:text-blue-400 text-sm">${escapeHtml(v.word)}</span>
+            <span class="text-xs text-slate-600 dark:text-slate-300 font-medium">${escapeHtml(v.meaning)}</span>
+          </div>
+          ${v.example ? `<p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic">例: "${escapeHtml(v.example)}"</p>` : ''}
+        </div>
+      `).join('');
+
+      const grammarList = (data.grammar_points || []).map(g => `
+        <div class="p-3 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/60 space-y-1">
+          <div class="font-bold text-xs text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+            <span>💡</span>
+            <span>${escapeHtml(g.title)}</span>
+          </div>
+          <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(g.explanation)}</p>
+        </div>
+      `).join('');
+
+      resultContent.innerHTML = `
+        <!-- 英文本文 -->
+        <div class="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/60 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+              <span>📖</span>
+              <span>英文 (Passage)</span>
+            </span>
+          </div>
+          <p class="text-sm font-serif leading-relaxed text-slate-900 dark:text-slate-100 whitespace-pre-wrap">${escapeHtml(data.passage_en || '')}</p>
+        </div>
+
+        <!-- 日本語全訳 -->
+        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
+          <div class="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <span>🇯🇵</span>
+            <span>日本語訳 (Translation)</span>
+          </div>
+          <p class="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">${escapeHtml(data.translation_ja || '')}</p>
+        </div>
+
+        <!-- 重要語彙 -->
+        ${vocabList ? `
+        <div class="space-y-2">
+          <div class="font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <span>🔤</span>
+            <span>重要単語・表現 (Vocabulary)</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            ${vocabList}
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- 文法ポイント -->
+        ${grammarList ? `
+        <div class="space-y-2">
+          <div class="font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <span>🧩</span>
+            <span>重要文法・構文のポイント (Grammar Focus)</span>
+          </div>
+          <div class="space-y-2">
+            ${grammarList}
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- 確認クイズ -->
+        ${data.quick_check && data.quick_check.question ? `
+        <div class="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/60 space-y-2">
+          <div class="font-bold text-xs text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+            <span>🎯</span>
+            <span>理解度チェック (Quick Check)</span>
+          </div>
+          <p class="text-xs text-slate-800 dark:text-slate-200 font-bold">${escapeHtml(data.quick_check.question)}</p>
+          <details class="text-xs text-amber-800 dark:text-amber-300 cursor-pointer pt-1">
+            <summary class="font-bold">答えを見る</summary>
+            <p class="mt-1 p-2 rounded-lg bg-white/70 dark:bg-slate-900/60 border border-amber-200 dark:border-amber-800/60">${escapeHtml(data.quick_check.answer)}</p>
+          </details>
+        </div>
+        ` : ''}
+      `;
+    }
+
     function playEnglishSpeech() {
-      if (!englishSpeech || !lastPassageText) {
+      if (!englishSpeech || !lastPassageEn) {
         window.TutorUI.showToast('⚠️ 読み上げる英文がありません。', 'amber');
         return;
       }
       const rate = parseFloat(document.getElementById('speechRateSelect')?.value || '0.95');
-      englishSpeech.speak(lastPassageText, { rate });
+      englishSpeech.speak(lastPassageEn, { rate });
     }
 
     function escapeHtml(str) {

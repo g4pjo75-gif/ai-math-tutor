@@ -28,7 +28,7 @@
 | アプリ | 数学I・A AI家庭教師 `v1.6-beta` |
 | ファイル | `index.html` 170,932 bytes / 3,598行（単一ファイル+インラインJS） |
 | 主な機能 | 写真解析、複数小問、単元別解説、KaTeX、SVGグラフ、4択クイズ、直接入力、ステップ別Q&A、音声、マイノート |
-| PWA | `manifest.json` + `sw.js`（`amt-cache-v1.6`、scope `/ai-math-tutor/`） |
+| PWA | `manifest.json` + `sw.js`（`amt-cache-v1.8`、scope `/ai-math-tutor/`） |
 | ストレージ | `STORAGE_PREFIX = 'amt_'`。旧キー（prefixなし）も読み取り互換 |
 | 配信 | GitHub Pages `/ai-math-tutor/` |
 | ドキュメント | `docs/PLAN_v1.6.md`（未コミットの可能性あり） |
