@@ -80,7 +80,7 @@
     }
 
     const temperature = effectiveOpts.temperature ?? 0.35;
-    const maxOutputTokens = effectiveOpts.maxOutputTokens ?? 16384;
+    const maxOutputTokens = effectiveOpts.maxOutputTokens ?? 32768;
     const schema = effectiveOpts.schema || null;
     const useJson = !effectiveOpts.rawText && Boolean(schema);
     const timeoutMs = effectiveOpts.timeoutMs || 30000;
@@ -127,6 +127,9 @@
     const finishReason = candidate?.finishReason;
     const text = candidate?.content?.parts?.map(p => p.text || '').join('\n') || '';
     if (!text) {
+      if (finishReason === 'MAX_TOKENS') {
+        throw new Error('AIの回答が途中で切れました（思考・出力トークン上限）。もう一度試すか、入力内容を絞ってください。');
+      }
       const blockReason = data.promptFeedback?.blockReason || finishReason;
       throw new Error(blockReason
         ? `モデルが応答を中断しました（理由: ${blockReason}）`
@@ -141,7 +144,7 @@
       return parseJson(text);
     } catch (parseErr) {
       if (finishReason === 'MAX_TOKENS') {
-        throw new Error('問題数が多いためAIの回答が途中で切れました（トークン上限）。');
+        throw new Error('問題数が多いためAIの回答が途中で切れました（思考・出力トークン上限）。入力内容を小さく分割して試してください。');
       }
       throw parseErr;
     }

@@ -1730,12 +1730,13 @@ ${contextText}
     // 学習履歴の保存（長文解説・4択クイズ・英作文）
     function saveCurrentLessonToHistory() {
       if (!lastLessonData) return;
+      const { _twinQuizConsumed, ...persistPayload } = lastLessonData;
       const entry = {
         id: Date.now().toString(),
         type: 'reading',
         title: (lastLessonData.passage_en || '長文読解').slice(0, 48),
         summary: (lastLessonData.translation_ja || '').slice(0, 70),
-        payload: lastLessonData,
+        payload: persistPayload,
         savedAt: new Date().toISOString()
       };
       englishHistory.unshift(entry);
@@ -1899,14 +1900,14 @@ ${contextText}
 
       if (item.type === 'reading') {
         switchMode('reading');
-        lastLessonData = item.payload;
+        lastLessonData = { ...item.payload, _twinQuizConsumed: false };
         lastPassageEn = item.payload.passage_en || '';
         renderEnglishResult(item.payload);
         document.getElementById('resultSection').classList.remove('hidden');
       } else if (item.type === 'quiz') {
         switchMode('quiz');
         currentQuizData = item.payload;
-        selectedChoiceIndex = currentQuizData.displayCorrectIndex;
+        selectedChoiceIndex = -1;
         document.getElementById('quizEmptyState').classList.add('hidden');
         document.getElementById('quizActiveContainer').classList.remove('hidden');
         document.getElementById('quizTargetBadge').textContent = currentQuizData.targetPoint || '復習';
@@ -1914,7 +1915,12 @@ ${contextText}
         document.getElementById('quizTranslationText').textContent = `和訳: ${currentQuizData.translationJa || ''}`;
         document.getElementById('quizHintContent').textContent = currentQuizData.hint || '';
         renderEnglishQuizChoices();
-        submitEnglishQuizAnswer();
+        const box = document.getElementById('quizResultBox');
+        if (box) {
+          box.classList.add('hidden');
+          box.innerHTML = '';
+        }
+        window.TutorUI.showToast('📁 4択問題を復習用に読み込みました。回答を選択してチェックしてください。', 'blue');
       } else if (item.type === 'writing') {
         switchMode('writing');
         lastWritingData = item.payload;
@@ -1987,7 +1993,9 @@ ${contextText}
       return String(str || '')
         .replace(/\\/g, '\\\\')
         .replace(/'/g, "\\'")
-        .replace(/"/g, '\\"')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
         .replace(/\r?\n/g, ' ');
     }
   </script>
