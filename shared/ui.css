@@ -154,7 +154,8 @@ html[data-theme="edutech"] #quizChallengeBtn,
 html[data-theme="edutech"] #submitChoiceBtn,
 html[data-theme="edutech"] #submitAnswerBtn,
 html[data-theme="edutech"] #checkWritingBtn,
-html[data-theme="edutech"] #generateQuizBtn {
+html[data-theme="edutech"] #generateQuizBtn,
+html[data-theme="edutech"] #submitQuizBtn {
   border-radius: var(--radius-btn) !important;
   box-shadow: 0 4px 0px rgba(4, 120, 87, 0.85) !important;
   transition: transform 0.12s ease, box-shadow 0.12s ease !important;
@@ -165,7 +166,8 @@ html[data-theme="edutech"] #quizChallengeBtn:active,
 html[data-theme="edutech"] #submitChoiceBtn:active,
 html[data-theme="edutech"] #submitAnswerBtn:active,
 html[data-theme="edutech"] #checkWritingBtn:active,
-html[data-theme="edutech"] #generateQuizBtn:active {
+html[data-theme="edutech"] #generateQuizBtn:active,
+html[data-theme="edutech"] #submitQuizBtn:active {
   transform: var(--btn-active-transform) !important;
   box-shadow: none !important;
 }
@@ -205,8 +207,13 @@ html[data-theme="edutech"] #generateQuizBtn:active {
 }
 
 /* ③ タイムライン (data-theme="mobile") 特化レイアウト */
-html[data-theme="mobile"] body {
+html[data-theme="mobile"] body:has(#audioControlBar) {
   padding-bottom: calc(110px + var(--safe-area-inset-bottom)) !important;
+}
+
+/* 모바일 테마에서 하단 플로팅 오디오바와의 겹침 방지 */
+html[data-theme="mobile"] #toastNotification {
+  bottom: calc(96px + var(--safe-area-inset-bottom, 0px)) !important;
 }
 
 html[data-theme="mobile"] #audioControlBar {

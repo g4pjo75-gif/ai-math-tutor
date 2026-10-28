@@ -215,14 +215,25 @@
     return `fp_${(h1 >>> 0).toString(16)}_${(h2 >>> 0).toString(16)}_${raw.length}`;
   }
 
-  function getCachedResponse(storage, cacheKey, fingerprint) {
+  const CACHE_SCHEMA_VERSION = 2;
+  const DEFAULT_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30日
+
+  function getCachedResponse(storage, cacheKey, fingerprint, maxAgeMs = DEFAULT_CACHE_MAX_AGE_MS) {
     if (!storage || !cacheKey || !fingerprint) return null;
     try {
       const raw = storage.getItem(cacheKey);
       if (!raw) return null;
       const list = JSON.parse(raw);
       if (!Array.isArray(list)) return null;
-      const hit = list.find(item => item && item.fp === fingerprint);
+      const now = Date.now();
+      const hit = list.find(item => {
+        if (!item || item.fp !== fingerprint) return false;
+        // P3-8: スキーマバージョン確認（旧キャッシュを安全に無効化）
+        if (item.v !== CACHE_SCHEMA_VERSION) return false;
+        // P3-8: TTL有効期限確認
+        if (item.savedAt && (now - item.savedAt) > maxAgeMs) return false;
+        return true;
+      });
       return hit ? hit.data : null;
     } catch (e) {
       return null;
@@ -240,8 +251,8 @@
           if (Array.isArray(parsed)) list = parsed;
         } catch (e) {}
       }
-      list = list.filter(item => item && item.fp !== fingerprint);
-      list.unshift({ fp: fingerprint, savedAt: Date.now(), data });
+      list = list.filter(item => item && item.fp !== fingerprint && item.v === CACHE_SCHEMA_VERSION);
+      list.unshift({ v: CACHE_SCHEMA_VERSION, fp: fingerprint, savedAt: Date.now(), data });
       if (list.length > maxEntries) {
         list = list.slice(0, maxEntries);
       }

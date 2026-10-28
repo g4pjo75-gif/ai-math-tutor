@@ -1,9 +1,9 @@
 # AIチューター アーキテクチャ設計書
 
 > **対象リポジトリ**: `ai-math-tutor`  
-> **現行バージョン**: `v1.6-beta` (`index.html` 170,932 bytes / 3,598行)  
-> **最終更新**: 2026-10-27  
-> **目的**: 数学I・Aに続いて英語アプリを追加するための、リポジトリ構成・共有範囲・PWA/SW・移行手順の設計
+> **現行バージョン**: `v1.8` (`index.html` 204,251 bytes / 4,231行、`english/index.html` 104,886 bytes / 2,018行)  
+> **最終更新**: 2026-10-29  
+> **目的**: 数学I・Aに続いて高校英語アプリを追加・運用するための、リポジトリ構成・共有範囲・PWA/SW・最適化・品質管理設計
 
 ---
 
@@ -25,13 +25,13 @@
 
 | 項目 | 内容 |
 |:---|:---|
-| アプリ | 数学I・A AI家庭教師 `v1.6-beta` |
-| ファイル | `index.html` 170,932 bytes / 3,598行（単一ファイル+インラインJS） |
-| 主な機能 | 写真解析、複数小問、単元別解説、KaTeX、SVGグラフ、4択クイズ、直接入力、ステップ別Q&A、音声、マイノート |
-| PWA | `manifest.json` + `sw.js`（`amt-cache-v1.8`、scope `/ai-math-tutor/`） |
-| ストレージ | `STORAGE_PREFIX = 'amt_'`。旧キー（prefixなし）も読み取り互換 |
-| 配信 | GitHub Pages `/ai-math-tutor/` |
-| ドキュメント | `docs/PLAN_v1.6.md`（未コミットの可能性あり） |
+| アプリ | 数学I・A AI家庭教師 `v1.8` / 高校英語 AI家庭教師 `v1.0` |
+| ファイル | `index.html` 204,251 bytes / 4,231行、`english/index.html` 104,886 bytes / 2,018行 |
+| 主な機能 | 写真解析、複数小問、単元別解説、KaTeX、SVGグラフ、4択クイズ、直接入力、ステップ別Q&A、問題全体別解Q&A、音声、マイノート、英語長文/4択/添削 |
+| PWA | `sw.js` (`amt-cache-v2.4`) / `english/sw.js` (`aet-cache-v1.6`) |
+| ストレージ | `amt_` / `aet_` / 共通 `tutor_` (PIN・APIキー)。旧キー読み取り互換 |
+| 配信 | GitHub Pages `/ai-math-tutor/` (英語 `/english/`) |
+| ドキュメント | `PROJECT_SPEC.md`, `docs/ARCHITECTURE.md`, `docs/AUDIT_v1.7.md`, `docs/AUDIT_v1.8.md` |
 | バックアップ | `backup/`（`.gitignore`対象） |
 
 ### 1.1 v1.6で増えた重要な要素
@@ -175,7 +175,7 @@ self.addEventListener('fetch', (event) => {
 ```
 
 - `self.registration.scope` から英語パスを算出するので、リポジトリ名が変わっても動く。
-- ガード追加時はキャッシュ名を `amt-cache-v1.7` などに上げる。
+- ガード追加時はキャッシュ名を `amt-cache-v2.4` などに上げる。
 - 英語SWが未登録の間は、ガードによりネットワークへフォールバックする（オフライン英語はまだ不可）。
 
 ### 4.3 manifest

@@ -612,65 +612,65 @@
     // 2. Gemini 構造化出力スキーマ定義
     // =========================================================================
     const ENGLISH_READING_SCHEMA = {
-      type: 'object',
+      type: 'OBJECT',
       properties: {
-        passage_en: { type: 'string', description: '認識された英文全文または問題文' },
-        translation_ja: { type: 'string', description: '自然で分かりやすい日本語全訳' },
+        passage_en: { type: 'STRING', description: '認識された英文全文または問題文' },
+        translation_ja: { type: 'STRING', description: '自然で分かりやすい日本語全訳' },
         sentence_breakdown: {
-          type: 'array',
+          type: 'ARRAY',
           description: '1文ごとの構文(SVOC)・スラッシュリーディング解説',
           items: {
-            type: 'object',
+            type: 'OBJECT',
             properties: {
-              en: { type: 'string' },
-              ja: { type: 'string' },
-              structure_note: { type: 'string' }
+              en: { type: 'STRING' },
+              ja: { type: 'STRING' },
+              structure_note: { type: 'STRING' }
             },
             required: ['en', 'ja']
           }
         },
         vocabulary: {
-          type: 'array',
+          type: 'ARRAY',
           items: {
-            type: 'object',
+            type: 'OBJECT',
             properties: {
-              word: { type: 'string' },
-              meaning: { type: 'string' },
-              example: { type: 'string' }
+              word: { type: 'STRING' },
+              meaning: { type: 'STRING' },
+              example: { type: 'STRING' }
             },
             required: ['word', 'meaning']
           }
         },
         grammar_points: {
-          type: 'array',
+          type: 'ARRAY',
           items: {
-            type: 'object',
+            type: 'OBJECT',
             properties: {
-              title: { type: 'string' },
-              explanation: { type: 'string' }
+              title: { type: 'STRING' },
+              explanation: { type: 'STRING' }
             },
             required: ['title', 'explanation']
           }
         },
         quick_check: {
-          type: 'object',
+          type: 'OBJECT',
           properties: {
-            question: { type: 'string' },
-            answer: { type: 'string' }
+            question: { type: 'STRING' },
+            answer: { type: 'STRING' }
           }
         },
         twin_quiz: {
-          type: 'object',
+          type: 'OBJECT',
           description: '本文の文法・語彙を確認する4択の類題（ワンショット事前生成）',
           properties: {
-            target_point: { type: 'string' },
-            question_en: { type: 'string' },
-            translation_ja: { type: 'string' },
-            hint: { type: 'string' },
-            choices: { type: 'array', items: { type: 'string' } },
-            correct_index: { type: 'integer' },
-            choice_feedback: { type: 'array', items: { type: 'string' } },
-            explanation: { type: 'string' }
+            target_point: { type: 'STRING' },
+            question_en: { type: 'STRING' },
+            translation_ja: { type: 'STRING' },
+            hint: { type: 'STRING' },
+            choices: { type: 'ARRAY', items: { type: 'STRING' } },
+            correct_index: { type: 'INTEGER' },
+            choice_feedback: { type: 'ARRAY', items: { type: 'STRING' } },
+            explanation: { type: 'STRING' }
           },
           required: ['question_en', 'translation_ja', 'choices', 'correct_index', 'choice_feedback', 'explanation']
         }
@@ -679,49 +679,49 @@
     };
 
     const ENGLISH_QUIZ_SCHEMA = {
-      type: 'object',
+      type: 'OBJECT',
       properties: {
-        target_point: { type: 'string', description: '出題単元・文法ポイント名' },
-        question_en: { type: 'string', description: '英語の4択問題文（空所補充など）' },
-        translation_ja: { type: 'string', description: '問題文の日本語訳' },
-        hint: { type: 'string', description: '解くための着眼点ヒント（答えは言わない）' },
+        target_point: { type: 'STRING', description: '出題単元・文法ポイント名' },
+        question_en: { type: 'STRING', description: '英語の4択問題文（空所補充など）' },
+        translation_ja: { type: 'STRING', description: '問題文の日本語訳' },
+        hint: { type: 'STRING', description: '解くための着眼点ヒント（答えは言わない）' },
         choices: {
-          type: 'array',
-          items: { type: 'string' },
+          type: 'ARRAY',
+          items: { type: 'STRING' },
           description: '必ず4つの異なる選択肢'
         },
-        correct_index: { type: 'integer', description: '正解のインデックス (0〜3)' },
+        correct_index: { type: 'INTEGER', description: '正解のインデックス (0〜3)' },
         choice_feedback: {
-          type: 'array',
-          items: { type: 'string' },
+          type: 'ARRAY',
+          items: { type: 'STRING' },
           description: '各選択肢(0〜3)がなぜ正解/不正解なのかの解説'
         },
-        explanation: { type: 'string', description: '全体のまとめ解説' }
+        explanation: { type: 'STRING', description: '全体のまとめ解説' }
       },
       required: ['question_en', 'translation_ja', 'choices', 'correct_index', 'choice_feedback', 'explanation']
     };
 
     const WRITING_CORRECTION_SCHEMA = {
-      type: 'object',
+      type: 'OBJECT',
       properties: {
-        score: { type: 'integer', description: '100点満点の評価スコア' },
-        original_text: { type: 'string', description: '生徒が入力した元の英文' },
-        corrected_text: { type: 'string', description: '文法・語法を正しく直した自然な英文' },
-        natural_alternative: { type: 'string', description: 'さらにネイティブらしい別表現' },
-        translation_ja: { type: 'string', description: '添削後の英文の日本語訳' },
+        score: { type: 'INTEGER', description: '100点満点の評価スコア' },
+        original_text: { type: 'STRING', description: '生徒が入力した元の英文' },
+        corrected_text: { type: 'STRING', description: '文法・語法を正しく直した自然な英文' },
+        natural_alternative: { type: 'STRING', description: 'さらにネイティブらしい別表現' },
+        translation_ja: { type: 'STRING', description: '添削後の英文の日本語訳' },
         grammar_fixes: {
-          type: 'array',
+          type: 'ARRAY',
           items: {
-            type: 'object',
+            type: 'OBJECT',
             properties: {
-              before: { type: 'string' },
-              after: { type: 'string' },
-              reason_ja: { type: 'string' }
+              before: { type: 'STRING' },
+              after: { type: 'STRING' },
+              reason_ja: { type: 'STRING' }
             },
             required: ['before', 'after', 'reason_ja']
           }
         },
-        praise_and_advice: { type: 'string', description: '生徒を褒めつつ伸ばす温かいアドバイス' }
+        praise_and_advice: { type: 'STRING', description: '生徒を褒めつつ伸ばす温かいアドバイス' }
       },
       required: ['score', 'corrected_text', 'grammar_fixes', 'praise_and_advice']
     };
@@ -863,6 +863,21 @@
       currentMode = mode;
       stopAllSpeech();
       hideStatus();
+
+      // P3-1: 他モードへの切り替え時は前回のクイズ状態をクリアし、誤提出・不整合を防止
+      if (mode !== 'quiz' && currentQuizData) {
+        currentQuizData = null;
+        selectedChoiceIndex = -1;
+        const emptyState = document.getElementById('quizEmptyState');
+        const activeContainer = document.getElementById('quizActiveContainer');
+        const resultBox = document.getElementById('quizResultBox');
+        if (emptyState) emptyState.classList.remove('hidden');
+        if (activeContainer) activeContainer.classList.add('hidden');
+        if (resultBox) {
+          resultBox.classList.add('hidden');
+          resultBox.innerHTML = '';
+        }
+      }
 
       const panels = {
         reading: document.getElementById('panelReading'),
