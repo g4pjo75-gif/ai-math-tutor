@@ -286,21 +286,16 @@
         </select>
       </div>
 
-      <!-- カメラ撮影 / アルバム選択 -->
-      <div class="grid grid-cols-2 gap-3">
-        <label class="cursor-pointer bg-emerald-50 hover:bg-emerald-100 border-2 border-dashed border-emerald-400 rounded-xl p-3 text-center transition dark:bg-emerald-900/20 dark:border-emerald-500/30"
-          id="cameraLabel">
-          <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleImageUpload(event)" />
-          <div class="text-2xl mb-1">📷</div>
-          <div class="text-xs font-bold text-emerald-800 dark:text-emerald-400">カメラで問題を撮影</div>
-        </label>
-        <label class="cursor-pointer bg-blue-50 hover:bg-blue-100 border-2 border-dashed border-blue-400 rounded-xl p-3 text-center transition dark:bg-blue-900/20 dark:border-blue-500/30"
-          id="albumLabel">
-          <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
-          <div class="text-2xl mb-1">🖼️</div>
-          <div class="text-xs font-bold text-blue-800 dark:text-blue-400">アルバムから画像選択</div>
-        </label>
-      </div>
+      <!-- 写真選択 / カメラ撮影（統合ボタン） -->
+      <label id="photoUploadLabel"
+        class="block cursor-pointer border-2 border-dashed border-emerald-400 dark:border-emerald-500/40 hover:border-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-slate-800/50 dark:hover:bg-slate-800 rounded-2xl p-5 text-center transition">
+        <input id="photoUploadInput" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
+        <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full mx-auto flex items-center justify-center text-2xl mb-2">
+          📷
+        </div>
+        <div class="text-xs sm:text-sm font-bold text-emerald-900 dark:text-emerald-300">ここをタップして写真を選択 または カメラ撮影</div>
+        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">数学の教科書・問題集・プリントを撮影またはアルバムから選んでください</div>
+      </label>
 
       <!-- アップロード進行バー（初期非表示） -->
       <div id="uploadProgress" class="hidden space-y-2">
