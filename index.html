@@ -607,10 +607,10 @@
   </div>
 
   <!-- Shared Modules -->
-  <script src="shared/storage.js?v=20261027"></script>
-  <script src="shared/core.js?v=20261027"></script>
-  <script src="shared/speech.js?v=20261027"></script>
-  <script src="shared/ui.js?v=20261027"></script>
+  <script src="shared/storage.js?v=20261028"></script>
+  <script src="shared/core.js?v=20261028"></script>
+  <script src="shared/speech.js?v=20261028"></script>
+  <script src="shared/ui.js?v=20261028"></script>
 
   <script>
     // =========================================================================
@@ -755,7 +755,8 @@
         recognized_problem: data.recognized_problem || '',
         key_point: data.key_point || '',
         steps: Array.isArray(data.steps) ? data.steps : [],
-        final_answer: data.final_answer || ''
+        final_answer: data.final_answer || '',
+        twin_quiz: data.twin_quiz || null
       };
 
       // 最大100件まで保持、古いものから削除
@@ -880,7 +881,8 @@
         recognized_problem: currentProb.recognized_problem || recEl?.dataset?.rawMath || currentProblemText || '',
         key_point: currentProb.key_point || keyEl?.dataset?.rawMath || '',
         steps: currentSteps,
-        final_answer: currentProb.final_answer || ansEl?.dataset?.rawMath || ''
+        final_answer: currentProb.final_answer || ansEl?.dataset?.rawMath || '',
+        twin_quiz: currentProb.twin_quiz || null
       };
 
       const savedId = saveTutorHistory(data);
@@ -912,28 +914,17 @@
       const keyPoint = currentProb.key_point || document.getElementById('keyPoint')?.dataset?.rawMath || '';
       const currentProblem = recognizedProblem || currentProblemText;
 
-      return `あなたは数学の問題作成者です。
-以下の問題と同じ単元・同じ解法パターンの「類題（数字や条件だけ変えた問題）」を1問作ってください。
+      return `${buildSystemPrompt(unitHint)}
 
+【特別指示：類題のワンショット作成＆完全解説】
+以下の「元の問題」と同じ単元・同じ解法パターンで、数字・係数・定義域・条件だけを変えた「新しい類題」を1問作成し、その類題のステップ解説と twin_quiz を JSON形式で一度に出力してください。
 【元の問題】
 ${currentProblem}
-
-【単元ヒント】
-${unitHint}
-
 【重要な解法ポイント】
-${keyPoint}
-
-【条件】
-- 元の問題と同じ単元・同じ解法パターンを使うこと
-- 数字、係数、定義域、条件などを変えること（完全に同じ問題にしない）
-- 問題文だけを出力すること（解説は不要）
-- 元の問題より少しだけ難しくするか、同程度の難易度にすること
-- 数式は必ずLaTeX形式（$...$）で記述し、JSONエスケープ（\\\\leqq, \\\\ge）を厳守すること
-- 「問題：」などのラベルは付けず、問題文だけを出力`;
+${keyPoint}`;
     }
 
-    // 1. 類題の解説をすぐ見る（従来の自動解説フロー）
+    // 1. 類題の解説をすぐ見る（ワンショット1回呼び出しに最適化：従来の2回呼び出しを1回に削減）
     async function generateSimilarProblem() {
       const btn = document.getElementById('similarProblemBtn');
       const btnText = document.getElementById('similarProblemBtnText');
@@ -960,32 +951,26 @@ ${keyPoint}
       }
 
       try {
+        stopSpeech();
+        closeQuizSection();
+        showStatus(`⏳ AI先生（<strong>${escapeHtml(selectedModel)}</strong>）が類題とステップ解説を同時に作成しています…`, 'blue');
         const prompt = buildSimilarProblemPrompt();
-        const res = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-          timeoutMs: 25000,
-          rawText: true
+        const resultData = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
+          schema: TUTOR_RESPONSE_SCHEMA,
+          temperature: 0.65,
+          timeoutMs: 35000
         });
 
-        let similarProblem = '';
-        if (typeof res === 'string') similarProblem = res.trim();
-        else if (res) similarProblem = String(res).trim();
-
-        similarProblem = similarProblem
-          .replace(/^```[\s\S]*?\n/, '')
-          .replace(/```$/g, '')
-          .replace(/^(問題[：:]?\s*|類題[：:]?\s*|Question[：:]?\s*)/i, '')
-          .trim();
-
-        if (!similarProblem) throw new Error('類題の生成に失敗しました。');
-
-        const questionInput = document.getElementById('questionInput');
-        if (questionInput) questionInput.value = sanitizeMathString(similarProblem);
-
         clearImage();
-        closeQuizSection();
-        await solveProblem();
+        const renderedOk = renderTutorResult(resultData);
+        if (renderedOk) {
+          const firstProb = currentProblems[0];
+          const questionInput = document.getElementById('questionInput');
+          if (questionInput && firstProb?.recognized_problem) {
+            questionInput.value = sanitizeMathString(firstProb.recognized_problem);
+          }
+          hideStatus();
+        }
       } catch (err) {
         if (isQuotaError(err)) {
           showQuotaError(selectedModel);
@@ -1133,8 +1118,99 @@ ${keyPoint}
       renderQuizResult(judge, chosenText);
     }
 
-    // 2. 自分で解く「類題チャレンジ」出題
+    // 2. 自分で解く「類題チャレンジ」出題（ワンショット事前取得データがあればAPI消費0で即時出題）
+    function isValidQuizObject(q) {
+      if (!q || !Array.isArray(q.choices) || q.choices.length !== 4) return false;
+      const cleaned = q.choices.map(c => sanitizeMathString(c).trim());
+      if (cleaned.some(c => !c)) return false;
+      if (new Set(cleaned).size !== 4) return false;
+      if (typeof q.correct_index !== 'number' || !Number.isInteger(q.correct_index) || q.correct_index < 0 || q.correct_index > 3) return false;
+      return true;
+    }
+
+    function applyAndRenderQuizData(quizRes) {
+      const valid = isValidQuizObject(quizRes);
+      const rawChoices = valid ? quizRes.choices.map(c => sanitizeMathString(c).trim()) : [];
+      const correctIdx = valid ? quizRes.correct_index : 0;
+      const rawFeedback = (valid && Array.isArray(quizRes.choice_feedback))
+        ? quizRes.choice_feedback.map(f => sanitizeMathString(f))
+        : [];
+      const acceptedAnswers = Array.isArray(quizRes?.accepted_answers)
+        ? quizRes.accepted_answers.map(a => sanitizeMathString(a).trim()).filter(Boolean)
+        : [];
+
+      if (!valid) {
+        currentQuizData = {
+          problem: sanitizeMathString(quizRes?.problem || '類題の生成に失敗しました。もう一度お試しください。'),
+          answer: sanitizeMathString(quizRes?.answer || ''),
+          acceptedAnswers: acceptedAnswers,
+          hint: sanitizeMathString(quizRes?.hint || ''),
+          explanation: sanitizeMathString(quizRes?.explanation || ''),
+          wrongHint: sanitizeMathString(quizRes?.wrong_hint || ''),
+          choiceFeedback: [],
+          speechCorrect: quizRes?.speech_ja_correct || '正解です！素晴らしい！',
+          speechWrong: quizRes?.speech_ja_wrong || '惜しい！もう一歩です。',
+          rawChoices: [],
+          displayChoices: [],
+          displayCorrectIndex: -1
+        };
+        setQuizInputMode('text');
+      } else {
+        const shuffledData = shuffleChoices(rawChoices, correctIdx, rawFeedback);
+        currentQuizData = {
+          problem: sanitizeMathString(quizRes.problem || ''),
+          answer: sanitizeMathString(quizRes.answer || ''),
+          acceptedAnswers: acceptedAnswers,
+          hint: sanitizeMathString(quizRes.hint || ''),
+          explanation: sanitizeMathString(quizRes.explanation || ''),
+          wrongHint: sanitizeMathString(quizRes.wrong_hint || ''),
+          choiceFeedback: shuffledData.shuffledFeedback,
+          speechCorrect: quizRes.speech_ja_correct || '正解です！素晴らしい！',
+          speechWrong: quizRes.speech_ja_wrong || '惜しい！もう一歩です。',
+          rawChoices: rawChoices,
+          displayChoices: shuffledData.shuffled,
+          displayCorrectIndex: shuffledData.newCorrectIndex
+        };
+        setQuizInputMode(safeStorage.getItem('quiz_input_mode') || 'choice');
+      }
+
+      selectedChoiceIndex = -1;
+
+      const probEl = document.getElementById('quizProblemText');
+      probEl.textContent = currentQuizData.problem;
+      renderMathIn(probEl);
+
+      const hintEl = document.getElementById('quizHintContent');
+      hintEl.textContent = currentQuizData.hint;
+      renderMathIn(hintEl);
+      hintEl.classList.add('hidden');
+      document.getElementById('quizHintIcon').textContent = '▼';
+
+      renderQuizChoiceButtons();
+      setQuizInputMode(safeStorage.getItem('quiz_input_mode') || 'choice');
+
+      document.getElementById('studentAnswerInput').value = '';
+      const resultBox = document.getElementById('quizResultBox');
+      resultBox.classList.add('hidden');
+      resultBox.innerHTML = '';
+
+      const quizSec = document.getElementById('quizSection');
+      quizSec.classList.remove('hidden');
+      quizSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      speakJapanese('では、数字を変えた類題に挑戦してみましょう！4つの選択肢から選ぶか、自分で答えを入力してくださいね。');
+    }
+
     async function startQuizChallenge() {
+      const currentProb = currentProblems[currentProblemIndex] || {};
+
+      // ① ワンショット統合済み twin_quiz があれば API呼び出し0回・待ち時間0秒で即時表示！
+      if (currentProb.twin_quiz && !currentProb._twinQuizConsumed && isValidQuizObject(currentProb.twin_quiz)) {
+        currentProb._twinQuizConsumed = true;
+        applyAndRenderQuizData(currentProb.twin_quiz);
+        return;
+      }
+
       const btn = document.getElementById('quizChallengeBtn');
       const btnText = document.getElementById('quizChallengeBtnText');
       const btnSpinner = document.getElementById('quizChallengeBtnSpinner');
@@ -1160,11 +1236,10 @@ ${keyPoint}
       }
 
       const unitHint = document.getElementById('unitSelect').value;
-      const currentProb = currentProblems[currentProblemIndex] || {};
       const currentProblem = currentProb.recognized_problem || document.getElementById('recognizedProblem')?.dataset?.rawMath || currentProblemText || '';
       const keyPoint = currentProb.key_point || document.getElementById('keyPoint')?.dataset?.rawMath || '';
 
-      // v1.6 4択クイズ生成スキーマ (choices, correct_index, choice_feedback)
+      // v1.6 4択クイズ生成スキーマ (choices, correct_index, choice_feedback, accepted_answers)
       const QUIZ_GEN_SCHEMA = {
         type: 'OBJECT',
         properties: {
@@ -1175,6 +1250,10 @@ ${keyPoint}
           },
           correct_index: { type: 'INTEGER' },
           answer: { type: 'STRING' },
+          accepted_answers: {
+            type: 'ARRAY',
+            items: { type: 'STRING' }
+          },
           hint: { type: 'STRING' },
           explanation: { type: 'STRING' },
           wrong_hint: { type: 'STRING' },
@@ -1190,7 +1269,7 @@ ${keyPoint}
 
       const prompt = `あなたは日本の高校1年生を教えるプロ数学教師です。
 生徒が自力で解くための「4択の類題（数字・条件だけを変えた同じ解法パターンの双子問題）」を1問出題してください。
-問題文、4つの選択肢(必ず1つが正解、3つがよくある間違い)、正解番号(0〜3)、着眼点のヒント、正解の理由、誤答ごとの違いの理由を作成してください。
+問題文、4つの選択肢(必ず1つが正解、3つがよくある間違い)、正解番号(0〜3)、着眼点のヒント、正解の理由、誤答ごとの違いの理由、および記述式採点用の別表記リスト(accepted_answers)を作成してください。
 
 【元の問題】
 ${currentProblem}
@@ -1205,28 +1284,19 @@ ${keyPoint}
 - 選択肢(choices)は必ず4個（重複禁止、すべて異なる選択肢）。
 - 誤答は「符号ミス」「不等号の向き(≦と<)」「定義域の端の取り違え」「計算ミス」など高校生がよくやる間違い。
 - correct_index は choices 内の正解のインデックス (0, 1, 2, 3 のいずれか)。
+- accepted_answers には、直接入力で正解と認める表記ゆれ（例: "(x+1)(x+2)" と "(x+2)(x+1)"、"x=2,-3" と "2,-3" など）を2〜3個入れてください。
 - choice_feedback はそれぞれの選択肢がなぜ違うかを1〜2文で記述（正解の選択肢は「正解」）。
 - 数式は必ずLaTeX形式（$...$ または $$...$$）で記述し、バックスラッシュは2重化（\\\\leqq, \\\\ge, \\\\frac）してください。
 - 出力は必ず指定のJSONスキーマのみ。`;
 
       try {
-        const res = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
+        let quizRes = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
           schema: QUIZ_GEN_SCHEMA,
           temperature: 0.6,
           timeoutMs: 30000
         });
 
-        const isValidQuiz = (q) => {
-          if (!q || !Array.isArray(q.choices) || q.choices.length !== 4) return false;
-          const cleaned = q.choices.map(c => sanitizeMathString(c).trim());
-          if (cleaned.some(c => !c)) return false;
-          if (new Set(cleaned).size !== 4) return false;
-          if (typeof q.correct_index !== 'number' || !Number.isInteger(q.correct_index) || q.correct_index < 0 || q.correct_index > 3) return false;
-          return true;
-        };
-
-        let quizRes = res;
-        if (!isValidQuiz(quizRes)) {
+        if (!isValidQuizObject(quizRes)) {
           try {
             quizRes = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
               schema: QUIZ_GEN_SCHEMA,
@@ -1236,72 +1306,7 @@ ${keyPoint}
           } catch (retryErr) {}
         }
 
-        const valid = isValidQuiz(quizRes);
-        let rawChoices = valid ? quizRes.choices.map(c => sanitizeMathString(c).trim()) : [];
-        let correctIdx = valid ? quizRes.correct_index : 0;
-        let rawFeedback = (valid && Array.isArray(quizRes.choice_feedback))
-          ? quizRes.choice_feedback.map(f => sanitizeMathString(f))
-          : [];
-
-        if (!valid) {
-          currentQuizData = {
-            problem: sanitizeMathString(quizRes?.problem || '類題の生成に失敗しました。もう一度お試しください。'),
-            answer: sanitizeMathString(quizRes?.answer || ''),
-            hint: sanitizeMathString(quizRes?.hint || ''),
-            explanation: sanitizeMathString(quizRes?.explanation || ''),
-            wrongHint: sanitizeMathString(quizRes?.wrong_hint || ''),
-            choiceFeedback: [],
-            speechCorrect: quizRes?.speech_ja_correct || '正解です！素晴らしい！',
-            speechWrong: quizRes?.speech_ja_wrong || '惜しい！もう一歩です。',
-            rawChoices: [],
-            displayChoices: [],
-            displayCorrectIndex: -1
-          };
-          setQuizInputMode('text');
-        } else {
-          const shuffledData = shuffleChoices(rawChoices, correctIdx, rawFeedback);
-          currentQuizData = {
-            problem: sanitizeMathString(quizRes.problem || ''),
-            answer: sanitizeMathString(quizRes.answer || ''),
-            hint: sanitizeMathString(quizRes.hint || ''),
-            explanation: sanitizeMathString(quizRes.explanation || ''),
-            wrongHint: sanitizeMathString(quizRes.wrong_hint || ''),
-            choiceFeedback: shuffledData.shuffledFeedback,
-            speechCorrect: quizRes.speech_ja_correct || '正解です！素晴らしい！',
-            speechWrong: quizRes.speech_ja_wrong || '惜しい！もう一歩です。',
-            rawChoices: rawChoices,
-            displayChoices: shuffledData.shuffled,
-            displayCorrectIndex: shuffledData.newCorrectIndex
-          };
-          setQuizInputMode(safeStorage.getItem('quiz_input_mode') || 'choice');
-        }
-
-        selectedChoiceIndex = -1;
-
-        const probEl = document.getElementById('quizProblemText');
-        probEl.textContent = currentQuizData.problem;
-        renderMathIn(probEl);
-
-        const hintEl = document.getElementById('quizHintContent');
-        hintEl.textContent = currentQuizData.hint;
-        renderMathIn(hintEl);
-        hintEl.classList.add('hidden');
-        document.getElementById('quizHintIcon').textContent = '▼';
-
-        // 4択ボタン描画
-        renderQuizChoiceButtons();
-        setQuizInputMode(safeStorage.getItem('quiz_input_mode') || 'choice');
-
-        document.getElementById('studentAnswerInput').value = '';
-        const resultBox = document.getElementById('quizResultBox');
-        resultBox.classList.add('hidden');
-        resultBox.innerHTML = '';
-
-        const quizSec = document.getElementById('quizSection');
-        quizSec.classList.remove('hidden');
-        quizSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-        speakJapanese('では、数字を変えた類題に挑戦してみましょう！4つの選択肢から選ぶか、自分で答えを入力してくださいね。');
+        applyAndRenderQuizData(quizRes);
       } catch (err) {
         if (isQuotaError(err)) {
           showQuotaError(selectedModel);
@@ -1329,7 +1334,7 @@ ${keyPoint}
       if (quizSec) quizSec.classList.add('hidden');
     }
 
-    // 3. 生徒の答えをAIが自動採点
+    // 3. 生徒の答えを採点（② 1次判定はローカルJS正規化でAPI消費0、不一致時のみAI精密採点）
     async function submitStudentAnswer() {
       if (!currentQuizData) return;
       const inputEl = document.getElementById('studentAnswerInput');
@@ -1338,6 +1343,28 @@ ${keyPoint}
       if (!studentAns) {
         showStatus('⚠️ 答えを入力してから「採点する」を押してください。', 'amber');
         inputEl.focus();
+        return;
+      }
+
+      // ② 1次ローカルJS正規化判定（空白・全角半角・不等号・因数順序を吸収して即時正解判定）
+      const correctChoiceText = (currentQuizData.displayChoices && currentQuizData.displayCorrectIndex >= 0)
+        ? currentQuizData.displayChoices[currentQuizData.displayCorrectIndex]
+        : '';
+      const referenceCandidates = [
+        currentQuizData.answer,
+        correctChoiceText,
+        ...(Array.isArray(currentQuizData.acceptedAnswers) ? currentQuizData.acceptedAnswers : [])
+      ].filter(Boolean);
+
+      if (window.TutorCore && window.TutorCore.isLocalMathMatch(studentAns, referenceCandidates)) {
+        const localJudge = {
+          is_correct: true,
+          judgement_title: '正解！素晴らしい！（⚡即時判定）',
+          comment: currentQuizData.explanation || '素晴らしい！自分の力で正確に答えを導き出せましたね。',
+          correct_answer: currentQuizData.answer || correctChoiceText,
+          speech_ja: currentQuizData.speechCorrect || '大正解です！自分の力でしっかり解けましたね。素晴らしいです。'
+        };
+        renderQuizResult(localJudge, studentAns);
         return;
       }
 
@@ -1973,10 +2000,36 @@ ${studentAns}
                   propertyOrdering: ['step_number', 'title', 'focus', 'why', 'display_math', 'watch_out', 'visual', 'speech_ja']
                 }
               },
-              final_answer: { type: 'STRING' }
+              final_answer: { type: 'STRING' },
+              twin_quiz: {
+                type: 'OBJECT',
+                properties: {
+                  problem: { type: 'STRING' },
+                  choices: {
+                    type: 'ARRAY',
+                    items: { type: 'STRING' }
+                  },
+                  correct_index: { type: 'INTEGER' },
+                  answer: { type: 'STRING' },
+                  accepted_answers: {
+                    type: 'ARRAY',
+                    items: { type: 'STRING' }
+                  },
+                  hint: { type: 'STRING' },
+                  explanation: { type: 'STRING' },
+                  wrong_hint: { type: 'STRING' },
+                  choice_feedback: {
+                    type: 'ARRAY',
+                    items: { type: 'STRING' }
+                  },
+                  speech_ja_correct: { type: 'STRING' },
+                  speech_ja_wrong: { type: 'STRING' }
+                },
+                required: ['problem', 'choices', 'correct_index', 'answer', 'hint', 'explanation']
+              }
             },
-            required: ['problem_label', 'recognized_problem', 'key_point', 'steps', 'final_answer'],
-            propertyOrdering: ['problem_label', 'recognized_problem', 'key_point', 'steps', 'final_answer']
+            required: ['problem_label', 'recognized_problem', 'key_point', 'steps', 'final_answer', 'twin_quiz'],
+            propertyOrdering: ['problem_label', 'recognized_problem', 'key_point', 'steps', 'final_answer', 'twin_quiz']
           }
         }
       },
@@ -2095,7 +2148,20 @@ ${studentAns}
           "speech_ja": "音声で読み上げる台本。LaTeX禁止。100〜180文字"
         }
       ],
-      "final_answer": "最終的な答え（$$...$$ で明確に）"
+      "final_answer": "最終的な答え（$$...$$ で明確に）",
+      "twin_quiz": {
+        "problem": "生徒が自力で解くための双子問題（数字・条件だけを変えた類題1問）",
+        "choices": ["選択肢ア", "選択肢イ", "選択肢ウ", "選択肢エ（必ず4個すべて異なる式・値）"],
+        "correct_index": 0,
+        "answer": "双子問題の正解（LaTeX可）",
+        "accepted_answers": ["表記ゆれ1（例: (x+1)(x+2)）", "表記ゆれ2（例: (x+2)(x+1)）"],
+        "hint": "双子問題を解くための着眼点ヒント（答えは言わない）",
+        "explanation": "双子問題の簡潔な正解解説",
+        "wrong_hint": "間違えたときのヒント",
+        "choice_feedback": ["アの解説", "イの解説", "ウの解説", "エの解説"],
+        "speech_ja_correct": "正解です！素晴らしいですね。",
+        "speech_ja_wrong": "惜しいです。ヒントを見て再挑戦してみましょう。"
+      }
     }
   ]
 }
@@ -2264,7 +2330,7 @@ ${studentAns}
       }
     }
 
-    async function solveProblem(overrideModelId = null) {
+    async function solveProblem(overrideModelId = null, forceRefresh = false) {
       stopSpeech();
       const geminiKey = safeStorage.getItem('gemini_api_key');
       const customModel = safeStorage.getItem('custom_model_id');
@@ -2275,6 +2341,46 @@ ${studentAns}
       if (!currentImageBase64 && !userText) {
         showStatus('⚠️ 問題の写真をアップロードするか、テキストで質問を入力してください。', 'amber');
         return;
+      }
+
+      // ④ 画像・テキストハッシュ（Fingerprint）およびマイノート照合による重複API呼び出し防止キャッシュ
+      const reqFp = window.TutorCore
+        ? window.TutorCore.computeRequestHash({
+            mode: 'math_solve',
+            unit: unitHint,
+            text: userText,
+            imageBase64: currentImageBase64
+          })
+        : null;
+
+      if (!overrideModelId && !forceRefresh) {
+        let cachedData = reqFp && window.TutorCore
+          ? window.TutorCore.getCachedResponse(safeStorage, 'api_response_cache', reqFp)
+          : null;
+
+        // テキストのみ入力時はマイノート（tutorHistory）に同一問題があるかも照合
+        if (!cachedData && !currentImageBase64 && userText && window.TutorCore && Array.isArray(tutorHistory)) {
+          const normInput = window.TutorCore.normalizeMathExpr(userText);
+          if (normInput && normInput.length >= 3) {
+            const matchedHistory = tutorHistory.find(
+              item => item && window.TutorCore.normalizeMathExpr(item.recognized_problem) === normInput
+            );
+            if (matchedHistory) {
+              cachedData = matchedHistory;
+            }
+          }
+        }
+
+        if (cachedData) {
+          currentModelId = selectedModel;
+          currentProblemText = userText || '添付画像の問題';
+          const renderedOk = renderTutorResult(cachedData);
+          if (renderedOk) {
+            showStatus('⚡ 同じ問題の解説データが保存されていたため、APIを消費せず即座に表示しました！', 'blue');
+            setTimeout(() => hideStatus(), 2500);
+            return;
+          }
+        }
       }
 
       if (!geminiKey) {
@@ -2318,6 +2424,9 @@ ${studentAns}
 
         const renderedOk = renderTutorResult(resultData);
         if (renderedOk) {
+          if (reqFp && window.TutorCore) {
+            window.TutorCore.setCachedResponse(safeStorage, 'api_response_cache', reqFp, resultData, 15);
+          }
           hideStatus();
         }
       } catch (err) {
@@ -2413,7 +2522,9 @@ ${studentAns}
           visual: s.visual || null,
           followups: Array.isArray(s.followups) ? s.followups : []
         })) : [],
-        final_answer: p.final_answer || ''
+        final_answer: p.final_answer || '',
+        twin_quiz: p.twin_quiz || null,
+        _twinQuizConsumed: false
       });
 
       // 1. data.problems 配列の場合

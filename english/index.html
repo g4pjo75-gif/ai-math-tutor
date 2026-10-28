@@ -543,10 +543,10 @@
   <div id="toastNotification" role="status" aria-live="polite" class="hidden"></div>
 
   <!-- Shared Modules -->
-  <script src="../shared/storage.js?v=20261027"></script>
-  <script src="../shared/core.js?v=20261027"></script>
-  <script src="../shared/speech.js?v=20261027"></script>
-  <script src="../shared/ui.js?v=20261027"></script>
+  <script src="../shared/storage.js?v=20261028"></script>
+  <script src="../shared/core.js?v=20261028"></script>
+  <script src="../shared/speech.js?v=20261028"></script>
+  <script src="../shared/ui.js?v=20261028"></script>
 
   <!-- English Tutor v1.0 Application Script -->
   <script>
@@ -641,9 +641,24 @@
             question: { type: 'string' },
             answer: { type: 'string' }
           }
+        },
+        twin_quiz: {
+          type: 'object',
+          description: '本文の文法・語彙を確認する4択の類題（ワンショット事前生成）',
+          properties: {
+            target_point: { type: 'string' },
+            question_en: { type: 'string' },
+            translation_ja: { type: 'string' },
+            hint: { type: 'string' },
+            choices: { type: 'array', items: { type: 'string' } },
+            correct_index: { type: 'integer' },
+            choice_feedback: { type: 'array', items: { type: 'string' } },
+            explanation: { type: 'string' }
+          },
+          required: ['question_en', 'translation_ja', 'choices', 'correct_index', 'choice_feedback', 'explanation']
         }
       },
-      required: ['passage_en', 'translation_ja']
+      required: ['passage_en', 'translation_ja', 'twin_quiz']
     };
 
     const ENGLISH_QUIZ_SCHEMA = {
@@ -884,7 +899,7 @@
           window.TutorUI.showToast('❌ 画像形式を認識できませんでした。', 'red');
         };
         img.onload = () => {
-          const maxDim = 1400;
+          const maxDim = 1280;
           let w = img.width;
           let h = img.height;
           if (w > maxDim || h > maxDim) {
@@ -901,7 +916,7 @@
           canvas.height = h;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
           currentImageBase64 = dataUrl.split(',')[1];
 
           document.getElementById('uploadPrompt').classList.add('hidden');
@@ -926,13 +941,6 @@
     }
 
     async function analyzeEnglishProblem() {
-      const apiKey = getApiKey();
-      if (!apiKey) {
-        openSettings();
-        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
-        return;
-      }
-
       const userText = document.getElementById('questionInput').value.trim();
       if (!currentImageBase64 && !userText) {
         window.TutorUI.showToast('⚠️ 写真を撮影するか、英文・質問を入力してください。', 'amber');
@@ -940,6 +948,38 @@
       }
 
       const unitHint = document.getElementById('unitSelect').value;
+
+      // ④ 画像・テキストハッシュ（Fingerprint）による重複API呼び出し防止キャッシュ
+      const reqFp = window.TutorCore
+        ? window.TutorCore.computeRequestHash({
+            mode: 'eng_reading',
+            unit: unitHint,
+            text: userText,
+            imageBase64: currentImageBase64
+          })
+        : null;
+
+      if (reqFp && window.TutorCore && engStore) {
+        const cachedData = window.TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
+        if (cachedData) {
+          lastLessonData = { ...cachedData, _twinQuizConsumed: false };
+          lastPassageEn = cachedData.passage_en || '';
+          hideStatus();
+          renderEnglishResult(cachedData);
+          document.getElementById('resultSection').classList.remove('hidden');
+          document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          window.TutorUI.showToast('⚡ 同じ問題の解説データが保存されていたため、APIを消費せず即座に表示しました！', 'blue');
+          return;
+        }
+      }
+
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        openSettings();
+        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
+        return;
+      }
+
       const modelId = getActiveModel();
       const solveBtn = document.getElementById('solveBtn');
       const solveBtnText = document.getElementById('solveBtnText');
@@ -955,7 +995,8 @@
 - passage_en には英語の本文のみを正確に書き起こしてください（日本語を混ぜない）。
 - sentence_breakdown には1文ずつの英文(en)、和訳(ja)、SVOCや修飾関係のポイント(structure_note)を入れてください。
 - vocabulary には高校生が覚えるべき重要英単語・熟語を4〜8個選び、意味と短い英語例文を入れてください。
-- grammar_points には本文に含まれる重要な文法・構文の解説を入れてください。`;
+- grammar_points には本文に含まれる重要な文法・構文の解説を入れてください。
+- twin_quiz には本文の重要表現または文法事項を使った4択の類題（choicesは必ず4個すべて異なる英語の選択肢、correct_indexは0〜3）を1問作成してください。`;
 
       try {
         const data = await window.TutorCore.callGeminiModel({
@@ -968,8 +1009,11 @@
           timeoutMs: 35000
         });
 
-        lastLessonData = data;
+        lastLessonData = { ...data, _twinQuizConsumed: false };
         lastPassageEn = data.passage_en || '';
+        if (reqFp && window.TutorCore && engStore) {
+          window.TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, data, 15);
+        }
         hideStatus();
 
         renderEnglishResult(data);
@@ -1129,7 +1173,47 @@
       return true;
     }
 
+    function applyAndRenderEnglishQuiz(res, unitHint) {
+      const shuffled = shuffleQuizChoices(res.choices, res.correct_index, res.choice_feedback);
+      currentQuizData = {
+        targetPoint: res.target_point || unitHint,
+        questionEn: res.question_en || '',
+        translationJa: res.translation_ja || '',
+        hint: res.hint || '文脈と時制・品詞のつながりに注目しましょう。',
+        explanation: res.explanation || '',
+        displayChoices: shuffled.displayChoices,
+        displayFeedback: shuffled.displayFeedback,
+        displayCorrectIndex: shuffled.displayCorrectIndex
+      };
+
+      selectedChoiceIndex = -1;
+      hideStatus();
+
+      document.getElementById('quizEmptyState').classList.add('hidden');
+      document.getElementById('quizActiveContainer').classList.remove('hidden');
+      document.getElementById('quizResultBox').classList.add('hidden');
+
+      document.getElementById('quizTargetBadge').textContent = currentQuizData.targetPoint;
+      document.getElementById('quizQuestionText').textContent = currentQuizData.questionEn;
+      document.getElementById('quizTranslationText').textContent = `和訳: ${currentQuizData.translationJa}`;
+      document.getElementById('quizHintContent').textContent = currentQuizData.hint;
+      document.getElementById('quizHintContent').classList.add('hidden');
+      document.getElementById('quizHintIcon').textContent = '▼';
+
+      renderEnglishQuizChoices();
+    }
+
     async function generateEnglishQuiz(useCurrentLesson = false) {
+      const unitHint = document.getElementById('unitSelect').value;
+
+      // ① ワンショット事前生成された twin_quiz があれば API消費0・待ち時間0秒で即座に出題！
+      if (useCurrentLesson && lastLessonData && lastLessonData.twin_quiz && !lastLessonData._twinQuizConsumed && isValidQuizResponse(lastLessonData.twin_quiz)) {
+        lastLessonData._twinQuizConsumed = true;
+        applyAndRenderEnglishQuiz(lastLessonData.twin_quiz, unitHint);
+        window.TutorUI.showToast('⚡ 読解時に同時作成した4択クイズを即座に出題しました！', 'blue');
+        return;
+      }
+
       const apiKey = getApiKey();
       if (!apiKey) {
         openSettings();
@@ -1137,7 +1221,6 @@
         return;
       }
 
-      const unitHint = document.getElementById('unitSelect').value;
       const modelId = getActiveModel();
       const btn = document.getElementById('generateQuizBtn');
       const btnText = document.getElementById('generateQuizBtnText');
@@ -1183,33 +1266,7 @@ ${contextText}
           throw new Error('有効な4択データの生成に失敗しました。もう一度ボタンを押してください。');
         }
 
-        const shuffled = shuffleQuizChoices(res.choices, res.correct_index, res.choice_feedback);
-        currentQuizData = {
-          targetPoint: res.target_point || unitHint,
-          questionEn: res.question_en || '',
-          translationJa: res.translation_ja || '',
-          hint: res.hint || '文脈と時制・品詞のつながりに注目しましょう。',
-          explanation: res.explanation || '',
-          displayChoices: shuffled.displayChoices,
-          displayFeedback: shuffled.displayFeedback,
-          displayCorrectIndex: shuffled.displayCorrectIndex
-        };
-
-        selectedChoiceIndex = -1;
-        hideStatus();
-
-        document.getElementById('quizEmptyState').classList.add('hidden');
-        document.getElementById('quizActiveContainer').classList.remove('hidden');
-        document.getElementById('quizResultBox').classList.add('hidden');
-
-        document.getElementById('quizTargetBadge').textContent = currentQuizData.targetPoint;
-        document.getElementById('quizQuestionText').textContent = currentQuizData.questionEn;
-        document.getElementById('quizTranslationText').textContent = `和訳: ${currentQuizData.translationJa}`;
-        document.getElementById('quizHintContent').textContent = currentQuizData.hint;
-        document.getElementById('quizHintContent').classList.add('hidden');
-        document.getElementById('quizHintIcon').textContent = '▼';
-
-        renderEnglishQuizChoices();
+        applyAndRenderEnglishQuiz(res, unitHint);
       } catch (err) {
         console.error(err);
         showStatus(`❌ クイズ作成エラー: ${err.message}`, 'red');
@@ -1372,13 +1429,6 @@ ${contextText}
     }
 
     async function submitWritingForCorrection() {
-      const apiKey = getApiKey();
-      if (!apiKey) {
-        openSettings();
-        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
-        return;
-      }
-
       const studentText = (document.getElementById('writingStudentInput')?.value || '').trim();
       if (!studentText) {
         window.TutorUI.showToast('⚠️ 添削するあなたの英文を入力してください。', 'amber');
@@ -1387,6 +1437,34 @@ ${contextText}
 
       const taskJa = (document.getElementById('writingTaskInput')?.value || '').trim();
       const unitHint = document.getElementById('unitSelect').value;
+
+      // ④ 同一英作文の重複API呼び出し防止キャッシュ
+      const reqFp = window.TutorCore
+        ? window.TutorCore.computeRequestHash({
+            mode: 'eng_writing',
+            unit: `${unitHint}|${taskJa}`,
+            text: studentText
+          })
+        : null;
+
+      if (reqFp && window.TutorCore && engStore) {
+        const cachedData = window.TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
+        if (cachedData) {
+          lastWritingData = cachedData;
+          hideStatus();
+          renderWritingCorrection(lastWritingData);
+          window.TutorUI.showToast('⚡ 同じ英作文の添削記録が見つかったため、APIを消費せず即座に表示しました！', 'blue');
+          return;
+        }
+      }
+
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        openSettings();
+        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
+        return;
+      }
+
       const modelId = getActiveModel();
       const btn = document.getElementById('checkWritingBtn');
 
@@ -1410,6 +1488,9 @@ ${contextText}
         });
 
         lastWritingData = { ...data, task_ja: taskJa, original_text: data.original_text || studentText };
+        if (reqFp && window.TutorCore && engStore) {
+          window.TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, lastWritingData, 15);
+        }
         hideStatus();
         renderWritingCorrection(lastWritingData);
         window.TutorUI.showToast('✨ 英作文の添削が完了しました！', 'green');
