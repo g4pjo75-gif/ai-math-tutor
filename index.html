@@ -406,6 +406,58 @@
         <div id="finalAnswer" class="text-lg font-bold"></div>
       </div>
 
+      <!-- 問題全体の解法・別解についての質問チャット (Alternative Solutions & Overall Q&A) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 space-y-3 dark:bg-slate-900 dark:border-slate-800">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">💬</span>
+            <h3 class="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100">解法についての質問・別の解き方（別解）を聞く</h3>
+          </div>
+          <span class="text-[10px] sm:text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full">AI先生と対話</span>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+          「別の解き方はある？」「解法Aではなく解法Bで解いて」「なぜこの公式を使ったの？」など、問題全体や解法の疑問を何でも質問できます。
+        </p>
+
+        <!-- クイック質問チップ -->
+        <div class="flex flex-wrap gap-1.5 pt-0.5">
+          <button type="button" onclick="sendOverallQuickQuestion('この問題の「別の解き方（別解）」があれば詳しく教えてください。')"
+            class="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition">
+            💡 別の解法（別解）を教えて
+          </button>
+          <button type="button" onclick="sendOverallQuickQuestion('もっと計算が早く・簡単になる工夫や裏ワザ的な別解はありますか？')"
+            class="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition">
+            ⚡ もっと早く解く工夫・別解は？
+          </button>
+          <button type="button" onclick="sendOverallQuickQuestion('グラフや図形的なアプローチで解く別解はありますか？')"
+            class="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition">
+            📐 グラフ・図形的な解き方は？
+          </button>
+          <button type="button" onclick="sendOverallQuickQuestion('AI先生が使った解法と、よくある別の解法のメリット・デメリットの違いは何ですか？')"
+            class="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition">
+            ⚖️ 解法のメリット比較
+          </button>
+        </div>
+
+        <!-- チャット履歴コンテナ -->
+        <div id="overallChatLogs" class="space-y-3 max-h-96 overflow-y-auto p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm">
+          <!-- JSで動的描画 -->
+        </div>
+
+        <!-- 質問入力フォーム -->
+        <div class="flex gap-2 pt-1">
+          <input type="text" id="overallChatInput"
+            placeholder="例: 解法Aではなく解法B（因数分解/解の公式/判別式など）で解いて"
+            class="flex-1 text-xs sm:text-sm border border-slate-300 dark:border-slate-600 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-emerald-600 dark:bg-slate-800 dark:text-white"
+            onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) sendOverallQuestion()" />
+          <button onclick="sendOverallQuestion()" id="overallChatBtn"
+            class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow flex items-center gap-1.5 shrink-0 transition">
+            <span id="overallChatBtnText">質問する 🚀</span>
+            <span id="overallChatBtnSpinner" class="hidden animate-spin">⟳</span>
+          </button>
+        </div>
+      </div>
+
       <!-- 類題＆ノート アクションボタン群 -->
       <div class="space-y-2.5 pt-2">
         <!-- メイン：自分で挑戦して採点（おすすめ） -->
@@ -701,6 +753,8 @@
     let selectedChoiceIndex = -1;    // 選択中の4択インデックス (0~3)
     let stepChats = {};              // ステップ別フォローアップ会話 { `${problemIndex}:${stepIndex}`: [ {role, text, speech_ja} ] }
     let stepChatBusy = {};           // ステップ別質問送信中フラグ
+    let overallChats = {};           // 問題全体の解法・別解フォローアップ会話 { [problemIndex]: [ {role, text, method_name, comparison_note, speech_ja, createdAt} ] }
+    let overallChatBusy = false;     // 全体質問送信中フラグ
     let currentSteps = [];
     let isPlayingQueue = false;
     let autoPlayTimer = null;        // 自動再生用タイマーID（タブ切替時の重複防止）
@@ -789,7 +843,8 @@
         key_point: data.key_point || '',
         steps: Array.isArray(data.steps) ? data.steps : [],
         final_answer: data.final_answer || '',
-        twin_quiz: data.twin_quiz || null
+        twin_quiz: data.twin_quiz || null,
+        overall_chat: Array.isArray(data.overall_chat) ? data.overall_chat : (overallChats[currentProblemIndex] || [])
       };
 
       // 最大100件まで保持、古いものから削除
@@ -915,7 +970,8 @@
         key_point: currentProb.key_point || keyEl?.dataset?.rawMath || '',
         steps: currentSteps,
         final_answer: currentProb.final_answer || ansEl?.dataset?.rawMath || '',
-        twin_quiz: currentProb.twin_quiz || null
+        twin_quiz: currentProb.twin_quiz || null,
+        overall_chat: overallChats[currentProblemIndex] || []
       };
 
       const savedId = saveTutorHistory(data);
@@ -2558,6 +2614,7 @@ ${studentAns}
         })) : [],
         final_answer: p.final_answer || '',
         twin_quiz: p.twin_quiz || null,
+        overall_chat: Array.isArray(p.overall_chat) ? p.overall_chat : [],
         _twinQuizConsumed: false
       });
 
@@ -2662,6 +2719,12 @@ ${studentAns}
       finalEl.textContent = prob.final_answer || '';
       renderMathIn(finalEl);
 
+      // 問題全体の解法・別解Q&A履歴の復元 & 描画
+      if (Array.isArray(prob.overall_chat) && prob.overall_chat.length > 0 && (!overallChats[currentProblemIndex] || overallChats[currentProblemIndex].length === 0)) {
+        overallChats[currentProblemIndex] = [...prob.overall_chat];
+      }
+      renderOverallChatLogs();
+
       // 類題ボタン表示テキスト更新
       const similarBtnText = document.getElementById('similarProblemBtnText');
       if (similarBtnText) {
@@ -2700,6 +2763,8 @@ ${studentAns}
       stepChats = {};
       stepChatBusy = {};
       stepQuotes = {};
+      overallChats = {};
+      overallChatBusy = false;
       currentProblems = normalized;
       currentProblemIndex = 0;
 
@@ -3880,6 +3945,209 @@ ${question}
           btn.disabled = false;
           btn.textContent = '送信 🚀';
         }
+      }
+    }
+
+    // =========================================================================
+    // 問題全体の解法・別解についての質問チャット (Alternative Solutions & Overall Q&A)
+    // =========================================================================
+    function renderOverallChatLogs() {
+      const container = document.getElementById('overallChatLogs');
+      if (!container) return;
+
+      const logs = overallChats[currentProblemIndex] || [];
+      if (logs.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-3 text-slate-400 dark:text-slate-500 space-y-1">
+            <p class="font-bold">まだ解法についての質問はありません。</p>
+            <p class="text-[11px]">上のクイックボタンを押すか、下の入力欄から「解法Aではなく解法B（因数分解/解の公式/判別式など）で解いて」と自由に聞いてみましょう！</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = logs.map(msg => {
+        const isUser = msg.role === 'user';
+        if (isUser) {
+          return `
+            <div class="flex flex-col items-end space-y-1">
+              <span class="text-[10px] text-slate-400 font-bold">あなた</span>
+              <div class="max-w-[90%] p-3 rounded-2xl rounded-br-none bg-emerald-600 text-white shadow-sm leading-relaxed">
+                <div>${escapeHtml(msg.text)}</div>
+              </div>
+            </div>
+          `;
+        }
+
+        const methodName = msg.method_name
+          ? `<span class="bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold px-2.5 py-0.5 rounded-full inline-block">💡 ${escapeHtml(msg.method_name)}</span>`
+          : '';
+        const comparisonNote = msg.comparison_note ? `
+          <div class="mt-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-slate-700 dark:text-slate-200 text-xs space-y-0.5">
+            <div class="font-bold text-amber-800 dark:text-amber-300">⚖️ 解法比較・使い分けのコツ:</div>
+            <div class="overall-chat-math">${escapeHtml(msg.comparison_note)}</div>
+          </div>
+        ` : '';
+        const speechBtn = msg.speech_ja ? `
+          <button onclick="speakJapanese('${escapeJsString(msg.speech_ja)}')" class="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1 mt-1">
+            <span>🔊 声で解説を聞く</span>
+          </button>
+        ` : '';
+
+        return `
+          <div class="flex flex-col items-start space-y-1">
+            <span class="text-[10px] text-slate-400 font-bold">👨‍🏫 AI先生の回答</span>
+            <div class="max-w-[95%] p-3.5 rounded-2xl rounded-bl-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-sm space-y-2 leading-relaxed">
+              ${methodName}
+              <div class="overall-chat-math leading-relaxed">${escapeHtml(msg.text)}</div>
+              ${comparisonNote}
+              ${speechBtn}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.overall-chat-math').forEach(el => renderMathIn(el));
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function sendOverallQuickQuestion(text) {
+      const inputEl = document.getElementById('overallChatInput');
+      if (inputEl) inputEl.value = text;
+      sendOverallQuestion(text);
+    }
+
+    async function sendOverallQuestion(directQuestion = null) {
+      const inputEl = document.getElementById('overallChatInput');
+      const question = (directQuestion || inputEl?.value || '').trim();
+      if (!question) return;
+
+      if (overallChatBusy) return;
+
+      const currentProb = currentProblems[currentProblemIndex] || {};
+      const currentProblem = currentProb.recognized_problem || currentProblemText || '';
+      if (!currentProblem) {
+        showStatus('⚠️ 先に問題を解析してください。', 'amber');
+        return;
+      }
+
+      const geminiKey = safeStorage.getItem('gemini_api_key');
+      const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
+
+      if (!geminiKey) {
+        openSettings();
+        showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
+        return;
+      }
+
+      if (!overallChats[currentProblemIndex]) {
+        overallChats[currentProblemIndex] = [];
+      }
+
+      overallChats[currentProblemIndex].push({
+        role: 'user',
+        text: question,
+        createdAt: Date.now()
+      });
+
+      if (inputEl) inputEl.value = '';
+      renderOverallChatLogs();
+
+      const btn = document.getElementById('overallChatBtn');
+      const btnText = document.getElementById('overallChatBtnText');
+      const btnSpinner = document.getElementById('overallChatBtnSpinner');
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.textContent = '解説を作成中…';
+      if (btnSpinner) btnSpinner.classList.remove('hidden');
+      overallChatBusy = true;
+
+      const unitHint = document.getElementById('unitSelect').value;
+      const originalStepsSummary = currentSteps.map(s => `・ステップ${s.step_number} (${s.title}): ${s.why || ''} 黒板式: ${s.display_math || ''}`).join('\n');
+      const pastChatContext = overallChats[currentProblemIndex].slice(-4).map(m => `${m.role === 'user' ? '生徒' : '先生'}: ${m.text}`).join('\n');
+
+      const prompt = `あなたは日本の高校1年生を教えるあたたかくて優秀なプロ数学教師です。
+生徒が以下の問題について、AIが最初に行った解法（解法A）とは「別の解法（解法B、別解）」や、問題全体の解き方についての質問をしています。
+生徒の要望に寄り添い、別の解き方の途中式や考え方、または解法同士の使い分けのコツを丁寧に解説してください。
+
+【対象の問題】
+${currentProblem}
+
+【単元ヒント】
+${unitHint}
+
+【着眼点】
+${currentProb.key_point || ''}
+
+【AI先生が最初に行った解法（解法A）の概要】
+${originalStepsSummary}
+
+【最終的な答え】
+${currentProb.final_answer || ''}
+
+【これまでの対話履歴】
+${pastChatContext}
+
+【生徒からの質問・別解の依頼】
+${question}
+
+【指導・回答ルール】
+1. 生徒が「別の解き方（別解）」「別のアプローチ（公式、因数分解、幾何的、グラフなど）」を求めている場合は、その解き方（解法B）の方針・途中式・考え方を省略せずにわかりやすく説明してください。
+2. method_name には別解のタイトル（例: 「別解：解の公式を使った解法」「別解：グラフと対称性を利用した幾何的解法」など）を簡潔に記載。
+3. answer には解法の完全な説明と途中式を記述。数式は必ずLaTeX形式（$...$ または $$...$$）で記述し、バックスラッシュは2重エスケープ（\\\\leqq, \\\\frac など）してください。
+4. comparison_note には「元の解法Aと今回の解法Bのメリット・デメリット、試験での使い分けのコツ」を2〜3文でアドバイスしてください。
+5. speech_ja には音声で読み上げるための自然な台本（LaTeX禁止・日本語読み言葉）を120〜180文字で作成してください。
+6. 出力は指定のJSON形式のみ。`;
+
+      const OVERALL_CHAT_SCHEMA = {
+        type: 'OBJECT',
+        properties: {
+          method_name: { type: 'STRING' },
+          answer: { type: 'STRING' },
+          comparison_note: { type: 'STRING' },
+          speech_ja: { type: 'STRING' }
+        },
+        required: ['method_name', 'answer', 'comparison_note', 'speech_ja']
+      };
+
+      try {
+        const res = await callGeminiModel(selectedModel, geminiKey, prompt, null, {
+          schema: OVERALL_CHAT_SCHEMA,
+          temperature: 0.5,
+          timeoutMs: 35000
+        });
+
+        const assistantMsg = {
+          role: 'assistant',
+          text: sanitizeMathString(res.answer || ''),
+          method_name: sanitizeMathString(res.method_name || '別解・解法解説'),
+          comparison_note: sanitizeMathString(res.comparison_note || ''),
+          speech_ja: res.speech_ja || '',
+          createdAt: Date.now()
+        };
+
+        overallChats[currentProblemIndex].push(assistantMsg);
+
+        // currentProblems および tutorHistory と同期
+        if (currentProblems[currentProblemIndex]) {
+          currentProblems[currentProblemIndex].overall_chat = overallChats[currentProblemIndex].slice(-10);
+        }
+
+        renderOverallChatLogs();
+
+        if (assistantMsg.speech_ja) {
+          speakJapanese(assistantMsg.speech_ja);
+        }
+      } catch (err) {
+        if (isQuotaError(err)) {
+          showQuotaError(selectedModel);
+        } else {
+          showStatus(`❌ 別解解説エラー: ${escapeHtml(err.message)}`, 'red');
+        }
+      } finally {
+        overallChatBusy = false;
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = '質問する 🚀';
+        if (btnSpinner) btnSpinner.classList.add('hidden');
       }
     }
 
