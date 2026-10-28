@@ -96,48 +96,56 @@
 
   <!-- 2. Header -->
   <header class="sticky top-0 z-30 bg-[#1e3a5f] text-white shadow-md pt-safe">
-    <div class="max-w-4xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2.5 min-w-0">
-        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/30 flex items-center justify-center text-lg sm:text-xl shadow-inner border border-blue-400/20 shrink-0">
-          🇬🇧
-        </div>
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5">
-            <h1 class="text-sm sm:text-base font-black tracking-wide truncate">高校英語 AI家庭教師</h1>
-            <span class="text-[10px] bg-amber-400 text-amber-950 font-bold px-2 py-0.5 rounded-full shrink-0 shadow-sm">v1.0</span>
+    <div class="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 space-y-2">
+      <!-- 1行目: ロゴ・タイトル & ユーティリティボタン -->
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-500/30 flex items-center justify-center text-base sm:text-lg shadow-inner border border-blue-400/20 shrink-0">
+            🇬🇧
           </div>
-          <p class="text-[10px] sm:text-[11px] text-blue-200/90 truncate">読解・4択クイズ・英作文添削・マイ単語帳</p>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <h1 class="text-sm sm:text-base font-black tracking-wide truncate">高校英語 AI家庭教師</h1>
+              <span class="text-[10px] bg-amber-400 text-amber-950 font-bold px-2 py-0.5 rounded-full shrink-0 shadow-sm">v1.0</span>
+            </div>
+            <p class="text-[10px] sm:text-[11px] text-blue-200/90 truncate">読解・4択クイズ・英作文添削・マイ単語帳</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <a href="../" target="_blank" rel="noopener" title="数学チューターへ移動"
+            class="text-xs bg-emerald-600/80 hover:bg-emerald-600 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-white font-bold transition flex items-center gap-1 border border-emerald-400/30 shrink-0">
+            <span>📐</span>
+            <span class="hidden xs:inline">数学</span>
+          </a>
+          <button onclick="openSettings()" title="設定"
+            class="bg-white/10 hover:bg-white/20 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs whitespace-nowrap shrink-0 flex items-center gap-1 border border-white/15">
+            <span>⚙️</span><span class="hidden xs:inline">設定</span>
+          </button>
+          <button id="darkModeToggle" onclick="toggleDarkMode()" title="ダークモード切替"
+            class="bg-white/10 hover:bg-white/20 p-1 sm:p-1.5 rounded-lg text-xs shrink-0 border border-white/15">
+            🌙
+          </button>
+          <button id="noteBtn" onclick="openHistoryModal('wordbook')" title="マイ単語帳・復習ノート"
+            class="bg-white/10 hover:bg-white/20 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs shrink-0 flex items-center gap-1 border border-white/15 font-bold">
+            <span>📁</span>
+            <span id="wordbookBadge" class="text-[10px] bg-blue-500 text-white px-1.5 py-0.2 rounded-full">0</span>
+          </button>
         </div>
       </div>
 
-      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap justify-end">
-        <div class="theme-pill-group" role="group" aria-label="UIテーマ選択">
+      <!-- 2行目: 3種UIテーマ切替 & AIモデル選択 -->
+      <div class="flex items-center justify-between gap-2 pt-1 border-t border-blue-400/20">
+        <div class="theme-pill-group shrink-0" role="group" aria-label="UIテーマ選択">
           <button type="button" class="theme-btn active" onclick="changeTheme('minimal')" id="btn-minimal">① ミニマル</button>
           <button type="button" class="theme-btn" onclick="changeTheme('edutech')" id="btn-edutech">② パステル</button>
           <button type="button" class="theme-btn" onclick="changeTheme('mobile')" id="btn-mobile">③ タイムライン</button>
         </div>
+
         <select id="modelSelect" onchange="onModelChange()"
-          class="bg-slate-800/90 text-white text-[11px] sm:text-xs rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 border border-blue-400/40 focus:outline-none max-w-[105px] xs:max-w-[135px] sm:max-w-[170px] truncate">
+          class="bg-slate-800/90 text-white text-[10px] sm:text-xs rounded-lg px-2 py-1 border border-blue-400/40 focus:outline-none max-w-[130px] sm:max-w-[180px] truncate">
           <option value="gemini-3.8-flash" selected>gemini-3.8-flash (標準・高速)</option>
         </select>
-        <a href="../" target="_blank" rel="noopener" title="数学チューターへ移動"
-          class="text-xs bg-emerald-600/80 hover:bg-emerald-600 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-white font-bold transition flex items-center gap-1 border border-emerald-400/30 shrink-0">
-          <span>📐</span>
-          <span class="hidden xs:inline">数学</span>
-        </a>
-        <button onclick="openSettings()" title="設定"
-          class="bg-white/10 hover:bg-white/20 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0 flex items-center gap-1 border border-white/15">
-          <span>⚙️</span><span class="hidden sm:inline">設定</span>
-        </button>
-        <button id="darkModeToggle" onclick="toggleDarkMode()" title="ダークモード切替"
-          class="bg-white/10 hover:bg-white/20 p-1.5 sm:p-2 rounded-lg text-xs sm:text-sm shrink-0 border border-white/15">
-          🌙
-        </button>
-        <button id="noteBtn" onclick="openHistoryModal('wordbook')" title="マイ単語帳・復習ノート"
-          class="bg-white/10 hover:bg-white/20 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg text-xs sm:text-sm shrink-0 flex items-center gap-1 border border-white/15 font-bold">
-          <span>📁</span>
-          <span id="wordbookBadge" class="text-[10px] bg-blue-500 text-white px-1.5 py-0.2 rounded-full">0</span>
-        </button>
       </div>
     </div>
   </header>
