@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" class="light">
+<html lang="ja" class="light" data-theme="minimal">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -17,7 +17,11 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" href="icon-192.png" />
-  <link rel="stylesheet" href="shared/ui.css?v=20261027" />
+  <!-- Google Fonts: Noto Sans JP & M PLUS Rounded 1c -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared/ui.css?v=20261028" />
   <!-- Tailwind CSS (dark mode: class) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -227,7 +231,12 @@
       </div>
 
       <!-- モデル選択ドロップダウン & 設定ボタン -->
-      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap justify-end">
+        <div class="theme-pill-group" role="group" aria-label="UIテーマ選択">
+          <button type="button" class="theme-btn active" onclick="changeTheme('minimal')" id="btn-minimal">① ミニマル</button>
+          <button type="button" class="theme-btn" onclick="changeTheme('edutech')" id="btn-edutech">② パステル</button>
+          <button type="button" class="theme-btn" onclick="changeTheme('mobile')" id="btn-mobile">③ タイムライン</button>
+        </div>
         <select id="modelSelect" onchange="onModelDropdownChange()"
           class="bg-slate-800/90 text-white text-[11px] sm:text-xs rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 border border-emerald-500/40 focus:outline-none max-w-[110px] xs:max-w-[140px] sm:max-w-[180px] truncate">
           <option value="gemini-3.8-flash" selected>gemini-3.8-flash (標準・高速)</option>
@@ -335,7 +344,7 @@
     <!-- 4. 音声コントロールバー & 黒板解説結果エリア -->
     <section id="resultSection" class="hidden section-fade space-y-4 scroll-mt-40">
       <!-- オーディオコントロールバー -->
-      <div class="bg-slate-800 text-white rounded-2xl p-3.5 shadow flex flex-wrap items-center justify-between gap-2 sticky top-4 z-20 dark:bg-slate-900">
+      <div id="audioControlBar" class="bg-slate-800 text-white rounded-2xl p-3.5 shadow flex flex-wrap items-center justify-between gap-2 sticky top-4 z-20 dark:bg-slate-900">
         <div class="flex items-center gap-2">
           <button onclick="playAllSteps()" class="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 dark:bg-emerald-500 dark:hover:bg-emerald-400">
             ▶️ 最初から連続再生
@@ -619,7 +628,7 @@
       : null;
 
     // 共通キー（数学・英語・保護者画面で共有）
-    const COMMON_STORAGE_KEYS = new Set(['gemini_api_key', 'app_pin', 'dark_mode']);
+    const COMMON_STORAGE_KEYS = new Set(['gemini_api_key', 'app_pin', 'dark_mode', 'ui_theme']);
 
     const memoryFallback = {};
     const safeStorage = {
@@ -717,6 +726,28 @@
       } else {
         html.classList.remove('dark');
         if (btn) btn.textContent = '🌙';
+      }
+    }
+
+    function changeTheme(theme) {
+      if (window.TutorUI && typeof window.TutorUI.applyTheme === 'function') {
+        window.TutorUI.applyTheme(theme, { storage: safeStorage, key: 'ui_theme' });
+      } else {
+        document.documentElement.setAttribute('data-theme', theme);
+        safeStorage.setItem('ui_theme', theme);
+        ['minimal', 'edutech', 'mobile'].forEach(t => {
+          const btn = document.getElementById('btn-' + t);
+          if (btn) btn.classList.toggle('active', t === theme);
+        });
+      }
+    }
+
+    function initTheme() {
+      if (window.TutorUI && typeof window.TutorUI.initTheme === 'function') {
+        window.TutorUI.initTheme({ storage: safeStorage, key: 'ui_theme' });
+      } else {
+        const savedTheme = safeStorage.getItem('ui_theme') || 'minimal';
+        changeTheme(savedTheme);
       }
     }
 
@@ -1579,6 +1610,7 @@ ${studentAns}
     // =========================================================================
     window.addEventListener('DOMContentLoaded', () => {
       initDarkMode();
+      initTheme();
       initTutorHistory();
 
       // 埋め込み API キー（設定がある場合のみ）

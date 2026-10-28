@@ -96,6 +96,41 @@
     return isDark;
   }
 
+  const VALID_THEMES = ['minimal', 'edutech', 'mobile'];
+
+  function applyTheme(theme, { storage, key = 'ui_theme' } = {}) {
+    const validTheme = VALID_THEMES.includes(theme) ? theme : 'minimal';
+    document.documentElement.setAttribute('data-theme', validTheme);
+    if (storage && typeof storage.setItem === 'function') {
+      storage.setItem(key, validTheme);
+    }
+    try {
+      localStorage.setItem('ai_math_tutor_theme', validTheme);
+    } catch (e) {}
+
+    VALID_THEMES.forEach(t => {
+      const btn = document.getElementById('btn-' + t);
+      if (btn) {
+        btn.classList.toggle('active', t === validTheme);
+        btn.setAttribute('aria-pressed', t === validTheme ? 'true' : 'false');
+      }
+    });
+    return validTheme;
+  }
+
+  function initTheme({ storage, key = 'ui_theme' } = {}) {
+    let saved = null;
+    if (storage && typeof storage.getItem === 'function') {
+      saved = storage.getItem(key);
+    }
+    if (!saved) {
+      try {
+        saved = localStorage.getItem('ai_math_tutor_theme') || localStorage.getItem('tutor_ui_theme');
+      } catch (e) {}
+    }
+    return applyTheme(saved || 'minimal', { storage, key });
+  }
+
   function updateSafeArea() {
     const kbHeight = Math.max(
       0,
@@ -111,6 +146,8 @@
     bindBackdropClose,
     initDarkMode,
     toggleDarkMode,
+    applyTheme,
+    initTheme,
     updateSafeArea
   };
 })(window);

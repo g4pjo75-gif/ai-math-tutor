@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja" class="light">
+<html lang="ja" class="light" data-theme="minimal">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -17,6 +17,10 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" href="icon-192.png" />
+  <!-- Google Fonts: Noto Sans JP & M PLUS Rounded 1c -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 
   <!-- Tailwind CSS (CDN first, then config to avoid ReferenceError and enable class dark mode) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -38,7 +42,7 @@
   </script>
 
   <!-- Common UI Stylesheet -->
-  <link rel="stylesheet" href="../shared/ui.css?v=20261027" />
+  <link rel="stylesheet" href="../shared/ui.css?v=20261028" />
 
   <style>
     body {
@@ -106,7 +110,12 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap justify-end">
+        <div class="theme-pill-group" role="group" aria-label="UIテーマ選択">
+          <button type="button" class="theme-btn active" onclick="changeTheme('minimal')" id="btn-minimal">① ミニマル</button>
+          <button type="button" class="theme-btn" onclick="changeTheme('edutech')" id="btn-edutech">② パステル</button>
+          <button type="button" class="theme-btn" onclick="changeTheme('mobile')" id="btn-mobile">③ タイムライン</button>
+        </div>
         <select id="modelSelect" onchange="onModelChange()"
           class="bg-slate-800/90 text-white text-[11px] sm:text-xs rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 border border-blue-400/40 focus:outline-none max-w-[105px] xs:max-w-[135px] sm:max-w-[170px] truncate">
           <option value="gemini-3.8-flash" selected>gemini-3.8-flash (標準・高速)</option>
@@ -715,6 +724,7 @@
     window.addEventListener('DOMContentLoaded', () => {
       if (window.TutorUI) {
         window.TutorUI.initDarkMode({ storage: sharedStore, key: 'dark_mode' });
+        window.TutorUI.initTheme({ storage: sharedStore, key: 'ui_theme' });
         window.TutorUI.updateSafeArea();
         window.TutorUI.bindBackdropClose('settingsModal', 'settingsModalContent');
         window.TutorUI.bindBackdropClose('historyModal', 'historyModalContent');
@@ -796,6 +806,12 @@
     function toggleDarkMode() {
       if (window.TutorUI) {
         window.TutorUI.toggleDarkMode({ storage: sharedStore, key: 'dark_mode' });
+      }
+    }
+
+    function changeTheme(theme) {
+      if (window.TutorUI && typeof window.TutorUI.applyTheme === 'function') {
+        window.TutorUI.applyTheme(theme, { storage: sharedStore, key: 'ui_theme' });
       }
     }
 
@@ -1040,9 +1056,9 @@
             <span>🔍</span>
             <span>1文ごとの構文・スラッシュ解説 (Sentence Breakdown)</span>
           </div>
-          <div class="space-y-2">
+          <div class="space-y-2 sentence-breakdown-list">
             ${data.sentence_breakdown.map((item, idx) => `
-              <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1.5">
+              <div class="breakdown-item p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1.5">
                 <div class="flex items-start justify-between gap-2">
                   <p class="font-serif font-bold text-slate-900 dark:text-white text-xs sm:text-sm"><span class="text-blue-600 dark:text-blue-400 mr-1">(${idx + 1})</span>${escapeHtml(item.en)}</p>
                   <button onclick="speakEnglishText('${escapeJsString(item.en)}')" class="shrink-0 text-[11px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg font-bold">🔊</button>

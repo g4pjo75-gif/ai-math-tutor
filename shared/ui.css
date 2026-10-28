@@ -56,3 +56,210 @@
 .dark ::-webkit-scrollbar-thumb {
   background: rgba(100, 116, 139, 0.4);
 }
+
+/* =========================================================================
+   3-Theme System: ① ミニマル (minimal) / ② パステル (edutech) / ③ タイムライン (mobile)
+   ========================================================================= */
+:root,
+html[data-theme="minimal"] {
+  --font-body: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+  --bg-main: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F1F5F9;
+  --primary: #4F46E5;
+  --primary-hover: #4338CA;
+  --primary-soft: #EEF2FF;
+  --accent: #10B981;
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --border-color: #E2E8F0;
+  --radius-card: 18px;
+  --radius-btn: 10px;
+  --shadow-card: 0 8px 24px -4px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  --btn-3d-shadow: none;
+  --btn-active-transform: scale(0.98);
+}
+
+html[data-theme="edutech"] {
+  --font-body: 'M PLUS Rounded 1c', 'Noto Sans JP', sans-serif;
+  --bg-main: #FFFDF9;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #FEF3C7;
+  --primary: #10B981;
+  --primary-hover: #059669;
+  --primary-soft: #D1FAE5;
+  --accent: #F59E0B;
+  --text-main: #1E293B;
+  --text-muted: #64748B;
+  --border-color: #E2E8F0;
+  --radius-card: 24px;
+  --radius-btn: 16px;
+  --shadow-card: 0 6px 0px #E2E8F0;
+  --btn-3d-shadow: 0 4px 0px #047857;
+  --btn-active-transform: translateY(3px);
+}
+
+html[data-theme="mobile"] {
+  --font-body: 'Noto Sans JP', -apple-system, sans-serif;
+  --bg-main: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F8FAFC;
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --primary-soft: #DBEAFE;
+  --accent: #8B5CF6;
+  --text-main: #0F172A;
+  --text-muted: #475569;
+  --border-color: #CBD5E1;
+  --radius-card: 20px;
+  --radius-btn: 12px;
+  --shadow-card: 0 4px 15px rgba(0, 0, 0, 0.05);
+  --btn-3d-shadow: none;
+  --btn-active-transform: scale(0.97);
+}
+
+/* Apply theme font & background transitions */
+html[data-theme] body {
+  font-family: var(--font-body) !important;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+html:not(.dark)[data-theme="minimal"] body,
+html:not(.dark)[data-theme="minimal"] main {
+  background-color: var(--bg-main) !important;
+}
+
+html:not(.dark)[data-theme="edutech"] body,
+html:not(.dark)[data-theme="edutech"] main {
+  background-color: #FFFDF9 !important;
+}
+
+html:not(.dark)[data-theme="edutech"] main section.bg-white,
+html:not(.dark)[data-theme="edutech"] main .bg-white.rounded-2xl,
+html:not(.dark)[data-theme="edutech"] main .bg-white.rounded-3xl,
+html:not(.dark)[data-theme="edutech"] .step-card {
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-color: #FDE68A !important;
+}
+
+html.dark[data-theme="edutech"] main section,
+html.dark[data-theme="edutech"] .step-card {
+  border-radius: var(--radius-card) !important;
+  box-shadow: 0 5px 0px #1e293b !important;
+}
+
+html[data-theme="edutech"] #solveBtn,
+html[data-theme="edutech"] #quizChallengeBtn,
+html[data-theme="edutech"] #submitChoiceBtn,
+html[data-theme="edutech"] #submitAnswerBtn,
+html[data-theme="edutech"] #checkWritingBtn,
+html[data-theme="edutech"] #generateQuizBtn {
+  border-radius: var(--radius-btn) !important;
+  box-shadow: 0 4px 0px rgba(4, 120, 87, 0.85) !important;
+  transition: transform 0.12s ease, box-shadow 0.12s ease !important;
+}
+
+html[data-theme="edutech"] #solveBtn:active,
+html[data-theme="edutech"] #quizChallengeBtn:active,
+html[data-theme="edutech"] #submitChoiceBtn:active,
+html[data-theme="edutech"] #submitAnswerBtn:active,
+html[data-theme="edutech"] #checkWritingBtn:active,
+html[data-theme="edutech"] #generateQuizBtn:active {
+  transform: var(--btn-active-transform) !important;
+  box-shadow: none !important;
+}
+
+/* Theme Pill Switcher UI */
+.theme-pill-group {
+  display: inline-flex;
+  background: rgba(15, 23, 42, 0.35);
+  padding: 2px;
+  border-radius: 999px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.theme-btn {
+  border: none;
+  background: transparent;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.theme-btn:hover {
+  color: #FFFFFF;
+}
+
+.theme-btn.active {
+  background: #FFFFFF;
+  color: #0F172A;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+}
+
+/* ③ タイムライン (data-theme="mobile") 特化レイアウト */
+html[data-theme="mobile"] body {
+  padding-bottom: calc(110px + var(--safe-area-inset-bottom)) !important;
+}
+
+html[data-theme="mobile"] #audioControlBar {
+  position: fixed !important;
+  bottom: calc(14px + var(--safe-area-inset-bottom)) !important;
+  top: auto !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: calc(100% - 1.5rem) !important;
+  max-width: 640px !important;
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  z-index: 40 !important;
+  border-radius: 24px !important;
+  padding: 0.65rem 1rem !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+html[data-theme="mobile"] #audioControlBar p {
+  display: none !important;
+}
+
+html[data-theme="mobile"] #stepsContainer,
+html[data-theme="mobile"] .sentence-breakdown-list {
+  border-left: 3px solid var(--primary) !important;
+  margin-left: 0.65rem !important;
+  padding-left: 1.15rem !important;
+  position: relative !important;
+}
+
+html[data-theme="mobile"] .step-card,
+html[data-theme="mobile"] .breakdown-item {
+  position: relative !important;
+}
+
+html[data-theme="mobile"] .step-card::before,
+html[data-theme="mobile"] .breakdown-item::before {
+  content: "";
+  position: absolute;
+  left: -1.6rem;
+  top: 1.25rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 3px solid #FFFFFF;
+  box-shadow: 0 0 0 2px var(--primary);
+  z-index: 2;
+}
+
+html.dark[data-theme="mobile"] .step-card::before,
+html.dark[data-theme="mobile"] .breakdown-item::before {
+  border-color: #0F172A;
+}
