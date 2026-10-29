@@ -142,14 +142,26 @@
       height: auto;
       max-height: 280px;
     }
-    .viz-axis { stroke: #64748b; stroke-width: 1.5; }
+    .viz-axis { stroke: #334155; stroke-width: 1.6; }
     .dark .viz-axis { stroke: #94a3b8; }
     .viz-grid { stroke: #e2e8f0; stroke-width: 0.8; stroke-dasharray: 2 2; }
     .dark .viz-grid { stroke: #1e293b; }
-    .viz-text { font-size: 11px; fill: #475569; font-family: monospace, sans-serif; }
-    .dark .viz-text { fill: #cbd5e1; }
-    .viz-curve { fill: none; stroke-width: 2.5; stroke-linecap: round; }
-    .viz-guide { stroke-width: 1.2; stroke-dasharray: 3 3; }
+    .viz-text { font-size: 11px; fill: #1e293b; font-family: 'Noto Sans JP', sans-serif; }
+    .dark .viz-text { fill: #f1f5f9; }
+    .viz-axis-num { font-size: 11px; font-weight: 700; fill: #0f172a; font-family: serif, sans-serif; }
+    .dark .viz-axis-num { fill: #f8fafc; }
+    .viz-origin { font-size: 13px; font-style: italic; font-weight: 700; fill: #0f172a; font-family: serif, sans-serif; }
+    .dark .viz-origin { fill: #f8fafc; }
+    .viz-curve { fill: none; stroke: #0f172a; stroke-width: 3.2; stroke-linecap: round; }
+    .dark .viz-curve { stroke: #38bdf8; }
+    .viz-curve-ext { fill: none; stroke: #64748b; stroke-width: 1.8; stroke-dasharray: 4 4; }
+    .dark .viz-curve-ext { stroke: #64748b; }
+    .viz-guide { stroke: #94a3b8; stroke-width: 1.2; stroke-dasharray: 2.5 2.5; }
+    .dark .viz-guide { stroke: #64748b; }
+    .viz-endpoint { fill: #0f172a; stroke: #ffffff; stroke-width: 1.5; }
+    .dark .viz-endpoint { fill: #38bdf8; stroke: #0f172a; }
+    .viz-endpoint-open { fill: #ffffff; stroke: #0f172a; stroke-width: 2.5; }
+    .dark .viz-endpoint-open { fill: #0f172a; stroke: #38bdf8; stroke-width: 2.5; }
 
     /* v1.6 4択クイズボタンスタイル */
     .choice-btn {
@@ -1148,6 +1160,21 @@ ${keyPoint}`;
       };
     }
 
+    function formatChoiceMath(text) {
+      if (!text) return '';
+      let str = sanitizeMathString(text).trim();
+      // 多桁の指数（x^10など）を正規化
+      str = str.replace(/\^([0-9a-zA-Z]{2,})/g, '^{$1}');
+      if (str.includes('$') || str.includes('\\(')) {
+        return str;
+      }
+      // 指数(^)、添字(_)、LaTeXコマンド(\)、不等号(≦, ≧)、根号(√)、または数式英字を含む場合は自動で $...$ で囲む
+      if (/[\^\\_\u2264\u2265\u221a\u2266\u2267]/.test(str) || (/^[0-9a-zA-Z\s\+\-\*\/\(\)\=,\.±]+$/.test(str) && /[a-zA-Z]/.test(str))) {
+        return `$${str}$`;
+      }
+      return str;
+    }
+
     function renderQuizChoiceButtons() {
       const grid = document.getElementById('quizChoiceGrid');
       if (!grid || !currentQuizData || !currentQuizData.displayChoices) return;
@@ -1172,7 +1199,7 @@ ${keyPoint}`;
       currentQuizData.displayChoices.forEach((choiceText, idx) => {
         const el = document.getElementById(`quiz-choice-text-${idx}`);
         if (el) {
-          el.textContent = choiceText;
+          el.textContent = formatChoiceMath(choiceText);
           renderMathIn(el);
         }
       });
@@ -1224,7 +1251,7 @@ ${keyPoint}`;
 
     function applyAndRenderQuizData(quizRes) {
       const valid = isValidQuizObject(quizRes);
-      const rawChoices = valid ? quizRes.choices.map(c => sanitizeMathString(c).trim()) : [];
+      const rawChoices = valid ? quizRes.choices.map(c => formatChoiceMath(c)) : [];
       const correctIdx = valid ? quizRes.correct_index : 0;
       const rawFeedback = (valid && Array.isArray(quizRes.choice_feedback))
         ? quizRes.choice_feedback.map(f => sanitizeMathString(f))
@@ -1236,7 +1263,7 @@ ${keyPoint}`;
       if (!valid) {
         currentQuizData = {
           problem: sanitizeMathString(quizRes?.problem || '類題の生成に失敗しました。もう一度お試しください。'),
-          answer: sanitizeMathString(quizRes?.answer || ''),
+          answer: formatChoiceMath(quizRes?.answer || ''),
           acceptedAnswers: acceptedAnswers,
           hint: sanitizeMathString(quizRes?.hint || ''),
           explanation: sanitizeMathString(quizRes?.explanation || ''),
@@ -1253,7 +1280,7 @@ ${keyPoint}`;
         const shuffledData = shuffleChoices(rawChoices, correctIdx, rawFeedback);
         currentQuizData = {
           problem: sanitizeMathString(quizRes.problem || ''),
-          answer: sanitizeMathString(quizRes.answer || ''),
+          answer: formatChoiceMath(quizRes.answer || ''),
           acceptedAnswers: acceptedAnswers,
           hint: sanitizeMathString(quizRes.hint || ''),
           explanation: sanitizeMathString(quizRes.explanation || ''),
@@ -1543,7 +1570,7 @@ ${studentAns}
 
       box.className = `rounded-xl p-4 space-y-3 border shadow-sm ${bgClass}`;
 
-      const correctAnsText = sanitizeMathString(judge.correct_answer || currentQuizData?.answer || '');
+      const correctAnsText = formatChoiceMath(judge.correct_answer || currentQuizData?.answer || '');
 
       box.innerHTML = `
         <div class="flex items-center justify-between">
@@ -2280,9 +2307,14 @@ ${studentAns}
       "final_answer": "最終的な答え（$$...$$ で明確に）",
       "twin_quiz": {
         "problem": "生徒が自力で解くための双子問題（数字・条件だけを変えた類題1問）",
-        "choices": ["選択肢ア", "選択肢イ", "選択肢ウ", "選択肢エ（必ず4個すべて異なる式・値）"],
+        "choices": [
+          "$x^4 + 4x^3 + 5x^2 + 2x + 1$（数式の場合は必ず $...$ で囲む）",
+          "$x^4 + 4x^3 + 4x^2 + 1$",
+          "$x^4 + 2x^3 + 5x^2 + 4x + 1$",
+          "$x^4 + 4x^3 + 6x^2 + 4x + 1$（必ず4個すべて異なる式・値）"
+        ],
         "correct_index": 0,
-        "answer": "双子問題の正解（LaTeX可）",
+        "answer": "$x^4 + 4x^3 + 5x^2 + 2x + 1$（数式は $...$ で囲む）",
         "accepted_answers": ["表記ゆれ1（例: (x+1)(x+2)）", "表記ゆれ2（例: (x+2)(x+1)）"],
         "hint": "双子問題を解くための着眼点ヒント（答えは言わない）",
         "explanation": "双子問題の簡潔な正解解説",
@@ -2529,7 +2561,7 @@ ${studentAns}
       currentModelId = selectedModel;
       currentProblemText = userText || '添付画像の問題';
 
-      showStatus(`⏳ AI先生（モデル: <strong>${escapeHtml(selectedModel)}</strong>）が問題を解いています...（最大30秒）`, 'blue');
+      showStatus('⏳ AI先生が問題を解いています...（最大30秒）', 'blue');
       document.getElementById('solveBtn').disabled = true;
       document.getElementById('solveBtnText').classList.add('hidden');
       document.getElementById('solveBtnSpinner').classList.remove('hidden');
@@ -2969,7 +3001,7 @@ ${studentAns}
 
         // v1.6 グラフ・図形 (SVG) レンダリング
         const vizEl = document.getElementById(`step-visual-${idx}`);
-        if (vizEl) renderVisual(vizEl, step.visual);
+        if (vizEl) renderVisual(vizEl, step.visual, step);
 
         // v1.6 ステップ質問チャットログ復元
         renderStepChatLogs(idx);
@@ -3427,7 +3459,74 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       return Math.max(min, Math.min(max, num));
     }
 
-    function renderVisual(container, visual) {
+    function evalFraction(str) {
+      if (!str) return 0;
+      const s = String(str).trim();
+      if (s.includes('/')) {
+        const parts = s.split('/');
+        const num = parseFloat(parts[0]);
+        const den = parseFloat(parts[1]);
+        if (!isNaN(num) && !isNaN(den) && den !== 0) return num / den;
+      }
+      return parseFloat(s) || 0;
+    }
+
+    function parseFunctionFromText(text) {
+      if (!text || typeof text !== 'string') return null;
+      const clean = text.replace(/\\mathrm\{|\\text\{|\}/g, '').replace(/\s+/g, ' ');
+
+      // 1. 定義域の抽出 (例: -2 ≦ x ≦ 0, -2 <= x <= 0, 1 < x <= 3)
+      let domainMin = undefined;
+      let domainMax = undefined;
+      let minClosed = true;
+      let maxClosed = true;
+
+      const domainRegex = /([−\-+]?\s*\d+(?:\/\d+)?(?:\.\d+)?)\s*(<=|≦|\\leqq|\\le|<)\s*x\s*(<=|≦|\\leqq|\\le|<)\s*([−\-+]?\s*\d+(?:\/\d+)?(?:\.\d+)?)/i;
+      const dm = clean.match(domainRegex);
+      if (dm) {
+        domainMin = evalFraction(dm[1].replace(/−/g, '-').replace(/\s+/g, ''));
+        domainMax = evalFraction(dm[4].replace(/−/g, '-').replace(/\s+/g, ''));
+        minClosed = !dm[2].includes('<') || dm[2].includes('=') || dm[2].includes('le') || dm[2].includes('≦');
+        maxClosed = !dm[3].includes('<') || dm[3].includes('=') || dm[3].includes('le') || dm[3].includes('≦');
+      }
+
+      // 2. 2次関数: y = ax^2 + bx + c
+      const quadRegex = /y\s*=\s*([−\-+]?\s*(?:\d+(?:\/\d+)?(?:\.\d+)?)?)\s*x\^?2\s*([−\-+]\s*(?:\d+(?:\/\d+)?(?:\.\d+)?)?\s*x)?\s*([−\-+]\s*\d+(?:\/\d+)?(?:\.\d+)?)?/i;
+      const qm = clean.match(quadRegex);
+      if (qm) {
+        let aStr = (qm[1] || '').replace(/−/g, '-').replace(/\s+/g, '');
+        let a = (aStr === '' || aStr === '+') ? 1 : (aStr === '-' ? -1 : evalFraction(aStr));
+        let b = 0;
+        if (qm[2]) {
+          let bStr = qm[2].replace(/x/i, '').replace(/−/g, '-').replace(/\s+/g, '');
+          b = (bStr === '' || bStr === '+') ? 1 : (bStr === '-' ? -1 : evalFraction(bStr));
+        }
+        let c = qm[3] ? evalFraction(qm[3].replace(/−/g, '-').replace(/\s+/g, '')) : 0;
+        return { kind: 'quadratic', a, b, c, domain_min: domainMin, domain_max: domainMax, domain_min_closed: minClosed, domain_max_closed: maxClosed };
+      }
+
+      // 3. 1次関数: y = ax + b
+      const linearRegex = /y\s*=\s*([−\-+]?\s*(?:\d+(?:\/\d+)?(?:\.\d+)?)?)\s*x\s*([−\-+]\s*\d+(?:\/\d+)?(?:\.\d+)?)?/i;
+      const lm = clean.match(linearRegex);
+      if (lm) {
+        let aStr = (lm[1] || '').replace(/−/g, '-').replace(/\s+/g, '');
+        let a = (aStr === '' || aStr === '+') ? 1 : (aStr === '-' ? -1 : evalFraction(aStr));
+        let bStr = (lm[2] || '').replace(/−/g, '-').replace(/\s+/g, '');
+        let b = bStr ? evalFraction(bStr) : 0;
+        return { kind: 'linear', a, b, c: 0, domain_min: domainMin, domain_max: domainMax, domain_min_closed: minClosed, domain_max_closed: maxClosed };
+      }
+
+      return null;
+    }
+
+    function formatCoordinateNumber(val) {
+      if (val === null || val === undefined || isNaN(val)) return '';
+      const rounded = Math.round(val);
+      if (Math.abs(val - rounded) < 0.01) return String(rounded);
+      return String(Number(val.toFixed(2)));
+    }
+
+    function renderVisual(container, visual, stepContext = null) {
       if (!container) return;
       if (!visual || typeof visual !== 'object' || !visual.type || visual.type === 'none') {
         container.classList.add('hidden');
@@ -3448,7 +3547,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       svg.setAttribute('aria-label', visual.caption || '数学の図解');
 
       if (visual.type === 'graph') {
-        renderGraphSvg(svg, visual);
+        renderGraphSvg(svg, visual, stepContext);
       } else if (visual.type === 'numberline') {
         renderNumberlineSvg(svg, visual);
       } else {
@@ -3468,25 +3567,110 @@ ${step.why ? `【今の意図】${step.why}` : ''}
       container.appendChild(figure);
     }
 
-    function renderGraphSvg(svg, visual) {
+    function renderGraphSvg(svg, visual, stepContext = null) {
+      let curves = Array.isArray(visual.curves) ? visual.curves.filter(Boolean) : [];
+      if (curves.length === 0) {
+        const parsed = parseFunctionFromText(visual.caption || '') ||
+                       parseFunctionFromText(stepContext?.content || '') ||
+                       parseFunctionFromText(stepContext?.explanation || '') ||
+                       parseFunctionFromText(currentProblemText || '');
+        if (parsed) curves.push(parsed);
+      }
+
+      // グラフの代表点（原点、定義域の端点、y切片、頂点など）を収集し表示範囲を自動調整
+      const critX = [0];
+      const critY = [0];
+
+      curves.forEach(c => {
+        const kind = c.kind || 'linear';
+        const a = Number(c.a ?? (kind === 'linear' ? 1 : 0));
+        const b = Number(c.b ?? 0);
+        const cVal = Number(c.c ?? 0);
+        const fn = (x) => (kind === 'quadratic' ? a * x * x + b * x + cVal : a * x + b);
+
+        if (c.domain_min !== undefined) {
+          critX.push(c.domain_min);
+          critY.push(fn(c.domain_min));
+        }
+        if (c.domain_max !== undefined) {
+          critX.push(c.domain_max);
+          critY.push(fn(c.domain_max));
+        }
+        critY.push(fn(0));
+        if (kind === 'quadratic' && a !== 0) {
+          const vx = -b / (2 * a);
+          critX.push(vx);
+          critY.push(fn(vx));
+        }
+      });
+
+      if (Array.isArray(visual.points)) {
+        visual.points.filter(Boolean).forEach(p => {
+          if (p.x !== undefined) critX.push(Number(p.x));
+          if (p.y !== undefined) critY.push(Number(p.y));
+        });
+      }
+
+      let autoXMin = Math.min(...critX);
+      let autoXMax = Math.max(...critX);
+      let autoYMin = Math.min(...critY);
+      let autoYMax = Math.max(...critY);
+
+      const xSpan = Math.max(2, autoXMax - autoXMin);
+      const ySpan = Math.max(2, autoYMax - autoYMin);
+      const padX = Math.max(1, Math.ceil(xSpan * 0.25));
+      const padY = Math.max(1, Math.ceil(ySpan * 0.25));
+
+      let xMin = autoXMin - padX;
+      let xMax = autoXMax + padX;
+      let yMin = autoYMin - padY;
+      let yMax = autoYMax + padY;
+
       const view = visual.view || {};
-      const xMin = clampVal(view.x_min, -50, 50, -4);
-      const xMax = clampVal(view.x_max, -50, 50, 4);
-      const yMin = clampVal(view.y_min, -50, 50, -6);
-      const yMax = clampVal(view.y_max, -50, 50, 4);
+      if (view.x_min !== undefined && view.x_max !== undefined) {
+        xMin = Math.min(xMin, clampVal(view.x_min, -50, 50, xMin));
+        xMax = Math.max(xMax, clampVal(view.x_max, -50, 50, xMax));
+      }
+      if (view.y_min !== undefined && view.y_max !== undefined) {
+        yMin = Math.min(yMin, clampVal(view.y_min, -50, 50, yMin));
+        yMax = Math.max(yMax, clampVal(view.y_max, -50, 50, yMax));
+      }
 
       const width = 360;
-      const height = 240;
+      const height = 250;
       const padLeft = 36;
-      const padRight = 20;
-      const padTop = 20;
-      const padBottom = 30;
+      const padRight = 24;
+      const padTop = 22;
+      const padBottom = 26;
 
       const plotWidth = width - padLeft - padRight;
       const plotHeight = height - padTop - padBottom;
 
       const toSvgX = (x) => padLeft + ((x - xMin) / (xMax - xMin || 1)) * plotWidth;
       const toSvgY = (y) => padTop + plotHeight - ((y - yMin) / (yMax - yMin || 1)) * plotHeight;
+
+      // 軸の矢印マーカー定義
+      let defs = svg.querySelector('defs');
+      if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svg.appendChild(defs);
+      }
+      let marker = defs.querySelector('#axis-arrow-math');
+      if (!marker) {
+        marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        marker.setAttribute('id', 'axis-arrow-math');
+        marker.setAttribute('viewBox', '0 0 10 10');
+        marker.setAttribute('refX', '7');
+        marker.setAttribute('refY', '5');
+        marker.setAttribute('markerWidth', '6');
+        marker.setAttribute('markerHeight', '6');
+        marker.setAttribute('orient', 'auto-start-reverse');
+        const mpath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        mpath.setAttribute('d', 'M 0 1.5 L 8 5 L 0 8.5 z');
+        mpath.setAttribute('class', 'fill-slate-700 dark:fill-slate-300');
+        marker.appendChild(mpath);
+        defs.appendChild(marker);
+      }
 
       // 1. グリッド線
       const xStep = Math.max(1, Math.round((xMax - xMin) / 8));
@@ -3513,7 +3697,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         svg.appendChild(line);
       }
 
-      // 2. 座標軸 (x軸, y軸)
+      // 2. 座標軸 (x軸, y軸, 原点O) - 教科書・チャート式準拠
       const zeroX = toSvgX(0);
       const zeroY = toSvgY(0);
 
@@ -3522,15 +3706,16 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         xAxis.setAttribute('x1', padLeft - 6);
         xAxis.setAttribute('y1', zeroY);
-        xAxis.setAttribute('x2', padLeft + plotWidth + 12);
+        xAxis.setAttribute('x2', padLeft + plotWidth + 14);
         xAxis.setAttribute('y2', zeroY);
         xAxis.setAttribute('class', 'viz-axis');
+        xAxis.setAttribute('marker-end', 'url(#axis-arrow-math)');
         svg.appendChild(xAxis);
 
         const xLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        xLabel.setAttribute('x', padLeft + plotWidth + 14);
+        xLabel.setAttribute('x', padLeft + plotWidth + 16);
         xLabel.setAttribute('y', zeroY + 4);
-        xLabel.setAttribute('class', 'viz-text font-bold');
+        xLabel.setAttribute('class', 'viz-text font-bold italic');
         xLabel.textContent = 'x';
         svg.appendChild(xLabel);
       }
@@ -3541,19 +3726,178 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         yAxis.setAttribute('x1', zeroX);
         yAxis.setAttribute('y1', padTop + plotHeight + 6);
         yAxis.setAttribute('x2', zeroX);
-        yAxis.setAttribute('y2', padTop - 12);
+        yAxis.setAttribute('y2', padTop - 14);
         yAxis.setAttribute('class', 'viz-axis');
+        yAxis.setAttribute('marker-end', 'url(#axis-arrow-math)');
         svg.appendChild(yAxis);
 
         const yLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         yLabel.setAttribute('x', zeroX - 10);
-        yLabel.setAttribute('y', padTop - 14);
-        yLabel.setAttribute('class', 'viz-text font-bold');
+        yLabel.setAttribute('y', padTop - 16);
+        yLabel.setAttribute('class', 'viz-text font-bold italic');
         yLabel.textContent = 'y';
         svg.appendChild(yLabel);
       }
 
-      // 3. 点線ガイド (guides)
+      // 原点 O
+      if (zeroX >= padLeft && zeroX <= padLeft + plotWidth && zeroY >= padTop && zeroY <= padTop + plotHeight) {
+        const oLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        oLabel.setAttribute('x', zeroX - 11);
+        oLabel.setAttribute('y', zeroY + 13);
+        oLabel.setAttribute('class', 'viz-origin');
+        oLabel.textContent = 'O';
+        svg.appendChild(oLabel);
+      }
+
+      // 3. グラフ曲線・線分描画（実線と点線延長）
+      curves.forEach((curve, cIdx) => {
+        const kind = curve.kind || 'linear';
+        const a = Number(curve.a ?? (kind === 'linear' ? 1 : 0));
+        const b = Number(curve.b ?? 0);
+        const cVal = Number(curve.c ?? 0);
+        const fn = (x) => (kind === 'quadratic' ? a * x * x + b * x + cVal : a * x + b);
+
+        const hasDomain = curve.domain_min !== undefined || curve.domain_max !== undefined;
+        const dMin = curve.domain_min !== undefined ? curve.domain_min : xMin;
+        const dMax = curve.domain_max !== undefined ? curve.domain_max : xMax;
+
+        // 定義域外の延長線（点線）
+        if (hasDomain) {
+          const extSteps = 80;
+          const extPoints = [];
+          for (let i = 0; i <= extSteps; i++) {
+            const x = xMin + (i / extSteps) * (xMax - xMin);
+            const y = fn(x);
+            if (y >= yMin - (yMax - yMin) * 0.2 && y <= yMax + (yMax - yMin) * 0.2) {
+              extPoints.push(`${toSvgX(x).toFixed(1)},${toSvgY(y).toFixed(1)}`);
+            }
+          }
+          if (extPoints.length > 1) {
+            const extPath = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            extPath.setAttribute('points', extPoints.join(' '));
+            extPath.setAttribute('class', 'viz-curve-ext');
+            svg.appendChild(extPath);
+          }
+        }
+
+        // 定義域内の主要線分（太い実線）
+        const domSteps = 60;
+        const domPoints = [];
+        for (let i = 0; i <= domSteps; i++) {
+          const x = dMin + (i / domSteps) * (dMax - dMin);
+          const y = fn(x);
+          domPoints.push(`${toSvgX(x).toFixed(1)},${toSvgY(y).toFixed(1)}`);
+        }
+        const mainPath = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        mainPath.setAttribute('points', domPoints.join(' '));
+        mainPath.setAttribute('class', 'viz-curve');
+        svg.appendChild(mainPath);
+
+        // 曲線ラベル
+        if (curve.label) {
+          const midX = (dMin + dMax) / 2;
+          const midY = fn(midX);
+          const clbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          clbl.setAttribute('x', toSvgX(midX) + 6);
+          clbl.setAttribute('y', toSvgY(midY) - 6);
+          clbl.setAttribute('class', 'viz-text font-bold text-[10px]');
+          clbl.textContent = curve.label;
+          svg.appendChild(clbl);
+        }
+
+        // 端点と軸への点線補助線・座標値ラベル
+        const endpoints = [];
+        if (curve.domain_min !== undefined) {
+          endpoints.push({ x: curve.domain_min, y: fn(curve.domain_min), closed: curve.domain_min_closed !== false });
+        }
+        if (curve.domain_max !== undefined) {
+          endpoints.push({ x: curve.domain_max, y: fn(curve.domain_max), closed: curve.domain_max_closed !== false });
+        }
+
+        const labeledX = new Set();
+        const labeledY = new Set();
+
+        endpoints.forEach(ep => {
+          const ex = toSvgX(ep.x);
+          const ey = toSvgY(ep.y);
+
+          // x軸への垂直補助線
+          if (Math.abs(ep.y) > 0.05 && zeroY >= padTop && zeroY <= padTop + plotHeight) {
+            const vGuide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            vGuide.setAttribute('x1', ex);
+            vGuide.setAttribute('y1', ey);
+            vGuide.setAttribute('x2', ex);
+            vGuide.setAttribute('y2', zeroY);
+            vGuide.setAttribute('class', 'viz-guide');
+            svg.appendChild(vGuide);
+          }
+
+          // y軸への水平補助線
+          if (Math.abs(ep.x) > 0.05 && zeroX >= padLeft && zeroX <= padLeft + plotWidth) {
+            const hGuide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            hGuide.setAttribute('x1', ex);
+            hGuide.setAttribute('y1', ey);
+            hGuide.setAttribute('x2', zeroX);
+            hGuide.setAttribute('y2', ey);
+            hGuide.setAttribute('class', 'viz-guide');
+            svg.appendChild(hGuide);
+          }
+
+          // x軸目盛り数値
+          if (Math.abs(ep.x) > 0.05 && !labeledX.has(ep.x)) {
+            labeledX.add(ep.x);
+            const xNum = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            xNum.setAttribute('x', ex - 4);
+            xNum.setAttribute('y', zeroY >= padTop && zeroY <= padTop + plotHeight ? (ep.y >= 0 ? zeroY + 14 : zeroY - 5) : padTop + plotHeight + 12);
+            xNum.setAttribute('class', 'viz-axis-num');
+            xNum.textContent = formatCoordinateNumber(ep.x);
+            svg.appendChild(xNum);
+          }
+
+          // y軸目盛り数値
+          if (Math.abs(ep.y) > 0.05 && !labeledY.has(ep.y)) {
+            labeledY.add(ep.y);
+            const yNum = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            const yLabelX = zeroX >= padLeft && zeroX <= padLeft + plotWidth ? (ep.x >= 0 ? zeroX - 14 : zeroX + 6) : padLeft - 14;
+            yNum.setAttribute('x', yLabelX);
+            yNum.setAttribute('y', ey + 4);
+            yNum.setAttribute('class', 'viz-axis-num');
+            yNum.textContent = formatCoordinateNumber(ep.y);
+            svg.appendChild(yNum);
+          }
+
+          // 端点の丸印（塗りつぶし ● または 白抜き ○）
+          const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('cx', ex);
+          dot.setAttribute('cy', ey);
+          dot.setAttribute('r', '4.5');
+          dot.setAttribute('class', ep.closed ? 'viz-endpoint' : 'viz-endpoint-open');
+          svg.appendChild(dot);
+        });
+
+        // y切片ラベル
+        const yIntercept = fn(0);
+        if (!labeledY.has(yIntercept) && Math.abs(yIntercept) > 0.05 && yIntercept >= yMin && yIntercept <= yMax) {
+          labeledY.add(yIntercept);
+          const sy = toSvgY(yIntercept);
+          const yIntNum = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          yIntNum.setAttribute('x', zeroX - 12);
+          yIntNum.setAttribute('y', sy + 4);
+          yIntNum.setAttribute('class', 'viz-axis-num');
+          yIntNum.textContent = formatCoordinateNumber(yIntercept);
+          svg.appendChild(yIntNum);
+
+          const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          tick.setAttribute('x1', zeroX - 3);
+          tick.setAttribute('y1', sy);
+          tick.setAttribute('x2', zeroX + 3);
+          tick.setAttribute('y2', sy);
+          tick.setAttribute('class', 'viz-axis');
+          svg.appendChild(tick);
+        }
+      });
+
+      // 4. 追加のガイド線（AI指定のguides）
       if (Array.isArray(visual.guides)) {
         visual.guides.filter(Boolean).forEach(g => {
           const guideLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -3570,81 +3914,8 @@ ${step.why ? `【今の意図】${step.why}` : ''}
             guideLine.setAttribute('x2', toSvgX(g.to ?? 0));
             guideLine.setAttribute('y2', sy);
           }
-          guideLine.setAttribute('class', 'viz-guide stroke-slate-400 dark:stroke-slate-500');
+          guideLine.setAttribute('class', 'viz-guide');
           svg.appendChild(guideLine);
-        });
-      }
-
-      // 4. 関数グラフ曲線 (curves)
-      if (Array.isArray(visual.curves)) {
-        visual.curves.filter(Boolean).forEach((curve, cIdx) => {
-          const kind = curve.kind || 'linear';
-          const a = Number(curve.a ?? (kind === 'linear' ? 1 : 0));
-          const b = Number(curve.b ?? 0);
-          const c = Number(curve.c ?? 0);
-
-          const dMin = curve.domain_min !== undefined ? Math.max(xMin, curve.domain_min) : xMin;
-          const dMax = curve.domain_max !== undefined ? Math.min(xMax, curve.domain_max) : xMax;
-
-          const fn = (x) => {
-            if (kind === 'quadratic') return a * x * x + b * x + c;
-            if (kind === 'constant') return b;
-            return a * x + b;
-          };
-
-          const points = [];
-          const steps = 60;
-          for (let i = 0; i <= steps; i++) {
-            const x = dMin + (i / steps) * (dMax - dMin);
-            const y = fn(x);
-            points.push(`${toSvgX(x)},${toSvgY(y)}`);
-          }
-
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-          path.setAttribute('points', points.join(' '));
-          const strokeColor = cIdx === 0 ? 'stroke-emerald-600 dark:stroke-emerald-400' : 'stroke-blue-600 dark:stroke-blue-400';
-          path.setAttribute('class', `viz-curve ${strokeColor}`);
-          svg.appendChild(path);
-
-          // 曲線ラベル
-          if (curve.label) {
-            const midX = (dMin + dMax) / 2;
-            const midY = fn(midX);
-            const clbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            clbl.setAttribute('x', toSvgX(midX) + 6);
-            clbl.setAttribute('y', toSvgY(midY) - 6);
-            clbl.setAttribute('class', 'viz-text font-bold fill-emerald-700 dark:fill-emerald-300 text-[10px]');
-            clbl.textContent = curve.label;
-            svg.appendChild(clbl);
-          }
-
-          // 端点 (domain_min, domain_max) の丸印描画
-          if (curve.domain_min !== undefined) {
-            const startX = toSvgX(curve.domain_min);
-            const startY = toSvgY(fn(curve.domain_min));
-            const isClosed = curve.domain_min_closed !== false;
-            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle.setAttribute('cx', startX);
-            circle.setAttribute('cy', startY);
-            circle.setAttribute('r', '4.5');
-            circle.setAttribute('class', isClosed
-              ? 'fill-emerald-600 stroke-white stroke-2 dark:fill-emerald-400 dark:stroke-slate-900'
-              : 'fill-white stroke-emerald-600 stroke-2 dark:fill-slate-900 dark:stroke-emerald-400');
-            svg.appendChild(circle);
-          }
-          if (curve.domain_max !== undefined) {
-            const endX = toSvgX(curve.domain_max);
-            const endY = toSvgY(fn(curve.domain_max));
-            const isClosed = curve.domain_max_closed !== false;
-            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle.setAttribute('cx', endX);
-            circle.setAttribute('cy', endY);
-            circle.setAttribute('r', '4.5');
-            circle.setAttribute('class', isClosed
-              ? 'fill-emerald-600 stroke-white stroke-2 dark:fill-emerald-400 dark:stroke-slate-900'
-              : 'fill-white stroke-emerald-600 stroke-2 dark:fill-slate-900 dark:stroke-emerald-400');
-            svg.appendChild(circle);
-          }
         });
       }
 
@@ -3657,14 +3928,14 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           dot.setAttribute('cx', px);
           dot.setAttribute('cy', py);
           dot.setAttribute('r', '3.5');
-          dot.setAttribute('class', p.open ? 'fill-white stroke-slate-700 stroke-2' : 'fill-slate-800 dark:fill-slate-100');
+          dot.setAttribute('class', p.open ? 'viz-endpoint-open' : 'viz-endpoint');
           svg.appendChild(dot);
 
           if (p.label) {
             const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             txt.setAttribute('x', px + 6);
             txt.setAttribute('y', py - 6);
-            txt.setAttribute('class', 'viz-text font-bold fill-slate-800 dark:fill-slate-200');
+            txt.setAttribute('class', 'viz-text font-bold');
             txt.textContent = p.label;
             svg.appendChild(txt);
           }
