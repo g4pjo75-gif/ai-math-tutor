@@ -1,10 +1,10 @@
 import { safeStorage, state } from './state.js';
 import { openSettings } from './settings.js';
 import { SIMPLIFY_RESPONSE_SCHEMA } from './schema.js';
-import { callGeminiModel } from './api-solve.js';
+import { callGeminiModel, isQuotaError } from '../core/index.js';
 import { renderStepCards } from './render.js';
 import { highlightStepCard, speakJapanese, stopSpeech } from './voice.js';
-import { isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { showQuotaError, showStatus } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
     // 6-2. 「もっとやさしく」：そのステップだけを、よりかみくだいて再生成

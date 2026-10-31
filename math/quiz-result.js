@@ -1,13 +1,13 @@
-import { TutorCore } from '../shared/core.js';
+import { callGeminiModel, isLocalMathMatch, isQuotaError } from '../core/index.js';
 import { safeStorage, state } from './state.js';
 import { saveTutorHistory } from './history.js';
 import { formatChoiceMath } from './quiz.js';
 import { openSettings } from './settings.js';
 import { clearImage } from './upload.js';
-import { callGeminiModel, solveProblem } from './api-solve.js';
+import { solveProblem } from './api-solve.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese } from './voice.js';
-import { isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { showQuotaError, showStatus } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
 export function toggleQuizHint() {
@@ -44,7 +44,7 @@ export async function submitStudentAnswer() {
         ...(Array.isArray(state.currentQuizData.acceptedAnswers) ? state.currentQuizData.acceptedAnswers : [])
       ].filter(Boolean);
 
-      if (TutorCore && TutorCore.isLocalMathMatch(studentAns, referenceCandidates)) {
+      if (isLocalMathMatch(studentAns, referenceCandidates)) {
         const localJudge = {
           is_correct: true,
           judgement_title: '正解！素晴らしい！（⚡即時判定）',

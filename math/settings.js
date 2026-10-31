@@ -1,6 +1,6 @@
 import { safeStorage } from './state.js';
 import { checkApiKeyWarning } from './init.js';
-import { fetchWithTimeout } from './api-solve.js';
+import { fetchAvailableModels as fetchModelsFromApi } from '../core/index.js';
 import { showStatus } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
@@ -62,40 +62,7 @@ export async function fetchAvailableModels() {
       }
 
       try {
-        const res = await fetchWithTimeout('https://generativelanguage.googleapis.com/v1beta/models', {
-          method: 'GET',
-          headers: { 'x-goog-api-key': key }
-        }, 15000);
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          throw new Error(data.error?.message || `HTTP ${res.status}`);
-        }
-
-        // generateContent をサポートする Gemini モデルのみフィルタリング
-        const validModels = (data.models || [])
-          .filter(m =>
-            Array.isArray(m.supportedGenerationMethods) &&
-            m.supportedGenerationMethods.includes('generateContent') &&
-            m.name.includes('gemini') &&
-            !m.name.includes('embedding') &&
-            !m.name.includes('imagen') &&
-            !m.name.includes('tts')
-          )
-          .map(m => ({
-            id: m.name.replace(/^models\//, ''),
-            displayName: m.displayName || m.name.replace(/^models\//, '')
-          }));
-
-        if (validModels.length === 0) {
-          throw new Error('generateContentに対応したGeminiモデルが見つかりませんでした。');
-        }
-
-        // 最新 Flash / Pro モデルが上に来るようにソート
-        validModels.sort((a, b) => {
-          const score = id => (id.includes('flash') ? 2 : id.includes('pro') ? 1 : 0);
-          return score(b.id) - score(a.id) || b.id.localeCompare(a.id);
-        });
+        const validModels = await fetchModelsFromApi({ apiKey: key, timeoutMs: 15000 });
 
         safeStorage.setItem('gemini_api_key', key);
         safeStorage.setItem('available_gemini_models', JSON.stringify(validModels));

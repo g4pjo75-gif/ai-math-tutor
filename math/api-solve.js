@@ -1,4 +1,4 @@
-import { TutorCore } from '../shared/core.js';
+import { callGeminiModel, computeRequestHash, getCachedResponse, setCachedResponse, normalizeMathExpr, isQuotaError } from '../core/index.js';
 import { escapeAttr } from '../shared/actions.js';
 import { safeStorage, state } from './state.js';
 import { setUploadProgress } from './quiz-result.js';
@@ -6,120 +6,8 @@ import { openSettings } from './settings.js';
 import { TUTOR_RESPONSE_SCHEMA, buildSystemPrompt } from './schema.js';
 import { renderTutorResult } from './render.js';
 import { stopSpeech } from './voice.js';
-import { hideStatus, isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { hideStatus, showQuotaError, showStatus } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
-
-export async function fetchWithTimeout(url, options, timeoutMs = 25000) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
-        return response;
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-
-export function parseTutorJson(rawText) {
-      const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-      const firstBrace = cleaned.indexOf('{');
-      const firstBracket = cleaned.indexOf('[');
-
-      let startIdx = -1;
-      let endIdx = -1;
-
-      if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
-        startIdx = firstBrace;
-        endIdx = cleaned.lastIndexOf('}');
-      } else if (firstBracket !== -1) {
-        startIdx = firstBracket;
-        endIdx = cleaned.lastIndexOf(']');
-      }
-
-      if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
-        throw new Error('AIの応答からJSONデータを抽出できませんでした。');
-      }
-      return JSON.parse(cleaned.slice(startIdx, endIdx + 1));
-    }
-
-export async function callGeminiModel(modelId, apiKey, promptText, imageBase64, options = {}) {
-      const cleanModelId = String(modelId).replace(/^models\//, '').trim();
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cleanModelId)}:generateContent`;
-
-      const parts = [{ text: promptText }];
-      if (imageBase64) {
-        parts.push({
-          inline_data: { mime_type: 'image/jpeg', data: imageBase64 }
-        });
-      }
-
-      const temperature = options.temperature ?? 0.35;
-      const maxOutputTokens = options.maxOutputTokens ?? 32768;
-      const schema = options.schema || TUTOR_RESPONSE_SCHEMA;
-      const useJson = !options.rawText;
-
-      const buildPayload = (useStructured) => ({
-        contents: [{ role: 'user', parts }],
-        generationConfig: useStructured && useJson
-          ? { temperature, maxOutputTokens, responseMimeType: 'application/json', responseSchema: schema }
-          : { temperature: useStructured ? temperature : 0.3, maxOutputTokens }
-      });
-
-      const send = async (useStructured) => {
-        const res = await fetchWithTimeout(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey
-          },
-          body: JSON.stringify(buildPayload(useStructured))
-        }, options.timeoutMs || 30000);
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const err = new Error(data.error?.message || `HTTP Error ${res.status}`);
-          err.status = res.status;
-          throw err;
-        }
-        return data;
-      };
-
-      let data;
-      try {
-        data = await send(true);
-      } catch (err) {
-        // 構造化出力（responseSchema）に未対応のモデル向けフォールバック
-        if (err.status === 400 && /response|schema|mime/i.test(err.message)) {
-          data = await send(false);
-        } else {
-          throw err;
-        }
-      }
-
-      const candidate = data.candidates?.[0];
-      const finishReason = candidate?.finishReason;
-      const text = candidate?.content?.parts?.map(p => p.text || '').join('\n') || '';
-      if (!text) {
-        if (finishReason === 'MAX_TOKENS') {
-          throw new Error('AIの回答が途中で切れました（思考・出力トークン上限）。もう一度試すか、入力内容を絞ってください。');
-        }
-        const blockReason = data.promptFeedback?.blockReason || finishReason;
-        throw new Error(blockReason
-          ? `モデルが応答を中断しました（理由: ${blockReason}）`
-          : 'モデルから空の応答が返されました。');
-      }
-      if (options.rawText) {
-        return text.trim();
-      }
-      try {
-        return parseTutorJson(text);
-      } catch (parseErr) {
-        if (finishReason === 'MAX_TOKENS') {
-          throw new Error('問題数が多いためAIの回答が途中で切れました（トークン上限）。写真を1〜2問ずつ切り取ってアップロードしてください。');
-        }
-        throw parseErr;
-      }
-    }
 
 export async function solveProblem(overrideModelId = null, forceRefresh = false) {
       stopSpeech();
@@ -135,26 +23,24 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
       }
 
       // ④ 画像・テキストハッシュ（Fingerprint）およびマイノート照合による重複API呼び出し防止キャッシュ
-      const reqFp = TutorCore
-        ? TutorCore.computeRequestHash({
+      const reqFp = computeRequestHash({
             mode: 'math_solve',
             unit: unitHint,
             text: userText,
             imageBase64: state.currentImageBase64
-          })
-        : null;
+          });
 
       if (!overrideModelId && !forceRefresh) {
-        let cachedData = reqFp && TutorCore
-          ? TutorCore.getCachedResponse(safeStorage, 'api_response_cache', reqFp)
+        let cachedData = reqFp
+          ? getCachedResponse(safeStorage, 'api_response_cache', reqFp)
           : null;
 
         // テキストのみ入力時はマイノート（tutorHistory）に同一問題があるかも照合
-        if (!cachedData && !state.currentImageBase64 && userText && TutorCore && Array.isArray(state.tutorHistory)) {
-          const normInput = TutorCore.normalizeMathExpr(userText);
+        if (!cachedData && !state.currentImageBase64 && userText && Array.isArray(state.tutorHistory)) {
+          const normInput = normalizeMathExpr(userText);
           if (normInput && normInput.length >= 3) {
             const matchedHistory = state.tutorHistory.find(
-              item => item && TutorCore.normalizeMathExpr(item.recognized_problem) === normInput
+              item => item && normalizeMathExpr(item.recognized_problem) === normInput
             );
             if (matchedHistory) {
               cachedData = matchedHistory;
@@ -197,7 +83,7 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
       try {
         let resultData;
         try {
-          resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64);
+          resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { schema: TUTOR_RESPONSE_SCHEMA });
         } catch (firstErr) {
           // 混雑・レート制限・タイムアウト時は3秒待って1回だけ自動再試行
           const retryable = firstErr.name === 'AbortError' ||
@@ -207,7 +93,7 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
           if (retryable) {
             showStatus(`⚠️ <strong>${escapeHtml(selectedModel)}</strong> が混雑しています。3秒後に自動で再試行します…`, 'amber');
             await new Promise(r => setTimeout(r, 3000));
-            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { timeoutMs: 40000 });
+            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { schema: TUTOR_RESPONSE_SCHEMA, timeoutMs: 40000 });
           } else {
             throw firstErr;
           }
@@ -215,8 +101,8 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
 
         const renderedOk = renderTutorResult(resultData);
         if (renderedOk) {
-          if (reqFp && TutorCore) {
-            TutorCore.setCachedResponse(safeStorage, 'api_response_cache', reqFp, resultData, 15);
+          if (reqFp) {
+            setCachedResponse(safeStorage, 'api_response_cache', reqFp, resultData, 15);
           }
           hideStatus();
         }

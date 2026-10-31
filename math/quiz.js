@@ -1,10 +1,10 @@
 import { safeStorage, state } from './state.js';
 import { renderQuizResult } from './quiz-result.js';
 import { openSettings } from './settings.js';
-import { callGeminiModel } from './api-solve.js';
+import { callGeminiModel, isQuotaError } from '../core/index.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese } from './voice.js';
-import { isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { showQuotaError, showStatus } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
 

@@ -46,12 +46,7 @@ export function hideStatus() {
       document.getElementById('statusBox').classList.add('hidden');
     }
 
-    // クォータ超過エラーの判定
-export function isQuotaError(err) {
-      const msg = (err?.message || '').toLowerCase();
-      return msg.includes('quota') || msg.includes('rate limit') || msg.includes('resource_exhausted') ||
-        msg.includes('billing') || msg.includes('limit: 0');
-    }
+
 
     // クォータ超過時の推奨モデル一覧を取得
 export function getRecommendedModels() {
