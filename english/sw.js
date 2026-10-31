@@ -1,7 +1,8 @@
-const CACHE_NAME = 'aet-cache-v1.7';
+const CACHE_NAME = 'aet-cache-v1.8';
 const ASSETS = [
   './',
   './index.html',
+  './app.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
