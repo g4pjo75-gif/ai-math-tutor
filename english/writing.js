@@ -70,9 +70,9 @@
       if (reqFp && window.TutorCore && engStore) {
         const cachedData = window.TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
         if (cachedData) {
-          lastWritingData = cachedData;
+          state.lastWritingData = cachedData;
           hideStatus();
-          renderWritingCorrection(lastWritingData);
+          renderWritingCorrection(state.lastWritingData);
           window.TutorUI.showToast('⚡ 同じ英作文の添削記録が見つかったため、APIを消費せず即座に表示しました！', 'blue');
           return;
         }
@@ -107,12 +107,12 @@
           timeoutMs: 30000
         });
 
-        lastWritingData = { ...data, task_ja: taskJa, original_text: data.original_text || studentText };
+        state.lastWritingData = { ...data, task_ja: taskJa, original_text: data.original_text || studentText };
         if (reqFp && window.TutorCore && engStore) {
-          window.TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, lastWritingData, 15);
+          window.TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, state.lastWritingData, 15);
         }
         hideStatus();
-        renderWritingCorrection(lastWritingData);
+        renderWritingCorrection(state.lastWritingData);
         window.TutorUI.showToast('✨ 英作文の添削が完了しました！', 'green');
       } catch (err) {
         console.error(err);

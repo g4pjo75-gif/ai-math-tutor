@@ -27,14 +27,17 @@
       : null;
 
     // アプリ状態
-    let currentMode = 'reading'; // 'reading' | 'quiz' | 'writing'
-    let currentImageBase64 = null;
-    let lastLessonData = null;
-    let lastPassageEn = '';
-    let currentQuizData = null;
-    let selectedChoiceIndex = -1;
-    let lastWritingData = null;
 
-    let wordbookList = []; // { id, word, meaning, example, memorized, savedAt }
-    let englishHistory = []; // { id, type, title, summary, payload, savedAt }
-    let currentHistoryTab = 'wordbook'; // 'wordbook' | 'notes'
+    // ==== Phase 4-B: 공유 가변 상태 (ESM import 바인딩은 재할당 불가) ====
+    const state = {
+      currentMode: 'reading', // 'reading' | 'quiz' | 'writing'
+      currentImageBase64: null,
+      lastLessonData: null,
+      lastPassageEn: '',
+      currentQuizData: null,
+      selectedChoiceIndex: -1,
+      lastWritingData: null,
+      wordbookList: [], // { id, word, meaning, example, memorized, savedAt }
+      englishHistory: [], // { id, type, title, summary, payload, savedAt }
+      currentHistoryTab: 'wordbook', // 'wordbook' | 'notes'
+    };

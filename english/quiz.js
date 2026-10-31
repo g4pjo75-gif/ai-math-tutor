@@ -29,7 +29,7 @@
 
     function applyAndRenderEnglishQuiz(res, unitHint) {
       const shuffled = shuffleQuizChoices(res.choices, res.correct_index, res.choice_feedback);
-      currentQuizData = {
+      state.currentQuizData = {
         targetPoint: res.target_point || unitHint,
         questionEn: res.question_en || '',
         translationJa: res.translation_ja || '',
@@ -40,17 +40,17 @@
         displayCorrectIndex: shuffled.displayCorrectIndex
       };
 
-      selectedChoiceIndex = -1;
+      state.selectedChoiceIndex = -1;
       hideStatus();
 
       document.getElementById('quizEmptyState').classList.add('hidden');
       document.getElementById('quizActiveContainer').classList.remove('hidden');
       document.getElementById('quizResultBox').classList.add('hidden');
 
-      document.getElementById('quizTargetBadge').textContent = currentQuizData.targetPoint;
-      document.getElementById('quizQuestionText').textContent = currentQuizData.questionEn;
-      document.getElementById('quizTranslationText').textContent = `和訳: ${currentQuizData.translationJa}`;
-      document.getElementById('quizHintContent').textContent = currentQuizData.hint;
+      document.getElementById('quizTargetBadge').textContent = state.currentQuizData.targetPoint;
+      document.getElementById('quizQuestionText').textContent = state.currentQuizData.questionEn;
+      document.getElementById('quizTranslationText').textContent = `和訳: ${state.currentQuizData.translationJa}`;
+      document.getElementById('quizHintContent').textContent = state.currentQuizData.hint;
       document.getElementById('quizHintContent').classList.add('hidden');
       document.getElementById('quizHintIcon').textContent = '▼';
 
@@ -61,9 +61,9 @@
       const unitHint = document.getElementById('unitSelect').value;
 
       // ① ワンショット事前生成された twin_quiz があれば API消費0・待ち時間0秒で即座に出題！
-      if (useCurrentLesson && lastLessonData && lastLessonData.twin_quiz && !lastLessonData._twinQuizConsumed && isValidQuizResponse(lastLessonData.twin_quiz)) {
-        lastLessonData._twinQuizConsumed = true;
-        applyAndRenderEnglishQuiz(lastLessonData.twin_quiz, unitHint);
+      if (useCurrentLesson && state.lastLessonData && state.lastLessonData.twin_quiz && !state.lastLessonData._twinQuizConsumed && isValidQuizResponse(state.lastLessonData.twin_quiz)) {
+        state.lastLessonData._twinQuizConsumed = true;
+        applyAndRenderEnglishQuiz(state.lastLessonData.twin_quiz, unitHint);
         window.TutorUI.showToast('⚡ 読解時に同時作成した4択クイズを即座に出題しました！', 'blue');
         return;
       }
@@ -83,8 +83,8 @@
       if (btnText) btnText.textContent = '⏳ 問題作成中…';
       showStatus('⏳ AI先生が高校英語の4択クイズを作成しています…', 'blue');
 
-      const contextText = (useCurrentLesson && lastLessonData && lastLessonData.passage_en)
-        ? `【直前に学習した英文】:\n${lastLessonData.passage_en}\nこの英文に出てくる語彙または文法事項から出題してください。`
+      const contextText = (useCurrentLesson && state.lastLessonData && state.lastLessonData.passage_en)
+        ? `【直前に学習した英文】:\n${state.lastLessonData.passage_en}\nこの英文に出てくる語彙または文法事項から出題してください。`
         : `【出題単元】: ${unitHint}\n日本の高校1年生（英語コミュニケーションI / 論理・表現I）レベルの4択空所補充問題または語彙問題を1問作成してください。`;
 
       const prompt = `あなたは日本の高校英語教師です。以下の条件で4択クイズを1問作成し、JSONのみで出力してください。
@@ -132,11 +132,11 @@ ${contextText}
 
     function renderEnglishQuizChoices() {
       const grid = document.getElementById('quizChoiceGrid');
-      if (!grid || !currentQuizData) return;
+      if (!grid || !state.currentQuizData) return;
       const labels = ['A', 'B', 'C', 'D'];
 
-      grid.innerHTML = currentQuizData.displayChoices.map((text, idx) => {
-        const isSelected = selectedChoiceIndex === idx;
+      grid.innerHTML = state.currentQuizData.displayChoices.map((text, idx) => {
+        const isSelected = state.selectedChoiceIndex === idx;
         const cls = isSelected
           ? 'selected border-blue-600 bg-blue-50 text-blue-950 dark:bg-blue-950/60 dark:text-blue-100 ring-2 ring-blue-500'
           : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60';
@@ -152,7 +152,7 @@ ${contextText}
     }
 
     function selectEnglishQuizChoice(idx) {
-      selectedChoiceIndex = idx;
+      state.selectedChoiceIndex = idx;
       renderEnglishQuizChoices();
     }
 
@@ -165,15 +165,15 @@ ${contextText}
     }
 
     function submitEnglishQuizAnswer() {
-      if (!currentQuizData || selectedChoiceIndex < 0) {
+      if (!state.currentQuizData || state.selectedChoiceIndex < 0) {
         window.TutorUI.showToast('⚠️ 選択肢 (A〜D) を1つ選んでください。', 'amber');
         return;
       }
 
-      const isCorrect = selectedChoiceIndex === currentQuizData.displayCorrectIndex;
-      const chosenText = currentQuizData.displayChoices[selectedChoiceIndex];
-      const correctText = currentQuizData.displayChoices[currentQuizData.displayCorrectIndex];
-      const specificFeedback = currentQuizData.displayFeedback[selectedChoiceIndex] || '';
+      const isCorrect = state.selectedChoiceIndex === state.currentQuizData.displayCorrectIndex;
+      const chosenText = state.currentQuizData.displayChoices[state.selectedChoiceIndex];
+      const correctText = state.currentQuizData.displayChoices[state.currentQuizData.displayCorrectIndex];
+      const specificFeedback = state.currentQuizData.displayFeedback[state.selectedChoiceIndex] || '';
 
       const box = document.getElementById('quizResultBox');
       const bgClass = isCorrect
@@ -192,8 +192,8 @@ ${contextText}
 
         <div class="p-3 rounded-xl bg-white/80 dark:bg-slate-900/60 border border-current/15 text-xs sm:text-sm space-y-1.5">
           <div class="font-bold">【選んだ選択肢の解説】</div>
-          <p>${escapeHtml(specificFeedback || currentQuizData.explanation)}</p>
-          ${currentQuizData.explanation && specificFeedback !== currentQuizData.explanation ? `<p class="text-slate-600 dark:text-slate-300 pt-1 border-t border-slate-200/60 dark:border-slate-700">${escapeHtml(currentQuizData.explanation)}</p>` : ''}
+          <p>${escapeHtml(specificFeedback || state.currentQuizData.explanation)}</p>
+          ${state.currentQuizData.explanation && specificFeedback !== state.currentQuizData.explanation ? `<p class="text-slate-600 dark:text-slate-300 pt-1 border-t border-slate-200/60 dark:border-slate-700">${escapeHtml(state.currentQuizData.explanation)}</p>` : ''}
         </div>
 
         <div class="p-3 rounded-xl ${isCorrect ? 'bg-emerald-100/70 dark:bg-emerald-900/40' : 'bg-amber-100/70 dark:bg-amber-900/40'} text-xs sm:text-sm font-bold flex items-center justify-between">
@@ -205,7 +205,7 @@ ${contextText}
           <button data-action="save-quiz-record" data-correct="${isCorrect ? '1' : '0'}" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
             📁 この問題をマイノートに保存
           </button>
-          <button data-action="add-word-direct" data-word="${escapeAttr(correctText)}" data-meaning="${escapeAttr(currentQuizData.translationJa)}" data-example="${escapeAttr(currentQuizData.questionEn)}"
+          <button data-action="add-word-direct" data-word="${escapeAttr(correctText)}" data-meaning="${escapeAttr(state.currentQuizData.translationJa)}" data-example="${escapeAttr(state.currentQuizData.questionEn)}"
             class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
             🔤 正解表現を単語帳に登録
           </button>
@@ -221,14 +221,14 @@ ${contextText}
     }
 
     function speakQuizQuestion() {
-      if (!currentQuizData) return;
-      const text = currentQuizData.questionEn.replace(/\(\s*\)|_{2,}/g, ' blank ');
+      if (!state.currentQuizData) return;
+      const text = state.currentQuizData.questionEn.replace(/\(\s*\)|_{2,}/g, ' blank ');
       speakEnglishText(text);
     }
 
     function speakQuizFullSentence(correctChoice) {
-      if (!currentQuizData) return;
-      const filled = currentQuizData.questionEn.replace(/\(\s*\)|（\s*）|_{2,}/, ` ${correctChoice} `);
+      if (!state.currentQuizData) return;
+      const filled = state.currentQuizData.questionEn.replace(/\(\s*\)|（\s*）|_{2,}/, ` ${correctChoice} `);
       speakEnglishText(filled);
     }
 

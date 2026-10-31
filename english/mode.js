@@ -2,14 +2,14 @@
     // 4. モード切替 (長文読解 / 4択クイズ / 英作文添削)
     // =========================================================================
     function switchMode(mode) {
-      currentMode = mode;
+      state.currentMode = mode;
       stopAllSpeech();
       hideStatus();
 
       // P3-1: 他モードへの切り替え時は前回のクイズ状態をクリアし、誤提出・不整合を防止
-      if (mode !== 'quiz' && currentQuizData) {
-        currentQuizData = null;
-        selectedChoiceIndex = -1;
+      if (mode !== 'quiz' && state.currentQuizData) {
+        state.currentQuizData = null;
+        state.selectedChoiceIndex = -1;
         const emptyState = document.getElementById('quizEmptyState');
         const activeContainer = document.getElementById('quizActiveContainer');
         const resultBox = document.getElementById('quizResultBox');

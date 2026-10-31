@@ -33,7 +33,7 @@
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          currentImageBase64 = dataUrl.split(',')[1];
+          state.currentImageBase64 = dataUrl.split(',')[1];
 
           document.getElementById('uploadPrompt').classList.add('hidden');
           const preview = document.getElementById('imagePreview');
@@ -48,7 +48,7 @@
     }
 
     function clearImage() {
-      currentImageBase64 = null;
+      state.currentImageBase64 = null;
       document.getElementById('uploadPrompt').classList.remove('hidden');
       const preview = document.getElementById('imagePreview');
       preview.src = '';
@@ -58,7 +58,7 @@
 
     async function analyzeEnglishProblem() {
       const userText = document.getElementById('questionInput').value.trim();
-      if (!currentImageBase64 && !userText) {
+      if (!state.currentImageBase64 && !userText) {
         window.TutorUI.showToast('⚠️ 写真を撮影するか、英文・質問を入力してください。', 'amber');
         return;
       }
@@ -71,15 +71,15 @@
             mode: 'eng_reading',
             unit: unitHint,
             text: userText,
-            imageBase64: currentImageBase64
+            imageBase64: state.currentImageBase64
           })
         : null;
 
       if (reqFp && window.TutorCore && engStore) {
         const cachedData = window.TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
         if (cachedData) {
-          lastLessonData = { ...cachedData, _twinQuizConsumed: false };
-          lastPassageEn = cachedData.passage_en || '';
+          state.lastLessonData = { ...cachedData, _twinQuizConsumed: false };
+          state.lastPassageEn = cachedData.passage_en || '';
           hideStatus();
           renderEnglishResult(cachedData);
           document.getElementById('resultSection').classList.remove('hidden');
@@ -119,14 +119,14 @@
           modelId,
           apiKey,
           promptText: `${prompt}\n\n【生徒の入力・質問】: ${userText || '画像の問題・英文を解説してください'}`,
-          imageBase64: currentImageBase64,
+          imageBase64: state.currentImageBase64,
           schema: ENGLISH_READING_SCHEMA,
           temperature: 0.35,
           timeoutMs: 35000
         });
 
-        lastLessonData = { ...data, _twinQuizConsumed: false };
-        lastPassageEn = data.passage_en || '';
+        state.lastLessonData = { ...data, _twinQuizConsumed: false };
+        state.lastPassageEn = data.passage_en || '';
         if (reqFp && window.TutorCore && engStore) {
           window.TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, data, 15);
         }

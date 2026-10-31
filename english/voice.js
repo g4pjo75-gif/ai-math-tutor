@@ -12,11 +12,11 @@
     }
 
     function playEnglishSpeech() {
-      if (!lastPassageEn) {
+      if (!state.lastPassageEn) {
         window.TutorUI.showToast('⚠️ 読み上げる英文がありません。', 'amber');
         return;
       }
-      speakEnglishText(lastPassageEn);
+      speakEnglishText(state.lastPassageEn);
     }
 
     function stopAllSpeech() {
