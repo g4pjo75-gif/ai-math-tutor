@@ -1,6 +1,5 @@
 // shared/ui.js
 // Common UI helpers: Toast notifications, modals, dark mode, safe-area management
-(function (window) {
   'use strict';
 
   let toastTimer = null;
@@ -139,7 +138,7 @@
     document.documentElement.style.setProperty('--keyboard-height', `${kbHeight}px`);
   }
 
-  window.TutorUI = {
+  export const TutorUI = {
     showToast,
     openModal,
     closeModal,
@@ -150,4 +149,3 @@
     initTheme,
     updateSafeArea
   };
-})(window);

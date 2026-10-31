@@ -1,3 +1,4 @@
+import { escapeAttr } from '../shared/actions.js';
 import { safeStorage, state } from './state.js';
 import { renderTutorResult } from './render.js';
 import { showStatus } from './ui-status.js';

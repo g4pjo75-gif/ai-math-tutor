@@ -1,16 +1,18 @@
+import { TutorStorage } from '../shared/storage.js';
+import { TutorSpeech } from '../shared/speech.js';
     // =========================================================================
     // 1. ストレージ・音声エンジンの初期化
     // =========================================================================
-export const sharedStore = window.TutorStorage
-      ? window.TutorStorage.create({ prefix: 'tutor_', legacyPrefixes: ['amt_'] })
+export const sharedStore = TutorStorage
+      ? TutorStorage.create({ prefix: 'tutor_', legacyPrefixes: ['amt_'] })
       : null;
-export const engStore = window.TutorStorage
-      ? window.TutorStorage.create({ prefix: 'aet_', legacyPrefixes: [''] })
+export const engStore = TutorStorage
+      ? TutorStorage.create({ prefix: 'aet_', legacyPrefixes: [''] })
       : null;
 
     // 英語音声 (en-US)
-export const englishSpeech = window.TutorSpeech
-      ? window.TutorSpeech.create({
+export const englishSpeech = TutorSpeech
+      ? TutorSpeech.create({
           lang: 'en-US',
           defaultRate: 0.95,
           voicePriority: [/samantha|ava|daniel|alex/i, /google us english/i, /natural|online/i]
@@ -18,8 +20,8 @@ export const englishSpeech = window.TutorSpeech
       : null;
 
     // 日本語音声 (解説読み上げ補助用 ja-JP)
-export const japaneseSpeech = window.TutorSpeech
-      ? window.TutorSpeech.create({
+export const japaneseSpeech = TutorSpeech
+      ? TutorSpeech.create({
           lang: 'ja-JP',
           defaultRate: 1.0,
           voicePriority: [/kyoko|otoya|hattori/i, /natural|online/i, /google/i]

@@ -1,3 +1,6 @@
+import { TutorCore } from '../shared/core.js';
+import { TutorUI } from '../shared/ui.js';
+import { escapeAttr } from '../shared/actions.js';
 import { engStore, state } from './state.js';
 import { ENGLISH_READING_SCHEMA } from './schema.js';
 import { getActiveModel, getApiKey, openSettings } from './init.js';
@@ -13,12 +16,12 @@ export function handleImageUpload(e) {
 
       const reader = new FileReader();
       reader.onerror = () => {
-        window.TutorUI.showToast('❌ 画像の読み込みに失敗しました。', 'red');
+        TutorUI.showToast('❌ 画像の読み込みに失敗しました。', 'red');
       };
       reader.onload = (event) => {
         const img = new Image();
         img.onerror = () => {
-          window.TutorUI.showToast('❌ 画像形式を認識できませんでした。', 'red');
+          TutorUI.showToast('❌ 画像形式を認識できませんでした。', 'red');
         };
         img.onload = () => {
           const maxDim = 1280;
@@ -65,15 +68,15 @@ export function clearImage() {
 export async function analyzeEnglishProblem() {
       const userText = document.getElementById('questionInput').value.trim();
       if (!state.currentImageBase64 && !userText) {
-        window.TutorUI.showToast('⚠️ 写真を撮影するか、英文・質問を入力してください。', 'amber');
+        TutorUI.showToast('⚠️ 写真を撮影するか、英文・質問を入力してください。', 'amber');
         return;
       }
 
       const unitHint = document.getElementById('unitSelect').value;
 
       // ④ 画像・テキストハッシュ（Fingerprint）による重複API呼び出し防止キャッシュ
-      const reqFp = window.TutorCore
-        ? window.TutorCore.computeRequestHash({
+      const reqFp = TutorCore
+        ? TutorCore.computeRequestHash({
             mode: 'eng_reading',
             unit: unitHint,
             text: userText,
@@ -81,8 +84,8 @@ export async function analyzeEnglishProblem() {
           })
         : null;
 
-      if (reqFp && window.TutorCore && engStore) {
-        const cachedData = window.TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
+      if (reqFp && TutorCore && engStore) {
+        const cachedData = TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
         if (cachedData) {
           state.lastLessonData = { ...cachedData, _twinQuizConsumed: false };
           state.lastPassageEn = cachedData.passage_en || '';
@@ -90,7 +93,7 @@ export async function analyzeEnglishProblem() {
           renderEnglishResult(cachedData);
           document.getElementById('resultSection').classList.remove('hidden');
           document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-          window.TutorUI.showToast('⚡ 同じ問題の解説データが保存されていたため、APIを消費せず即座に表示しました！', 'blue');
+          TutorUI.showToast('⚡ 同じ問題の解説データが保存されていたため、APIを消費せず即座に表示しました！', 'blue');
           return;
         }
       }
@@ -98,7 +101,7 @@ export async function analyzeEnglishProblem() {
       const apiKey = getApiKey();
       if (!apiKey) {
         openSettings();
-        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
+        TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
         return;
       }
 
@@ -121,7 +124,7 @@ export async function analyzeEnglishProblem() {
 - twin_quiz には本文の重要表現または文法事項を使った4択の類題（choicesは必ず4個すべて異なる英語の選択肢、correct_indexは0〜3）を1問作成してください。`;
 
       try {
-        const data = await window.TutorCore.callGeminiModel({
+        const data = await TutorCore.callGeminiModel({
           modelId,
           apiKey,
           promptText: `${prompt}\n\n【生徒の入力・質問】: ${userText || '画像の問題・英文を解説してください'}`,
@@ -133,15 +136,15 @@ export async function analyzeEnglishProblem() {
 
         state.lastLessonData = { ...data, _twinQuizConsumed: false };
         state.lastPassageEn = data.passage_en || '';
-        if (reqFp && window.TutorCore && engStore) {
-          window.TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, data, 15);
+        if (reqFp && TutorCore && engStore) {
+          TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, data, 15);
         }
         hideStatus();
 
         renderEnglishResult(data);
         document.getElementById('resultSection').classList.remove('hidden');
         document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        window.TutorUI.showToast('✨ 英語の解説が完成しました！', 'green');
+        TutorUI.showToast('✨ 英語の解説が完成しました！', 'green');
       } catch (err) {
         console.error(err);
         showStatus(`❌ エラーが発生しました: ${err.message || '通信エラー'}`, 'red');

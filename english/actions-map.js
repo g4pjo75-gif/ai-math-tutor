@@ -1,3 +1,4 @@
+import { register } from '../shared/actions.js';
 import { changeTheme, closeSettings, onModelChange, openSettings, saveSettings, toggleDarkMode, unlockApp } from './init.js';
 import { switchMode } from './mode.js';
 import { analyzeEnglishProblem, clearImage, handleImageUpload } from './reading.js';
@@ -7,7 +8,7 @@ import { addWordDirect, addWordToWordbook, clearCurrentHistoryTab, closeHistoryM
 import { playEnglishSpeech, speakEnglishText, stopAllSpeech } from './voice.js';
 
 // english/actions-map.js — Phase 4-A: 영어 액션 등록표
-TutorActions.register({
+register({
   'unlock': () => unlockApp(),
   'open-settings': () => openSettings(),
   'toggle-dark-mode': () => toggleDarkMode(),

@@ -1,3 +1,5 @@
+import { TutorCore } from '../shared/core.js';
+import { escapeAttr } from '../shared/actions.js';
 import { safeStorage, state } from './state.js';
 import { setUploadProgress } from './quiz-result.js';
 import { openSettings } from './settings.js';
@@ -133,8 +135,8 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
       }
 
       // ④ 画像・テキストハッシュ（Fingerprint）およびマイノート照合による重複API呼び出し防止キャッシュ
-      const reqFp = window.TutorCore
-        ? window.TutorCore.computeRequestHash({
+      const reqFp = TutorCore
+        ? TutorCore.computeRequestHash({
             mode: 'math_solve',
             unit: unitHint,
             text: userText,
@@ -143,16 +145,16 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
         : null;
 
       if (!overrideModelId && !forceRefresh) {
-        let cachedData = reqFp && window.TutorCore
-          ? window.TutorCore.getCachedResponse(safeStorage, 'api_response_cache', reqFp)
+        let cachedData = reqFp && TutorCore
+          ? TutorCore.getCachedResponse(safeStorage, 'api_response_cache', reqFp)
           : null;
 
         // テキストのみ入力時はマイノート（tutorHistory）に同一問題があるかも照合
-        if (!cachedData && !state.currentImageBase64 && userText && window.TutorCore && Array.isArray(state.tutorHistory)) {
-          const normInput = window.TutorCore.normalizeMathExpr(userText);
+        if (!cachedData && !state.currentImageBase64 && userText && TutorCore && Array.isArray(state.tutorHistory)) {
+          const normInput = TutorCore.normalizeMathExpr(userText);
           if (normInput && normInput.length >= 3) {
             const matchedHistory = state.tutorHistory.find(
-              item => item && window.TutorCore.normalizeMathExpr(item.recognized_problem) === normInput
+              item => item && TutorCore.normalizeMathExpr(item.recognized_problem) === normInput
             );
             if (matchedHistory) {
               cachedData = matchedHistory;
@@ -213,8 +215,8 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
 
         const renderedOk = renderTutorResult(resultData);
         if (renderedOk) {
-          if (reqFp && window.TutorCore) {
-            window.TutorCore.setCachedResponse(safeStorage, 'api_response_cache', reqFp, resultData, 15);
+          if (reqFp && TutorCore) {
+            TutorCore.setCachedResponse(safeStorage, 'api_response_cache', reqFp, resultData, 15);
           }
           hideStatus();
         }

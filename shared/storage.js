@@ -1,9 +1,8 @@
 // shared/storage.js
 // Safe storage factory with prefix and legacy fallback support
-(function (window) {
   'use strict';
 
-  window.TutorStorage = {
+  export const TutorStorage = {
     create({ prefix = 'tutor_', legacyPrefixes = [] } = {}) {
       const memory = {};
       const candidates = (key) => {
@@ -73,4 +72,3 @@
       };
     }
   };
-})(window);

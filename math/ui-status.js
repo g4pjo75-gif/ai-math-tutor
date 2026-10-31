@@ -1,3 +1,4 @@
+import { escapeAttr } from '../shared/actions.js';
 import { state } from './state.js';
 import { escapeHtml } from './chat-overall.js';
 

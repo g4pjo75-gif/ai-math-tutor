@@ -1,3 +1,4 @@
+import { TutorUI } from '../shared/ui.js';
 import { engStore, sharedStore } from './state.js';
 import { loadWordbookAndHistory } from './wordbook.js';
 
@@ -6,12 +7,12 @@ import { loadWordbookAndHistory } from './wordbook.js';
     // 3. 初期化 & 共通設定
     // =========================================================================
     window.addEventListener('DOMContentLoaded', () => {
-      if (window.TutorUI) {
-        window.TutorUI.initDarkMode({ storage: sharedStore, key: 'dark_mode' });
-        window.TutorUI.initTheme({ storage: sharedStore, key: 'ui_theme' });
-        window.TutorUI.updateSafeArea();
-        window.TutorUI.bindBackdropClose('settingsModal', 'settingsModalContent');
-        window.TutorUI.bindBackdropClose('historyModal', 'historyModalContent');
+      if (TutorUI) {
+        TutorUI.initDarkMode({ storage: sharedStore, key: 'dark_mode' });
+        TutorUI.initTheme({ storage: sharedStore, key: 'ui_theme' });
+        TutorUI.updateSafeArea();
+        TutorUI.bindBackdropClose('settingsModal', 'settingsModalContent');
+        TutorUI.bindBackdropClose('historyModal', 'historyModalContent');
       }
 
       // セッションでPIN解錠済みならスキップ
@@ -88,14 +89,14 @@ export function unlockApp() {
     }
 
 export function toggleDarkMode() {
-      if (window.TutorUI) {
-        window.TutorUI.toggleDarkMode({ storage: sharedStore, key: 'dark_mode' });
+      if (TutorUI) {
+        TutorUI.toggleDarkMode({ storage: sharedStore, key: 'dark_mode' });
       }
     }
 
 export function changeTheme(theme) {
-      if (window.TutorUI && typeof window.TutorUI.applyTheme === 'function') {
-        window.TutorUI.applyTheme(theme, { storage: sharedStore, key: 'ui_theme' });
+      if (TutorUI && typeof TutorUI.applyTheme === 'function') {
+        TutorUI.applyTheme(theme, { storage: sharedStore, key: 'ui_theme' });
       }
     }
 
@@ -103,11 +104,11 @@ export function openSettings() {
       document.getElementById('geminiKeyInput').value = getApiKey();
       document.getElementById('customModelInput').value = (engStore && engStore.getItem('custom_model_id')) || '';
       document.getElementById('newPinInput').value = (sharedStore && (sharedStore.getItem('app_pin') || sharedStore.getItem('pin'))) || '1234';
-      window.TutorUI.openModal('settingsModal');
+      TutorUI.openModal('settingsModal');
     }
 
 export function closeSettings() {
-      window.TutorUI.closeModal('settingsModal');
+      TutorUI.closeModal('settingsModal');
     }
 
 export function saveSettings() {
@@ -129,6 +130,6 @@ export function saveSettings() {
       initModelDropdown();
       checkApiKeyBanner();
       closeSettings();
-      window.TutorUI.showToast('✅ 設定を保存しました。', 'green');
+      TutorUI.showToast('✅ 設定を保存しました。', 'green');
     }
 

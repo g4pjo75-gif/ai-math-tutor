@@ -1,6 +1,5 @@
 // shared/core.js
 // Gemini API client, network utilities, JSON parser, and quota detector
-(function (window) {
   'use strict';
 
   async function fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
@@ -372,7 +371,7 @@
     return false;
   }
 
-  window.TutorCore = {
+  export const TutorCore = {
     fetchWithTimeout,
     parseJson,
     isQuotaError,
@@ -384,4 +383,3 @@
     normalizeMathExpr,
     isLocalMathMatch
   };
-})(window);

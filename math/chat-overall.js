@@ -1,3 +1,4 @@
+import { escapeAttr } from '../shared/actions.js';
 import { safeStorage, state } from './state.js';
 import { openSettings } from './settings.js';
 import { callGeminiModel } from './api-solve.js';

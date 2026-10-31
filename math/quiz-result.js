@@ -1,3 +1,4 @@
+import { TutorCore } from '../shared/core.js';
 import { safeStorage, state } from './state.js';
 import { saveTutorHistory } from './history.js';
 import { formatChoiceMath } from './quiz.js';
@@ -43,7 +44,7 @@ export async function submitStudentAnswer() {
         ...(Array.isArray(state.currentQuizData.acceptedAnswers) ? state.currentQuizData.acceptedAnswers : [])
       ].filter(Boolean);
 
-      if (window.TutorCore && window.TutorCore.isLocalMathMatch(studentAns, referenceCandidates)) {
+      if (TutorCore && TutorCore.isLocalMathMatch(studentAns, referenceCandidates)) {
         const localJudge = {
           is_correct: true,
           judgement_title: '正解！素晴らしい！（⚡即時判定）',

@@ -1,3 +1,6 @@
+import { TutorCore } from '../shared/core.js';
+import { TutorUI } from '../shared/ui.js';
+import { escapeAttr } from '../shared/actions.js';
 import { engStore, state } from './state.js';
 import { WRITING_CORRECTION_SCHEMA } from './schema.js';
 import { getActiveModel, getApiKey, openSettings } from './init.js';
@@ -18,7 +21,7 @@ export async function generateWritingPrompt() {
       const apiKey = getApiKey();
       if (!apiKey) {
         openSettings();
-        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
+        TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
         return;
       }
 
@@ -28,7 +31,7 @@ export async function generateWritingPrompt() {
       if (btn) btn.disabled = true;
 
       try {
-        const res = await window.TutorCore.callGeminiModel({
+        const res = await TutorCore.callGeminiModel({
           modelId,
           apiKey,
           promptText: `日本の高校1年生が英作文の練習をするための和文課題を1つ作成してください。
@@ -46,9 +49,9 @@ export async function generateWritingPrompt() {
           hintEl.textContent = `💡 ${lines.slice(1).join(' / ')}`;
           hintEl.classList.remove('hidden');
         }
-        window.TutorUI.showToast('🎲 練習課題を作成しました！英文を書いてみましょう。', 'blue');
+        TutorUI.showToast('🎲 練習課題を作成しました！英文を書いてみましょう。', 'blue');
       } catch (e) {
-        window.TutorUI.showToast('❌ 課題の作成に失敗しました。', 'red');
+        TutorUI.showToast('❌ 課題の作成に失敗しました。', 'red');
       } finally {
         if (btn) btn.disabled = false;
       }
@@ -57,7 +60,7 @@ export async function generateWritingPrompt() {
 export async function submitWritingForCorrection() {
       const studentText = (document.getElementById('writingStudentInput')?.value || '').trim();
       if (!studentText) {
-        window.TutorUI.showToast('⚠️ 添削するあなたの英文を入力してください。', 'amber');
+        TutorUI.showToast('⚠️ 添削するあなたの英文を入力してください。', 'amber');
         return;
       }
 
@@ -65,21 +68,21 @@ export async function submitWritingForCorrection() {
       const unitHint = document.getElementById('unitSelect').value;
 
       // ④ 同一英作文の重複API呼び出し防止キャッシュ
-      const reqFp = window.TutorCore
-        ? window.TutorCore.computeRequestHash({
+      const reqFp = TutorCore
+        ? TutorCore.computeRequestHash({
             mode: 'eng_writing',
             unit: `${unitHint}|${taskJa}`,
             text: studentText
           })
         : null;
 
-      if (reqFp && window.TutorCore && engStore) {
-        const cachedData = window.TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
+      if (reqFp && TutorCore && engStore) {
+        const cachedData = TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
         if (cachedData) {
           state.lastWritingData = cachedData;
           hideStatus();
           renderWritingCorrection(state.lastWritingData);
-          window.TutorUI.showToast('⚡ 同じ英作文の添削記録が見つかったため、APIを消費せず即座に表示しました！', 'blue');
+          TutorUI.showToast('⚡ 同じ英作文の添削記録が見つかったため、APIを消費せず即座に表示しました！', 'blue');
           return;
         }
       }
@@ -87,7 +90,7 @@ export async function submitWritingForCorrection() {
       const apiKey = getApiKey();
       if (!apiKey) {
         openSettings();
-        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
+        TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
         return;
       }
 
@@ -104,7 +107,7 @@ export async function submitWritingForCorrection() {
 【生徒の英作文】: ${studentText}`;
 
       try {
-        const data = await window.TutorCore.callGeminiModel({
+        const data = await TutorCore.callGeminiModel({
           modelId,
           apiKey,
           promptText: prompt,
@@ -114,12 +117,12 @@ export async function submitWritingForCorrection() {
         });
 
         state.lastWritingData = { ...data, task_ja: taskJa, original_text: data.original_text || studentText };
-        if (reqFp && window.TutorCore && engStore) {
-          window.TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, state.lastWritingData, 15);
+        if (reqFp && TutorCore && engStore) {
+          TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, state.lastWritingData, 15);
         }
         hideStatus();
         renderWritingCorrection(state.lastWritingData);
-        window.TutorUI.showToast('✨ 英作文の添削が完了しました！', 'green');
+        TutorUI.showToast('✨ 英作文の添削が完了しました！', 'green');
       } catch (err) {
         console.error(err);
         showStatus(`❌ 添削エラー: ${err.message}`, 'red');

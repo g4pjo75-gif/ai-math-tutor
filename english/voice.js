@@ -1,3 +1,4 @@
+import { TutorUI } from '../shared/ui.js';
 import { englishSpeech, japaneseSpeech, state } from './state.js';
 
     // =========================================================================
@@ -15,7 +16,7 @@ export function speakEnglishText(text) {
 
 export function playEnglishSpeech() {
       if (!state.lastPassageEn) {
-        window.TutorUI.showToast('⚠️ 読み上げる英文がありません。', 'amber');
+        TutorUI.showToast('⚠️ 読み上げる英文がありません。', 'amber');
         return;
       }
       speakEnglishText(state.lastPassageEn);

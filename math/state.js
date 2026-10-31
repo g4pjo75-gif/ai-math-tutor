@@ -1,11 +1,12 @@
+import { TutorStorage } from '../shared/storage.js';
     // =========================================================================
     // 1. 安全ストレージラッパー (sharedStore + mathStore による共有キー連携)
     // =========================================================================
-export const sharedStore = window.TutorStorage
-      ? window.TutorStorage.create({ prefix: 'tutor_', legacyPrefixes: ['amt_'] })
+export const sharedStore = TutorStorage
+      ? TutorStorage.create({ prefix: 'tutor_', legacyPrefixes: ['amt_'] })
       : null;
-export const mathStore = window.TutorStorage
-      ? window.TutorStorage.create({ prefix: 'amt_', legacyPrefixes: [''] })
+export const mathStore = TutorStorage
+      ? TutorStorage.create({ prefix: 'amt_', legacyPrefixes: [''] })
       : null;
 
     // 共通キー（数学・英語・保護者画面で共有）

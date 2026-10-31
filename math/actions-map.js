@@ -1,3 +1,4 @@
+import { register } from '../shared/actions.js';
 import { changeTheme, toggleDarkMode } from './theme-ui.js';
 import { closeTutorHistoryModal, deleteFromTutorHistory, restoreFromHistory, saveCurrentToTutorHistory, showTutorHistory } from './history.js';
 import { generateSimilarProblem } from './similar.js';
@@ -13,7 +14,7 @@ import { openStepChatWithQuote, sendQuickQuestion, sendStepQuestion, toggleStepC
 import { sendOverallQuestion, sendOverallQuickQuestion } from './chat-overall.js';
 
 // math/actions-map.js — Phase 4-A: 수학 액션 등록표
-TutorActions.register({
+register({
   'unlock': () => unlockApp(),
   'open-settings': () => openSettings(),
   'toggle-dark-mode': () => toggleDarkMode(),

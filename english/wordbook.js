@@ -1,3 +1,5 @@
+import { TutorUI } from '../shared/ui.js';
+import { escapeAttr } from '../shared/actions.js';
 import { engStore, state } from './state.js';
 import { switchMode } from './mode.js';
 import { renderEnglishResult } from './reading.js';
@@ -55,7 +57,7 @@ export function addWordDirect(word, meaning, example = '') {
       if (!cleanWord) return;
       const exists = state.wordbookList.some(w => w.word.toLowerCase() === cleanWord.toLowerCase());
       if (exists) {
-        window.TutorUI.showToast(`ℹ️ 「${cleanWord}」は既にマイ単語帳に登録されています。`, 'blue');
+        TutorUI.showToast(`ℹ️ 「${cleanWord}」は既にマイ単語帳に登録されています。`, 'blue');
         return;
       }
       state.wordbookList.unshift({
@@ -67,9 +69,9 @@ export function addWordDirect(word, meaning, example = '') {
         savedAt: new Date().toISOString()
       });
       if (persistWordbook()) {
-        window.TutorUI.showToast(`🔤 「${cleanWord}」をマイ単語帳に保存しました！`, 'green');
+        TutorUI.showToast(`🔤 「${cleanWord}」をマイ単語帳に保存しました！`, 'green');
       } else {
-        window.TutorUI.showToast('⚠️ 保存容量の上限に達しています。', 'amber');
+        TutorUI.showToast('⚠️ 保存容量の上限に達しています。', 'amber');
       }
     }
 
@@ -99,7 +101,7 @@ export function saveAllLessonWords() {
         }
       });
       persistWordbook();
-      window.TutorUI.showToast(`🔤 新しく ${addedCount} 個の単語をマイ単語帳に一括登録しました！`, 'green');
+      TutorUI.showToast(`🔤 新しく ${addedCount} 個の単語をマイ単語帳に一括登録しました！`, 'green');
     }
 
 export function openAddCustomWord() {
@@ -112,7 +114,7 @@ export function saveCustomWord() {
       const m = document.getElementById('customMeaningInput').value.trim();
       const ex = document.getElementById('customExampleInput').value.trim();
       if (!w || !m) {
-        window.TutorUI.showToast('⚠️ 英単語と日本語の意味を入力してください。', 'amber');
+        TutorUI.showToast('⚠️ 英単語と日本語の意味を入力してください。', 'amber');
         return;
       }
       addWordDirect(w, m, ex);
@@ -152,9 +154,9 @@ export function saveCurrentLessonToHistory() {
       };
       state.englishHistory.unshift(entry);
       if (persistHistory()) {
-        window.TutorUI.showToast('📁 長文解説を復習ノートに保存しました！', 'green');
+        TutorUI.showToast('📁 長文解説を復習ノートに保存しました！', 'green');
       } else {
-        window.TutorUI.showToast('⚠️ 保存容量が不足しています。', 'amber');
+        TutorUI.showToast('⚠️ 保存容量が不足しています。', 'amber');
       }
     }
 
@@ -171,7 +173,7 @@ export function saveQuizRecordToHistory(isCorrect) {
       };
       state.englishHistory.unshift(entry);
       if (persistHistory()) {
-        window.TutorUI.showToast('📁 クイズ記録を復習ノートに保存しました！', 'green');
+        TutorUI.showToast('📁 クイズ記録を復習ノートに保存しました！', 'green');
       }
     }
 
@@ -187,18 +189,18 @@ export function saveWritingToHistory() {
       };
       state.englishHistory.unshift(entry);
       if (persistHistory()) {
-        window.TutorUI.showToast('📁 英作文の添削結果を復習ノートに保存しました！', 'green');
+        TutorUI.showToast('📁 英作文の添削結果を復習ノートに保存しました！', 'green');
       }
     }
 
 export function openHistoryModal(defaultTab = 'wordbook') {
       loadWordbookAndHistory();
-      window.TutorUI.openModal('historyModal');
+      TutorUI.openModal('historyModal');
       switchHistoryTab(defaultTab);
     }
 
 export function closeHistoryModal() {
-      window.TutorUI.closeModal('historyModal');
+      TutorUI.closeModal('historyModal');
     }
 
 export function switchHistoryTab(tab) {
@@ -331,7 +333,7 @@ export function restoreHistoryItem(id) {
           box.classList.add('hidden');
           box.innerHTML = '';
         }
-        window.TutorUI.showToast('📁 4択問題を復習用に読み込みました。回答を選択してチェックしてください。', 'blue');
+        TutorUI.showToast('📁 4択問題を復習用に読み込みました。回答を選択してチェックしてください。', 'blue');
       } else if (item.type === 'writing') {
         switchMode('writing');
         state.lastWritingData = item.payload;
@@ -340,7 +342,7 @@ export function restoreHistoryItem(id) {
         updateWordCount();
         renderWritingCorrection(item.payload);
       }
-      window.TutorUI.showToast('📂 ノートから学習記録を復元しました！', 'blue');
+      TutorUI.showToast('📂 ノートから学習記録を復元しました！', 'blue');
     }
 
 export function deleteHistoryItem(id) {
@@ -355,13 +357,13 @@ export function clearCurrentHistoryTab() {
         state.wordbookList = [];
         persistWordbook();
         renderWordbookList();
-        window.TutorUI.showToast('🗑️ マイ単語帳を整理しました。', 'blue');
+        TutorUI.showToast('🗑️ マイ単語帳を整理しました。', 'blue');
       } else {
         if (!state.englishHistory.length) return;
         state.englishHistory = [];
         persistHistory();
         renderNotesHistoryList();
-        window.TutorUI.showToast('🗑️ 復習ノート履歴を整理しました。', 'blue');
+        TutorUI.showToast('🗑️ 復習ノート履歴を整理しました。', 'blue');
       }
     }
 

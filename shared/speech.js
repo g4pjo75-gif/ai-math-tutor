@@ -1,6 +1,5 @@
 // shared/speech.js
 // Multi-language Text-to-Speech engine with sentence chunking and iOS watchdog
-(function (window) {
   'use strict';
 
   function cleanTextForSpeech(text) {
@@ -55,7 +54,7 @@
     return chunks;
   }
 
-  window.TutorSpeech = {
+  export const TutorSpeech = {
     create({
       lang = 'ja-JP',
       defaultRate = 0.95,
@@ -209,4 +208,3 @@
       };
     }
   };
-})(window);

@@ -1,3 +1,4 @@
+import { TutorUI } from '../shared/ui.js';
 import { safeStorage } from './state.js';
 
     // =========================================================================
@@ -25,8 +26,8 @@ export function initDarkMode() {
     }
 
 export function changeTheme(theme) {
-      if (window.TutorUI && typeof window.TutorUI.applyTheme === 'function') {
-        window.TutorUI.applyTheme(theme, { storage: safeStorage, key: 'ui_theme' });
+      if (TutorUI && typeof TutorUI.applyTheme === 'function') {
+        TutorUI.applyTheme(theme, { storage: safeStorage, key: 'ui_theme' });
       } else {
         document.documentElement.setAttribute('data-theme', theme);
         safeStorage.setItem('ui_theme', theme);
@@ -38,8 +39,8 @@ export function changeTheme(theme) {
     }
 
 export function initTheme() {
-      if (window.TutorUI && typeof window.TutorUI.initTheme === 'function') {
-        window.TutorUI.initTheme({ storage: safeStorage, key: 'ui_theme' });
+      if (TutorUI && typeof TutorUI.initTheme === 'function') {
+        TutorUI.initTheme({ storage: safeStorage, key: 'ui_theme' });
       } else {
         const savedTheme = safeStorage.getItem('ui_theme') || 'minimal';
         changeTheme(savedTheme);

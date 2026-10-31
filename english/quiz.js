@@ -1,3 +1,6 @@
+import { TutorCore } from '../shared/core.js';
+import { TutorUI } from '../shared/ui.js';
+import { escapeAttr } from '../shared/actions.js';
 import { state } from './state.js';
 import { ENGLISH_QUIZ_SCHEMA } from './schema.js';
 import { getActiveModel, getApiKey, openSettings } from './init.js';
@@ -70,14 +73,14 @@ export async function generateEnglishQuiz(useCurrentLesson = false) {
       if (useCurrentLesson && state.lastLessonData && state.lastLessonData.twin_quiz && !state.lastLessonData._twinQuizConsumed && isValidQuizResponse(state.lastLessonData.twin_quiz)) {
         state.lastLessonData._twinQuizConsumed = true;
         applyAndRenderEnglishQuiz(state.lastLessonData.twin_quiz, unitHint);
-        window.TutorUI.showToast('⚡ 読解時に同時作成した4択クイズを即座に出題しました！', 'blue');
+        TutorUI.showToast('⚡ 読解時に同時作成した4択クイズを即座に出題しました！', 'blue');
         return;
       }
 
       const apiKey = getApiKey();
       if (!apiKey) {
         openSettings();
-        window.TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
+        TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
         return;
       }
 
@@ -101,7 +104,7 @@ ${contextText}
 - choice_feedback は choices と同じ順番で4個作成し、それぞれの選択肢がなぜ正解・不正解なのかを日本語で分かりやすく説明してください。`;
 
       try {
-        let res = await window.TutorCore.callGeminiModel({
+        let res = await TutorCore.callGeminiModel({
           modelId,
           apiKey,
           promptText: prompt,
@@ -112,7 +115,7 @@ ${contextText}
 
         if (!isValidQuizResponse(res)) {
           // 1回自動再生成
-          res = await window.TutorCore.callGeminiModel({
+          res = await TutorCore.callGeminiModel({
             modelId,
             apiKey,
             promptText: prompt,
@@ -172,7 +175,7 @@ export function toggleQuizHint() {
 
 export function submitEnglishQuizAnswer() {
       if (!state.currentQuizData || state.selectedChoiceIndex < 0) {
-        window.TutorUI.showToast('⚠️ 選択肢 (A〜D) を1つ選んでください。', 'amber');
+        TutorUI.showToast('⚠️ 選択肢 (A〜D) を1つ選んでください。', 'amber');
         return;
       }
 
