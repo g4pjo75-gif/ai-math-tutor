@@ -2530,6 +2530,351 @@ for f in ['math/render.js', 'math/chat-step.js', 'math/simplify.js']:
 
 ---
 
+### 4.6 Phase 4-C (shared ESM + CSP)
+
+**전제**: 4-B + `stepQuotes` 수정 완료(`ef55bab`).
+**목표**: ① 남은 `window.*` 브리지 4+2개를 없애고 ② CSP를 건다.
+
+**현재 남은 전역 (4-B 종료 시점)**
+
+| 전역 | 정의 | 앱 참조 |
+|---|---|---:|
+| `window.TutorUI` | `shared/ui.js` | 52 |
+| `window.TutorCore` | `shared/core.js` | 28 |
+| `window.TutorStorage` | `shared/storage.js` | 8 |
+| `window.TutorSpeech` | `shared/speech.js` | 4 |
+| `escapeAttr` | `shared/actions.js` | 9개 파일 |
+| `TutorActions` | `shared/actions.js` | actions-map 2곳 |
+
+합계 **92회 / 11개 파일**. 이 단계가 끝나면 앱 코드에 전역은 0개가 된다.
+
+#### 4.6.1 변환 원칙
+
+1. `shared/*.js`의 IIFE를 벗기고 `export const TutorX = { ... }` 로 바꾼다.
+2. 앱의 `window.TutorX` → `TutorX` + `import { TutorX } from '../shared/x.js';`.
+3. `escapeAttr` → `import { escapeAttr } from '../shared/actions.js';`.
+4. `TutorActions.register(...)` → `import { register } from '../shared/actions.js'; register(...)`.
+5. `index.html`의 shared classic `<script>` 5줄을 **삭제**한다(모듈이 import로 가져온다).
+6. `main.js`는 그대로 둔다(앱 모듈 → shared 순으로 평가됨).
+7. `shared/actions.js`의 리스너 등록은 모듈 평가 시 1회 실행된다. `actions-map.js`가 마지막 import이므로
+   리스너는 DOMContentLoaded 이전에 설치된다.
+
+#### 4.6.2 변환 스크립트
+
+```python
+#!/usr/bin/env python3
+"""Phase 4-C prototype: shared/*.js -> ESM, remove window.* bridges."""
+import re
+import sys
+import os
+
+SHARED = {
+    'storage.js': ('window.TutorStorage', 'TutorStorage'),
+    'core.js': ('window.TutorCore', 'TutorCore'),
+    'speech.js': ('window.TutorSpeech', 'TutorSpeech'),
+    'ui.js': ('window.TutorUI', 'TutorUI'),
+}
+
+ACTIONS_HEAD = '''// shared/actions.js — Phase 4-C: 위임 디스패처 (ESM)
+const registry = Object.create(null);
+
+export function register(map) {
+  Object.keys(map).forEach((name) => {
+    if (registry[name]) console.warn('[actions] duplicate action:', name);
+    registry[name] = map[name];
+  });
+}
+
+export function escapeAttr(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\\r/g, '')
+    .replace(/\\n/g, '&#10;');
+}
+
+export function run(name, el, event) {
+  const fn = registry[name];
+  if (!fn) { console.warn('[actions] unregistered:', name); return; }
+  try { fn(el, event); } catch (err) { console.error('[actions] failed:', name, err); }
+}
+
+function closest(target, selector) {
+  return target && target.closest ? target.closest(selector) : null;
+}
+
+document.addEventListener('click', (event) => {
+  const el = closest(event.target, '[data-action]');
+  if (el) run(el.dataset.action, el, event);
+});
+
+document.addEventListener('change', (event) => {
+  const el = closest(event.target, '[data-change]');
+  if (el) run(el.dataset.change, el, event);
+});
+
+document.addEventListener('input', (event) => {
+  const el = closest(event.target, '[data-input]');
+  if (el) run(el.dataset.input, el, event);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+  const el = closest(event.target, '[data-enter]');
+  if (el) run(el.dataset.enter, el, event);
+});
+
+export function audit() {
+  const nodes = document.querySelectorAll('[data-action],[data-change],[data-input],[data-enter]');
+  const missing = [];
+  Array.prototype.forEach.call(nodes, (el) => {
+    const name = el.dataset.action || el.dataset.change || el.dataset.input || el.dataset.enter;
+    if (!registry[name]) missing.push(name);
+  });
+  return { nodes: nodes.length, actions: Object.keys(registry).length, missing };
+}
+
+export const TutorActions = { register, escapeAttr, run, audit };
+'''
+
+
+def convert_shared(path, target, name):
+    src = open(path, encoding='utf-8').read()
+    lines = src.split('\n')
+    # drop the IIFE header (first non-comment line starting with "(function")
+    out = []
+    header_done = False
+    for line in lines:
+        if not header_done and line.startswith('(function'):
+            header_done = True
+            continue
+        out.append(line)
+    src = '\n'.join(out)
+    src = re.sub(r'\}\)\(window\);\s*$', '', src)
+    src = src.replace('window.%s = {' % name, 'export const %s = {' % name, 1)
+    open(path, 'w', encoding='utf-8').write(src.rstrip('\n') + '\n')
+
+
+def convert_actions(path):
+    open(path, 'w', encoding='utf-8').write(ACTIONS_HEAD)
+
+
+def main(root):
+    shared = os.path.join(root, 'shared')
+    for fname, (_old, name) in SHARED.items():
+        convert_shared(os.path.join(shared, fname), None, name)
+        print('shared/%s -> export const %s' % (fname, name))
+    convert_actions(os.path.join(shared, 'actions.js'))
+    print('shared/actions.js -> named exports')
+
+    for app in ['math', 'english']:
+        d = os.path.join(root, app)
+        for f in sorted(os.listdir(d)):
+            if not f.endswith('.js'):
+                continue
+            p = os.path.join(d, f)
+            src = open(p, encoding='utf-8').read()
+            orig = src
+            imports = []
+            for fname, (old, name) in SHARED.items():
+                if old in src:
+                    src = src.replace(old, name)
+                    imports.append("import { %s } from '../shared/%s';" % (name, fname))
+            if 'escapeAttr(' in src and 'escapeAttr' not in ''.join(imports):
+                imports.append("import { escapeAttr } from '../shared/actions.js';")
+            if 'TutorActions.register(' in src:
+                src = src.replace('TutorActions.register(', 'register(')
+                imports.append("import { register } from '../shared/actions.js';")
+            if imports:
+                src = '\n'.join(imports) + '\n' + src
+            if src != orig:
+                open(p, 'w', encoding='utf-8').write(src)
+        print(app, 'patched')
+
+
+if __name__ == '__main__':
+    main(sys.argv[1])
+```
+
+실행: 위 코드를 `tools/transform_4c.py`로 저장한 뒤 저장소 루트에서 실행한다.
+
+```bash
+python3 tools/transform_4c.py .
+```
+
+그 다음 `index.html`에서 shared classic 태그 5줄 삭제:
+
+```bash
+python3 - <<'PY'
+import re
+for app in ['math', 'english']:
+    p = f'{app}/index.html'
+    s = open(p, encoding='utf-8').read()
+    s = re.sub(r'[ \t]*<script src="\.\./shared/[a-z]+\.js\?v=\d+"></script>\n', '', s)
+    open(p, 'w', encoding='utf-8').write(s)
+PY
+```
+
+결과 (`grep '<script' | grep -v cdn`):
+
+```html
+  <script src="tailwind.config.js"></script>          <!-- 4.6.3에서 추가 -->
+  <script type="module" src="main.js?v=20261031"></script>
+```
+
+**`shared/actions.js` 최종 형태** (스크립트가 이 내용으로 교체한다)
+
+```js
+// shared/actions.js — Phase 4-C: 위임 디스패처 (ESM)
+const registry = Object.create(null);
+
+export function register(map) { /* ... */ }
+export function escapeAttr(value) { /* ... */ }
+export function run(name, el, event) { /* ... */ }
+export function audit() { /* ... */ }
+
+document.addEventListener('click', /* ... */);
+document.addEventListener('change', /* ... */);
+document.addEventListener('input', /* ... */);
+document.addEventListener('keydown', /* ... */);
+
+export const TutorActions = { register, escapeAttr, run, audit };
+```
+
+#### 4.6.3 CSP
+
+**실측 결과**: 아래 정책으로 두 앱 모두 **위반 0건**이었다. Tailwind 적용, Google 폰트 로드,
+KaTeX 렌더, SVG 그래프, `data-action` 위임 전부 정상.
+
+`<head>`의 `<meta charset="UTF-8" />` 바로 다음에 넣는다(가능한 한 이른 위치).
+
+```html
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com; connect-src 'self' https://generativelanguage.googleapis.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" />
+```
+
+**필수 선행 작업 — 인라인 `tailwind.config` 외부화**
+
+지금 `index.html`에는 인라인 `<script>tailwind.config = {...}</script>`가 있다.
+`script-src 'self'`에서는 차단되므로 파일로 뺀다. **CDN 스크립트 바로 뒤**에 둔다.
+
+```html
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="tailwind.config.js"></script>
+```
+
+`math/tailwind.config.js`, `english/tailwind.config.js` (내용은 기존 인라인과 동일):
+
+```js
+// tailwind play CDN config
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        chalk: {
+          dark: '#142820',
+          mid: '#1e3a2f',
+        }
+      }
+    }
+  }
+};
+```
+
+**정책 근거 (실측으로 확인한 것)**
+
+| 지시어 | 값 | 이유 |
+|---|---|---|
+| `script-src` | `'self'` + Tailwind/KaTeX CDN | `tailwind.config.js`와 `main.js`는 self. CDN 2곳만 허용 |
+| `style-src` | `'self' 'unsafe-inline'` + CDN + Google Fonts | Tailwind가 `<style>`을 주입하고 KaTeX가 인라인 스타일을 씀. **당분간 필요** |
+| `font-src` | `'self' data:` + jsdelivr + gstatic | KaTeX 폰트, Google Fonts 실파일 |
+| `connect-src` | `'self'` + Gemini | API 호출만 |
+| `img-src` | `'self' data: blob:` | 아이콘, 붙여넣기/리사이즈 이미지 |
+| `worker-src` / `manifest-src` | `'self'` | SW, PWA 매니페스트 |
+| `object-src` | `'none'` | 불필요 |
+
+`'unsafe-inline'`(style)과 CDN 허용은 **Phase 5에서 CDN을 로컬화한 뒤 tighten**한다.
+`'unsafe-eval'`은 필요 없다(Tailwind Play CDN이 eval을 쓰지 않는 것을 확인).
+
+#### 4.6.4 검증 (전역이 사라졌으므로 방법이 바뀐다)
+
+`TutorActions`가 더 이상 전역이 아니다. 콘솔 검증은 **동적 import**로 한다.
+
+```js
+const A = await import('/shared/actions.js');
+A.audit();   // 수학 { nodes: 51, actions: 42, missing: [] }
+             // 영어 { nodes: 42, actions: 44, missing: [] }
+```
+
+전역 제거 확인:
+
+```js
+['TutorUI','TutorCore','TutorStorage','TutorSpeech','escapeAttr','TutorActions']
+  .map(k => [k, typeof window[k]])          // 전부 'undefined'
+```
+
+**정적 게이트**
+
+```bash
+grep -rn 'window\.Tutor' math english shared          # → 0
+grep -rn 'TutorActions\.' math english               # → 0
+for f in math/*.js english/*.js shared/*.js; do
+  cp "$f" /tmp/_c.mjs; node --check /tmp/_c.mjs || echo "FAIL $f"
+done
+node tests/check-imports.js                           # ALL PASSED
+node tests/check-actions.js                           # ALL PASSED (inline=0)
+```
+
+**브라우저 게이트**
+
+- 두 앱 로드: 콘솔 에러 **0**, CSP 위반 **0**
+- `audit()` 정적/렌더 후 `missing: []`
+- 스모크 **M1·M3·M4·M7** + M8(캐시 재방문)
+- 설정/테마/기록/기호/단어장/모드전환 버튼
+- KaTeX 1건, SVG 그래프 1건, Google 폰트 적용 확인
+
+#### 4.6.5 커밋 2개
+
+**커밋 1 — shared ESM + 전역 제거**
+
+```
+refactor(shared): convert shared helpers to ES modules
+```
+
+- 수정: `shared/{actions,storage,core,speech,ui}.js`, 앱 11개 파일(import/치환), `math/index.html`,
+  `english/index.html`, `math/sw.js`, `english/sw.js`
+- SW: `v3.2` / `v2.2` (shared 파일은 계속 ASSETS에 유지)
+- gate: 위 정적 게이트 + 브라우저 로드/스모크
+
+**커밋 2 — CSP**
+
+```
+chore(csp): externalize tailwind config and enforce CSP
+```
+
+- 신규: `math/tailwind.config.js`, `english/tailwind.config.js`
+- 수정: `math/index.html`, `english/index.html`, `math/sw.js`, `english/sw.js`
+- SW: `v3.3` / `v2.3`, ASSETS에 `'./tailwind.config.js'` 추가
+- gate: CSP 위반 0, 폰트/KaTeX/Tailwind 정상, 스모크 M1·M4·M7
+
+**Phase 4-C DoD**
+
+- [ ] `grep -rn 'window\.Tutor'` → 0
+- [ ] `typeof window.TutorActions` 등 6종 → 전부 `undefined`
+- [ ] `import('/shared/actions.js').audit()` → `missing: []`
+- [ ] CSP 위반 0 (두 앱)
+- [ ] 인라인 `<script>` 0개 (tailwind.config 외부화)
+- [ ] 스모크 M1·M3·M4·M7, 콘솔 에러 0
+- [ ] SW 캐시 `v3.3` / `v2.3`
+
+**롤백**: 커밋 2 → 커밋 1 순서로 revert. 전체는 `git reset --hard ef55bab`.
+
+> 4-C가 끝나면 **앱·shared 어디에도 전역이 없다.** 남은 외부 의존은 CDN 3개(Tailwind, KaTeX 2종)와
+> Google Fonts뿐이며, Phase 5에서 로컬화하면 `style-src`/`script-src`를 `'self'`로 좁힐 수 있다.
+
 ---
 
 ## 5. 리스크와 대응
