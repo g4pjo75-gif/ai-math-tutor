@@ -1740,7 +1740,7 @@ math/state.js … math/chat-overall.js
 | 41 | `step-question-send` | `idx` | `sendStepQuestion(Number(idx))` |
 | 42 | `speak-ja` | `text` | `speakJapanese(text)` |
 
-#### 4.4.3 영어 등록표 (43개)
+#### 4.4.3 영어 등록표 (44개)
 
 | # | `data-action` | `data-*` | 실행 |
 |---:|---|---|---|
@@ -1774,19 +1774,20 @@ math/state.js … math/chat-overall.js
 | 28 | `save-custom-word` | — | `saveCustomWord()` |
 | 29 | `clear-history-tab` | — | `clearCurrentHistoryTab()` |
 | 30 | `save-settings` | — | `saveSettings()` |
-| 31 | `speak-en` | `text` | `speakEnglishText(text)` |
-| 32 | `save-all-words` | — | `saveAllLessonWords()` |
-| 33 | `add-word-index` | `idx` | `addWordToWordbook(Number(idx))` |
-| 34 | `select-quiz-choice` | `idx` | `selectEnglishQuizChoice(Number(idx))` |
-| 35 | `speak-quiz-sentence` | `text` | `speakQuizFullSentence(text)` |
-| 36 | `save-quiz-record` | `correct` | `saveQuizRecordToHistory(correct)` |
-| 37 | `add-word-direct` | `word` `meaning` `example?` | `addWordDirect(word, meaning, example \|\| '')` |
-| 38 | `save-writing-history` | — | `saveWritingToHistory()` |
-| 39 | `unblur` | — | `el.classList.remove('blur-sm')` |
-| 40 | `toggle-memorized` | `id` | `toggleWordMemorized(id)` |
-| 41 | `delete-word` | `id` | `deleteWordItem(id)` |
-| 42 | `restore-history-item` | `id` | `restoreHistoryItem(id)` |
-| 43 | `delete-history-item` | `id` | `deleteHistoryItem(id)` |
+| 31 | `close-settings` | — | `closeSettings()` |
+| 32 | `speak-en` | `text` | `speakEnglishText(text)` |
+| 33 | `save-all-words` | — | `saveAllLessonWords()` |
+| 34 | `add-word-index` | `idx` | `addWordToWordbook(Number(idx))` |
+| 35 | `select-quiz-choice` | `idx` | `selectEnglishQuizChoice(Number(idx))` |
+| 36 | `speak-quiz-sentence` | `text` | `speakQuizFullSentence(text)` |
+| 37 | `save-quiz-record` | `correct` | `saveQuizRecordToHistory(correct)` |
+| 38 | `add-word-direct` | `word` `meaning` `example?` | `addWordDirect(word, meaning, example \|\| '')` |
+| 39 | `save-writing-history` | — | `saveWritingToHistory()` |
+| 40 | `unblur` | — | `el.classList.remove('blur-sm')` |
+| 41 | `toggle-memorized` | `id` | `toggleWordMemorized(id)` |
+| 42 | `delete-word` | `id` | `deleteWordItem(id)` |
+| 43 | `restore-history-item` | `id` | `restoreHistoryItem(id)` |
+| 44 | `delete-history-item` | `id` | `deleteHistoryItem(id)` |
 
 #### 4.4.4 파일별 변환 수량 (합계 138)
 
@@ -1947,7 +1948,7 @@ console.log(partial ? 'PARTIAL OK' : 'ALL PASSED');
 
 ```js
 TutorActions.audit()            // 수학 → { nodes: 51, actions: 42, missing: [] }
-TutorActions.audit()            // 영어 → { nodes: 42, actions: 43, missing: [] }
+TutorActions.audit()            // 영어 → { nodes: 42, actions: 44, missing: [] }
 TutorActions.audit().missing.length === 0
 ```
 
@@ -1979,7 +1980,7 @@ refactor(math,english): convert generated inline handlers to data attributes
 
 - 수정: `math/{history,quiz,quiz-result,api-solve,render,ui-status,chat-step,chat-overall}.js`,
   `english/{reading,quiz,writing,wordbook}.js`
-- gate: `node tests/check-actions.js --partial` → `inline=0`, `escapeJsString=2`(정의만), `used=42`/`43`, `missing 0`
+- gate: `node tests/check-actions.js --partial` → `inline=0`, `escapeJsString=2`(정의만), `used=42`/`44`, `missing 0`
 - 스모크: **M1·M3·M4·M7** + 렌더 후 `audit().missing === []`
 
 **커밋 3 — `escapeJsString` 삭제**
@@ -2007,6 +2008,459 @@ refactor: remove escapeJsString
 > 4-A가 끝나면 앱은 여전히 전역 함수지만, **HTML과 JS 사이의 문자열 결합은 사라진다.**
 > `escapeJsString`(21곳 호출)이 없어지고, 이벤트 진입점이 `shared/actions.js` 1곳으로 모인다.
 > 다음 4-B에서 `type="module"`로 바꾸면 `onclick`이 없으므로 **깨질 지점이 없다.**
+
+### 4.5 Phase 4-B (ESM 전환)
+
+**전제**: 4-A 완료(`4bdd3c0`), 태그 `v1.9-phase4a` 생성.
+**목표**: 앱 모듈을 ES Module로 바꿔 전역 함수를 없앤다. **동작 무변경.**
+
+**이 단계에서 같이 처리해야 하는 것 (핵심)**
+
+> ESM의 `import` 바인딩은 **읽기 전용**이다. 지금 앱은 `let currentQuizData` 같은 전역 변수를
+> 여러 파일에서 **재할당**한다(수학 38회 / 영어 30회). 그대로 `import`하면
+> `TypeError: Assignment to constant variable`(strict mode)로 죽는다.
+>
+> 따라서 **재할당되는 상태를 하나의 객체로 모으고**, 참조를 `state.xxx`로 바꾼다.
+> setter 함수를 만드는 방법도 가능하지만, 이 앱에는 이미 `setQuizInputMode()`라는
+> 함수가 있어 이름이 충돌한다(프로토타입에서 확인). 객체 방식이 충돌·오타 위험이 없다.
+
+**프로토타입 실측 (이미 수행, 양쪽 앱 통과)**
+
+| 항목 | 수학 | 영어 |
+|---|---:|---:|
+| `state`로 옮기는 변수 | 17 | 10 |
+| `state.` 로 바뀌는 줄 | 173 | 105 |
+| `export` 대상 선언 | 106 | 67 |
+| 생성되는 import 바인딩 | 181 | 83 |
+| import 헤더 줄 | 20개 파일 | 9개 파일 |
+| 브라우저 검증 | 통과 | 통과 |
+
+프로토타입에서 확인한 것: 모듈 함수가 전역에서 사라짐(`typeof solveProblem === 'undefined'`),
+`TutorActions.audit()` 51/42·42/44 `missing: []`, 설정·테마·퀴즈모드·기호삽입·기록모달·
+단어장 저장/암기토글·모드전환 전부 정상, 콘솔 에러 0.
+
+#### 4.5.1 최종 구조
+
+```
+math/
+  state.js        ← const state = { ...17개... } + 나머지 const/함수
+  ...20개 모듈...  ← 파일마다 import 헤더 + export
+  actions-map.js  ← ESM. 필요한 42개 함수를 import
+  main.js         ← 신규. side-effect import만 (원본 순서)
+  index.html      ← <script type="module" src="main.js?..."> 1줄
+english/ 동일 (10개 모듈 + main.js)
+shared/*.js       ← **classic 유지** (window.Tutor* 브리지). 4-C에서 정리
+```
+
+`main.js`:
+
+```js
+// math/main.js — ESM 엔트리 (Phase 4-B)
+// 로드 순서는 Phase 3의 <script> 순서와 동일하다.
+
+import './state.js';
+import './theme-ui.js';
+import './history.js';
+import './similar.js';
+import './quiz.js';
+import './quiz-result.js';
+import './init.js';
+import './settings.js';
+import './upload.js';
+import './schema.js';
+import './api-solve.js';
+import './render.js';
+import './simplify.js';
+import './voice.js';
+import './ui-status.js';
+import './visual.js';
+import './visual-graph.js';
+import './visual-numberline.js';
+import './chat-step.js';
+import './chat-overall.js';
+import './actions-map.js';
+```
+
+영어는 `state, schema, init, mode, reading, quiz, writing, wordbook, voice, actions-map` 10줄.
+
+**index.html**: 앱 모듈 script 태그 20줄(영어 9줄)을 아래 1줄로 교체.
+`../shared/*.js` 4줄은 **그대로 둔다**(classic이 먼저 실행되고 module은 defer).
+
+```html
+  <script type="module" src="main.js?v=20261031"></script>
+```
+
+**SW**: ASSETS에 `'./main.js'` 추가, 캐시 `amt-cache-v3.0 → v3.1`, `aet-cache-v2.0 → v2.1`.
+모듈 파일 목록은 그대로 둔다(브라우저가 import로 가져오므로 프리캐시에 필요).
+
+#### 4.5.2 변환 스크립트 (2단계)
+
+`state` 객체화(1단계)와 export/import(2단계)를 **분리 실행**한다. 1단계는 classic 상태로
+검증하고, 통과한 뒤에 2단계를 실행한다.
+
+```python
+#!/usr/bin/env python3
+"""Phase 4-B transformer: classic scripts -> ESM.
+
+stage 1 : move mutable state into one `state` object, rewrite references (classic scripts stay)
+stage 2 : add `export` to every top-level declaration and generate `import` headers
+
+Usage:
+    python3 transform_4b.py math math 1
+    python3 transform_4b.py math math 2
+"""
+import re
+import sys
+import os
+
+APPS = {
+    'math': ['state', 'theme-ui', 'history', 'similar', 'quiz', 'quiz-result', 'init',
+             'settings', 'upload', 'schema', 'api-solve', 'render', 'simplify', 'voice',
+             'ui-status', 'visual', 'visual-graph', 'visual-numberline', 'chat-step',
+             'chat-overall', 'actions-map'],
+    'english': ['state', 'schema', 'init', 'mode', 'reading', 'quiz', 'writing',
+                'wordbook', 'voice', 'actions-map'],
+}
+
+STATE_VARS = {
+    'math': ['currentImageBase64', 'currentProblems', 'currentProblemIndex', 'currentQuizData',
+             'quizInputMode', 'selectedChoiceIndex', 'stepChats', 'stepChatBusy', 'overallChats',
+             'overallChatBusy', 'currentSteps', 'isPlayingQueue', 'autoPlayTimer', 'toastTimer',
+             'currentModelId', 'currentProblemText', 'tutorHistory'],
+    'english': ['currentMode', 'currentImageBase64', 'lastLessonData', 'lastPassageEn',
+                'currentQuizData', 'selectedChoiceIndex', 'lastWritingData', 'wordbookList',
+                'englishHistory', 'currentHistoryTab'],
+}
+
+
+# ---------------------------------------------------------------- source masks
+def mask(src, blank_strings):
+    out = list(src)
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if c in ('"', "'"):
+            q = c
+            i += 1
+            while i < n:
+                ch = src[i]
+                if ch == '\\':
+                    if blank_strings:
+                        out[i] = ' '
+                    i += 2
+                    continue
+                if ch == q:
+                    i += 1
+                    break
+                if blank_strings and ch != '\n':
+                    out[i] = ' '
+                i += 1
+            continue
+        if c == '`':
+            i += 1
+            while i < n:
+                ch = src[i]
+                if ch == '\\':
+                    if blank_strings:
+                        out[i] = ' '
+                    i += 2
+                    continue
+                if ch == '`':
+                    i += 1
+                    break
+                if ch == '$' and i + 1 < n and src[i + 1] == '{':
+                    depth = 1
+                    i += 2
+                    while i < n and depth:
+                        if src[i] == '{':
+                            depth += 1
+                        elif src[i] == '}':
+                            depth -= 1
+                        i += 1
+                    continue
+                if blank_strings and ch != '\n':
+                    out[i] = ' '
+                i += 1
+            continue
+        if c == '/' and i + 1 < n and src[i + 1] == '/':
+            while i < n and src[i] != '\n':
+                out[i] = ' '
+                i += 1
+            continue
+        if c == '/' and i + 1 < n and src[i + 1] == '*':
+            while i + 1 < n and not (src[i] == '*' and src[i + 1] == '/'):
+                if src[i] != '\n':
+                    out[i] = ' '
+                i += 1
+            for k in (i, i + 1):
+                if k < n:
+                    out[k] = ' '
+            i += 2
+            continue
+        i += 1
+    return ''.join(out)
+
+
+DECL = re.compile(r'^    (?:export\s+)?(?:async\s+)?(function|let|const|var|class)\s+([A-Za-z_$][\w$]*)', re.M)
+
+
+def top_level_decls(src):
+    code = mask(src, True)
+    return [(m.group(2), code[:m.start()].count('\n')) for m in DECL.finditer(code)]
+
+
+# ------------------------------------------------------------------ stage 1
+def move_state_to_object(src, vars_):
+    lines = src.split('\n')
+    inits, comments, keep = {}, {}, []
+    for line in lines:
+        m = re.match(r'^\s{4}(?:let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(.*?);(?:\s*//\s*(.*))?\s*$', line)
+        if m and m.group(1) in vars_:
+            inits[m.group(1)] = m.group(2)
+            if m.group(3):
+                comments[m.group(1)] = m.group(3)
+            continue
+        keep.append(line)
+    missing = [v for v in vars_ if v not in inits]
+    if missing:
+        raise SystemExit('not a declaration: %s' % missing)
+    src = '\n'.join(keep).rstrip('\n')
+    block = ['', '    // ==== Phase 4-B: 공유 가변 상태 (ESM import 바인딩은 재할당 불가) ====',
+             '    const state = {']
+    for v in vars_:
+        suffix = (' // ' + comments[v]) if v in comments else ''
+        block.append('      %s: %s,%s' % (v, inits[v], suffix))
+    block.append('    };')
+    return src + '\n' + '\n'.join(block) + '\n'
+
+
+def rename_state_refs(src, vars_):
+    code = mask(src, True)
+    hits = []
+    for v in vars_:
+        p = re.compile(r'(?<![\w$.])' + re.escape(v) + r'(?![\w$])')
+        hits += [(m.start(), m.end(), v) for m in p.finditer(code)]
+    for start, end, v in sorted(hits, reverse=True):
+        src = src[:start] + 'state.' + v + src[end:]
+    return src
+
+
+# ------------------------------------------------------------------ stage 2
+def add_exports(src):
+    lines = src.split('\n')
+    for _name, line_no in top_level_decls(src):
+        line = lines[line_no]
+        if line.startswith('    ') and not line.startswith('    export '):
+            lines[line_no] = 'export ' + line[4:]
+    return '\n'.join(lines)
+
+
+def add_imports(src, filename, names, decls_by_file):
+    code = mask(src, False)
+    own = set(decls_by_file[filename])
+    header = []
+    for mod in names:
+        g = mod + '.js'
+        if g == filename:
+            continue
+        need = [n for n in decls_by_file[g]
+                if n not in own and re.search(r'(?<![\w$.])' + re.escape(n) + r'(?![\w$])', code)]
+        if need:
+            header.append("import { %s } from './%s';" % (', '.join(sorted(need)), g))
+    if header:
+        return '\n'.join(header) + '\n\n' + src
+    return src
+
+
+# ---------------------------------------------------------------------- main
+def main(app_dir, app, stage):
+    names = APPS[app]
+    srcs = {mod + '.js': open(os.path.join(app_dir, mod + '.js'), encoding='utf-8').read()
+            for mod in names}
+
+    if stage == 1:
+        vars_ = STATE_VARS[app]
+        srcs['state.js'] = move_state_to_object(srcs['state.js'], vars_)
+        renamed = 0
+        for f in srcs:
+            if f == 'state.js':
+                continue
+            before = srcs[f]
+            srcs[f] = rename_state_refs(srcs[f], vars_)
+            renamed += len([1 for a, b in zip(before.split('\n'), srcs[f].split('\n')) if a != b])
+        for f, s in srcs.items():
+            open(os.path.join(app_dir, f), 'w', encoding='utf-8').write(s)
+        print('%s stage 1: %d state vars, %d lines rewritten' % (app, len(vars_), renamed))
+        return
+
+    decls_by_file = {}
+    for f in srcs:
+        decls_by_file[f] = [n for n, _ in top_level_decls(srcs[f])]
+        srcs[f] = add_exports(srcs[f])
+    for f in srcs:
+        srcs[f] = add_imports(srcs[f], f, names, decls_by_file)
+        open(os.path.join(app_dir, f), 'w', encoding='utf-8').write(srcs[f])
+
+    print('%s stage 2: %d files' % (app, len(srcs)))
+    for f in srcs:
+        print('  %-24s exports=%2d importLines=%d' % (
+            f, len(decls_by_file[f]),
+            len([1 for l in srcs[f].split('\n') if l.startswith('import ')])))
+
+
+if __name__ == '__main__':
+    main(sys.argv[1], sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 2)
+```
+
+**1단계가 하는 일**
+
+1. `state.js`의 `let currentQuizData = null;` 17개(영어 10개)를 삭제하고,
+   파일 끝에 `const state = { currentQuizData: null, ... };` 를 만든다(주석은 속성 옆으로 이동).
+2. 나머지 파일에서 해당 이름을 `state.이름` 으로 바꾼다(문자열/주석 내부는 제외,
+   템플릿 리터럴의 `${...}` 안은 포함).
+
+**2단계가 하는 일**
+
+1. 모든 최상위 선언(`^    function|let|const|var|class`)에 `export ` 를 붙인다.
+   - 이미 `export`가 붙은 줄은 건너뛴다(`state` 객체).
+   - 선언줄만 바뀌고 본문 들여쓰기는 그대로다(의도적: diff 최소화).
+2. 다른 파일에서 실제로 참조하는 이름만 골라 `import { ... } from './x.js';` 를 파일 맨 위에 넣는다.
+   - 자기 파일 선언은 제외, 주석은 무시, 문자열은 유지(과잉 import는 무해).
+
+#### 4.5.3 검증 스크립트 `tests/check-imports.js`
+
+이미 저장소에 추가되어 있다(4-B 커밋에 포함). 모든 `import { … } from './x.js'`에 대해
+`x.js`가 그 이름을 정말 `export`하는지 확인한다. **오타·누락 import를 잡는 유일한 정적 게이트**다.
+
+```js
+// tests/check-imports.js — Phase 4-B gate (ESM export/import consistency)
+const fs = require('fs');
+const path = require('path');
+
+const APPS = ['math', 'english'];
+let failed = false;
+
+for (const app of APPS) {
+  const dir = path.join(__dirname, '..', app);
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.js'));
+  const exportsOf = new Map();
+  const importsOf = [];
+
+  for (const file of files) {
+    const src = fs.readFileSync(path.join(dir, file), 'utf8');
+    const names = new Set();
+    const EXP = /^[ \t]*export\s+(?:async\s+)?(?:function|let|const|var|class)\s+([A-Za-z_$][\w$]*)/gm;
+    let m;
+    while ((m = EXP.exec(src))) names.add(m[1]);
+    exportsOf.set(file, names);
+
+    const IMP = /import\s*\{([^}]*)\}\s*from\s*'\.\/([^']+)'/g;
+    while ((m = IMP.exec(src))) {
+      const list = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+      importsOf.push({ from: file, target: m[2], list });
+    }
+  }
+
+  let missing = 0;
+  let total = 0;
+  for (const imp of importsOf) {
+    if (!exportsOf.has(imp.target)) {
+      console.log(`  [${app}] ${imp.from}: missing module './${imp.target}'`);
+      failed = true;
+      continue;
+    }
+    for (const name of imp.list) {
+      total++;
+      if (!exportsOf.get(imp.target).has(name)) {
+        console.log(`  [${app}] ${imp.from}: '${name}' is not exported by './${imp.target}'`);
+        missing++;
+        failed = true;
+      }
+    }
+  }
+  console.log(`[${app}] files=${files.length} import-bindings=${total} missing=${missing}`);
+}
+if (failed) process.exit(1);
+console.log('ALL PASSED');
+```
+
+#### 4.5.4 문법 검사 (ESM 전용)
+
+`node --check file.js`는 CommonJS로 파싱하므로 `import`/`export`에서 실패한다.
+**`.mjs`로 복사해서 검사**한다.
+
+```bash
+for f in math/*.js english/*.js; do
+  cp "$f" /tmp/_chk.mjs
+  node --check /tmp/_chk.mjs || echo "FAIL $f"
+done
+```
+
+#### 4.5.5 커밋 4개
+
+**커밋 1 — 수학 상태 객체화 (classic 유지)**
+
+```
+refactor(math): move mutable state into a state object
+```
+
+- 수정: `math/*.js` 21개 (스크립트 1단계)
+- gate: `node --check` 전부 통과, `grep -c '^import \|^export ' math/*.js` → 0
+- gate: `grep -n 'const state = {' math/state.js` → 1
+- 스모크: 수학 M1·M3·M4 (전역 `state` 그대로이므로 기존 동작과 동일해야 함)
+
+**커밋 2 — 영어 상태 객체화 (classic 유지)**
+
+```
+refactor(english): move mutable state into a state object
+```
+
+- 커밋 1과 동일한 gate + 영어 M7
+
+**커밋 3 — 수학 ESM**
+
+```
+refactor(math): convert modules to ES modules
+```
+
+- 수정: `math/*.js` 21개(2단계), `math/main.js` 신규, `math/index.html`, `math/sw.js`
+- gate: `.mjs` 문법 검사 0건, `node tests/check-imports.js` → math `missing=0`
+- gate: `grep -c 'type="module"' math/index.html` → 1, 앱 모듈 classic 태그 → 0
+- 런타임: 콘솔 에러 0, `typeof solveProblem === 'undefined'`, `TutorActions.audit().missing === []`
+- 스모크: 수학 M1·M3·M4 + 설정/테마/기록/기호 버튼
+
+**커밋 4 — 영어 ESM**
+
+```
+refactor(english): convert modules to ES modules
+```
+
+- 커밋 3과 동일 + 영어 M7 + 단어장 저장/암기 토글
+
+#### 4.5.6 Phase 4-B DoD
+
+- [ ] `math/main.js`, `english/main.js` 존재, 각 `index.html`에 `type="module"` 1줄
+- [ ] 앱 모듈 classic `<script src="*.js">` 태그 0개 (shared 4줄은 유지)
+- [ ] `.mjs` 문법 검사 0건
+- [ ] `node tests/check-imports.js` → `[math] missing=0`, `[english] missing=0`, ALL PASSED
+- [ ] 브라우저에서 `typeof solveProblem` / `typeof analyzeEnglishProblem` → `undefined`
+- [ ] `typeof TutorActions === 'object'`, `typeof escapeAttr === 'function'` (4-C까지 유지되는 브리지)
+- [ ] `TutorActions.audit()` → 정적 `51/42`, `42/44`, `missing: []`
+- [ ] 스모크 M1·M3·M4·M7 통과, 콘솔 에러 0
+- [ ] SW 캐시 `v3.1` / `v2.1`, ASSETS에 `./main.js` 포함
+
+**롤백**: 커밋별로 되돌린다. 전체는 `git reset --hard v1.9-phase4a`.
+
+#### 4.5.7 4-C로 남기는 것
+
+- `shared/actions.js`의 `window.TutorActions`, `window.escapeAttr` 브리지
+- `shared/*.js`의 `window.TutorStorage` / `TutorCore` / `TutorSpeech` / `TutorUI`
+- CSP 메타 태그
+
+> 4-B가 끝나면 앱 코드에는 **전역 함수가 하나도 없다.** 남은 전역은 `shared/*`가 노출하는
+> 5개 브리지뿐이고, 4-C에서 `shared/actions.js`를 ESM으로 바꾸며 정리한다.
+> 브리지를 지우려면 `escapeAttr`을 쓰는 13개 파일에 import를 추가하고,
+> `actions-map.js`가 `register`를 import하도록 바꾸면 된다.
 
 ---
 
