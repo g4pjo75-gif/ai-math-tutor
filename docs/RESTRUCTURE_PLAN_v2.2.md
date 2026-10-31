@@ -4635,6 +4635,278 @@ npm test                         # L1 + L2 연속
 
 **롤백**: 커밋 3 → 2 → 1. 전체는 `git reset --hard v1.9-phase5`.
 
+### 4.10 Phase 6.5 (기능 테스트 확장 + 잔여 수정)
+
+**전제**: Phase 6 완료(`e0228ec`), 태그 `v1.9-phase6` 생성.
+**목표**: 구조 변경 없이 **기능 결함을 찾아 고친다.** 발견된 버그 1건은 **재현 스펙 1건**과 함께 처리한다.
+**비목표**: Phase 7(프록시·구독), CDN 로컬화, 대규모 리팩터링. (수익화 준비 단계로 미룸)
+
+**원칙**
+
+1. 프로덕션 **구조를 바꾸지 않는다**(모듈 분할·core 이동·전역 변경 금지).
+2. 수정은 **최소 diff**. 기존 함수 시그니처·저장 키·문구를 유지한다.
+3. 버그를 찾으면 **먼저 L2 스펙으로 재현**하고(red), 그다음 고친다(green).
+4. fixture로 검증할 수 없는 것(모델 출력 품질·실기기 음성)은 **L3 수동**으로 분리한다.
+5. 테스트 하네스 결함과 앱 결함을 **구분해서 기록**한다.
+
+#### 4.10.1 자동 커버리지 확장 (실측 19 pass)
+
+기존 11개에 **8개를 추가**해 19개가 됐다. 이번 스윕에서 **앱 결함은 0건**이었고,
+하네스 결함 2건(아래)만 수정했다.
+
+| 스펙 | 검증 |
+|---|---|
+| `features.spec.js` | 전체 Q&A 응답 로그 / 단계 채팅 / 「もっとやさしく」 / 직접 입력 채점 / 모델 목록 자동취득 / 영어 작문 첨삭 / 새 4択 생성(API 1회) |
+| `race.spec.js` | **M5**: 전체 Q&A 응답 대기 중 탭 전환 → 원래 문제에 저장, 다른 문제에 섞이지 않음 |
+
+**추가 파일 3개**
+
+| 파일 | 내용 |
+|---|---|
+| `tests/e2e/features.spec.js` | 기능 7경로 |
+| `tests/e2e/race.spec.js` | M5 레이스 |
+| `tests/fixtures/math-judge.json` | 직접 입력 채점 fixture (지금까지 stub이 즉석 생성하던 것) |
+
+**`tests/stub-gemini.js` 1줄 추가** (fixture 등록):
+
+```js
+  'math-quiz': 'math-quiz.json',
+  'math-judge': 'math-judge.json',   // ← 추가
+```
+
+> 하네스 결함 2건: ① `math-judge`가 `FIXTURE_FILES`에 없어 E2E에서만 실패,
+> ② `simplify` 결과를 `#simplify-content-*`로 찾으려 했으나 실제로는 `#stepsContainer`를 재렌더한다.
+> 둘 다 앱 문제가 아니므로 **테스트만 고쳤다.**
+
+**`features.spec.js`**
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, collectErrors, bootApp, solveMath } = require('./helpers');
+
+test.describe('features: 기능 커버리지', () => {
+  test('math: 전체 Q&A 응답이 로그에 남는다', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    const before = calls.length;
+
+    await page.fill('#overallChatInput', '別解はありますか？');
+    await page.click('[data-action="overall-send"]');
+    await expect(page.locator('#overallChatLogs')).toContainText('別解', { timeout: 15000 });
+    expect(calls.length).toBe(before + 1);
+    expect(errors).toEqual([]);
+  });
+
+  test('math: 단계 채팅 응답이 로그에 남는다', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    const before = calls.length;
+
+    await page.click('[data-action="toggle-step-chat"][data-idx="0"]');
+    await page.fill('#step-chat-input-0', 'なぜこの式になる？');
+    await page.click('[data-action="step-question-send"][data-idx="0"]');
+    await expect(page.locator('#step-chat-logs-0')).not.toBeEmpty({ timeout: 15000 });
+    expect(calls.length).toBe(before + 1);
+    expect(errors).toEqual([]);
+  });
+
+  test('math: もっとやさしく 가 렌더된다', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    const before = calls.length;
+
+    await page.click('[data-action="simplify-step"][data-idx="0"]');
+    await expect(page.locator('#stepsContainer')).toContainText('もっとやさしく', { timeout: 15000 });
+    expect(calls.length).toBe(before + 1);
+    expect(errors).toEqual([]);
+  });
+
+  test('math: 직접 입력 채점이 동작한다', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    await page.click('[data-action="start-quiz"]');
+    await page.click('[data-action="quiz-mode"][data-mode="text"]');
+    const before = calls.length;
+
+    await page.fill('#studentAnswerInput', 'x=2,3');
+    await page.click('[data-action="submit-student"]');
+    await expect(page.locator('#quizResultBox')).toBeVisible({ timeout: 15000 });
+    expect(calls.length).toBeGreaterThanOrEqual(before);
+    expect(errors).toEqual([]);
+  });
+
+  test('math: 모델 목록 자동取得', async ({ page }) => {
+    const errors = collectErrors(page);
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await page.click('[data-action="open-settings"]');
+    await page.fill('#geminiKeyInput', 'TEST_KEY');
+    await page.click('[data-action="fetch-models"]');
+    await expect(page.locator('#modelFetchStatus')).toContainText('成功', { timeout: 15000 });
+    expect(errors).toEqual([]);
+  });
+
+  test('english: 작문 첨삭이 렌더된다', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'english');
+    await page.click('[data-action="switch-mode"][data-mode="writing"]');
+    await page.fill('#writingTaskInput', 'もし私が鳥だったら');
+    await page.fill('#writingStudentInput', 'If I were a bird, I could fly to you.');
+    await page.click('[data-action="submit-writing"]');
+    await expect(page.locator('#writingResultSection, [id^="writingResult"]').first()).toBeVisible({ timeout: 20000 });
+    expect(calls.length).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
+  test('english: 새 4択 생성(API 1회)', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'english');
+    await page.click('[data-action="switch-mode"][data-mode="quiz"]');
+    await page.click('#generateQuizBtn');
+    await expect(page.locator('[data-action="select-quiz-choice"]')).toHaveCount(4, { timeout: 20000 });
+    expect(calls.length).toBe(1);
+    expect(errors).toEqual([]);
+  });
+});
+```
+
+**`race.spec.js`**
+
+```js
+const { test, expect } = require('@playwright/test');
+const { collectErrors, bootApp, solveMath } = require('./helpers');
+const stub = require('../stub-gemini.js');
+
+test.describe('race: 응답 대기 중 탭 전환', () => {
+  test('M5: 전체 Q&A 응답이 원래 문제에 저장되고, 돌아오면 보인다', async ({ page }) => {
+    const errors = collectErrors(page);
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    let chatCalls = 0;
+
+    await page.route('**/generativelanguage.googleapis.com/**', async (route) => {
+      const req = route.request();
+      if (req.method() === 'GET') {
+        return route.fulfill({ json: { models: [{ name: 'models/gemini-3.8-flash', displayName: 'F', supportedGenerationMethods: ['generateContent'] }] } });
+      }
+      const body = req.postData();
+      const key = stub.pickFixture(req.url(), { method: 'POST', body });
+      if (key === 'math-overall-chat') {
+        chatCalls++;
+        await gate;                       // 탭을 바꾼 뒤에 응답
+      }
+      return route.fulfill({ json: stub.envelope(stub.FIXTURES[key]) });
+    });
+
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+
+    await page.fill('#overallChatInput', '別解はありますか？');
+    await page.click('[data-action="overall-send"]');
+    await page.waitForTimeout(300);
+
+    await page.click('#problem-tab-1');   // 응답 도착 전에 다른 문제로 이동
+    release();
+    await page.waitForTimeout(1500);
+
+    await page.click('#problem-tab-0');   // 원래 문제로 복귀
+    await expect(page.locator('#overallChatLogs')).toContainText('解の公式', { timeout: 10000 });
+
+    // 다른 문제(탭 1)에는 답변이 섞이지 않는다
+    await page.click('#problem-tab-1');
+    await expect(page.locator('#overallChatLogs')).not.toContainText('による解法');
+
+    expect(chatCalls).toBe(1);
+    expect(errors).toEqual([]);
+  });
+});
+```
+
+**`tests/fixtures/math-judge.json`**
+
+```json
+{
+  "is_correct": true,
+  "judgement_title": "正解",
+  "comment": "よくできました。",
+  "correct_answer": "$x=3,\\ 4$",
+  "speech_ja": "正解です。"
+}
+```
+
+#### 4.10.2 감사 P항목 판정 (현재 코드 기준)
+
+| 항목 | 코드 근거 | 자동 검증 | 판정 |
+|---|---|:---:|---|
+| P1-1 영어 `escapeJsString` 파손 | 함수 자체 삭제(4-A), `escapeAttr` 사용 | ✅ health | **해소** |
+| P1-2 전체 Q&A 응답 유실 | `reqIndex` 고정 + 다른 탭이면 토스트 | ✅ race | **해소** |
+| P1-3 단계 Q&A 교차 오염 | `reqProblemIndex`/`reqStepIdx` 고정 | ⚠️ 없음 | **코드 확인, 스펙 추가 권장** |
+| P2-1 영어 복습이 항상 정답 처리 | 복원 시 `selectedChoiceIndex=-1`, 제출 호출 없음 | ⚠️ 없음 | **코드 확인, L3 권장** |
+| P2-2 모델 목록 no-op | `populateModelSelect()` 구현·호출 | ✅ features | **해소** |
+| P2-3 `maxOutputTokens 16384` | `core`에서 32768 통일 | ✅ L1 | **해소** |
+| P2-4 복원 후 twin_quiz 재사용 불가 | 저장 시 제외, 복원 시 `false` 재설정 | ⚠️ 없음 | **코드 확인** |
+| P2-5 노트에 상위 Q&A 혼입 | `overall_chat: []`로 저장 | ⚠️ 없음 | **코드 확인** |
+| P2-6 잘못된 퀴즈가 텍스트 모드 영구 저장 | `setQuizInputMode(mode, {persist})`, 폴백은 비영속 | ⚠️ 없음 | **코드 확인** |
+
+> ⚠️ 항목은 "코드상 고쳐져 있으나 런타임 증거가 없다"는 뜻이다.
+> Phase 6.5에서 **스펙 1개씩 추가**해 증거를 남긴다(P1-3, P2-1, P2-4, P2-6 우선).
+
+#### 4.10.3 fixture로 검증할 수 없는 것 (L3 실API)
+
+fixture는 "고정된 응답이 들어왔을 때 UI가 맞게 동작하는가"만 본다.
+아래는 **실제 Gemini 호출/실기기**가 필요하다.
+
+| 항목 | 방법 | 통과 기준 |
+|---|---|---|
+| 해설 품질(일본어·수식) | 실제 키로 3문제 | 단계 누락 0, 수식 깨짐 0 |
+| 사진 인식 | 인쇄/손글씨/기울어진 사진 각 1장 | 문제 텍스트 일치 |
+| 응답 지연·타임아웃 | 실제 호출 10회 | 30초 초과 0, 재시도 동작 |
+| 음성(일본어) | iOS Safari + Android Chrome | 낭독 시작, 중지 정상 |
+| 영어 voice picker | 실기기 | 음성 선택이 유지됨 |
+| 오프라인 설치 | 실기기 홈 화면 추가 → 기내 모드 | 앱 셸 + 노트 열람 |
+| M5 레이스(실API) | 응답 대기 중 탭 전환 | 답변이 원래 문제에 남음 |
+
+#### 4.10.4 버그 수정 워크플로
+
+```
+1) 재현        : L2 스펙 추가(또는 L3 절차 기록) → 실패 확인
+2) 수정        : 최소 diff (구조 변경 금지)
+3) 회귀        : npm test (L1 16 + L2 19+)
+4) 커밋        : fix(<앱>): <증상> — 스펙 동반
+```
+
+- 한 커밋에 **버그 1건**. 여러 건을 섞지 않는다.
+- 스펙 없이 고친 버그는 **반드시** 다음 커밋에서 스펙을 추가한다.
+- 문구/스타일 변경은 버그와 분리(`style:` / `docs:`).
+
+#### 4.10.5 커밋
+
+| # | 커밋 | 내용 | 게이트 |
+|---|---|---|---|
+| 1 | `test(e2e): cover chat, simplify, judge, writing, model list` | `features.spec.js`, `race.spec.js`, `math-judge.json`, `stub-gemini.js` 1줄 | `npx playwright test` **19 pass** |
+| 2 | `docs: record phase 6.5 coverage and P-item status` | 4.10 + `docs/SMOKE.md` 갱신 | — |
+| 3+ | `fix(...)` | 발견되는 버그마다 1건 | `npm test` |
+
+#### 4.10.6 DoD
+
+- [ ] `npx playwright test` → **19 passed** (신규 8 포함)
+- [ ] `npm test` → L1 16 + L2 19
+- [ ] P1-3 / P2-1 / P2-4 / P2-6 중 최소 2건에 **런타임 증거** 추가
+- [ ] L3 체크리스트(4.10.3) 실기기 1회 수행 및 서명
+- [ ] 발견 버그 전부 재현 스펙 동반
+
+**롤백**: 커밋 2 → 1. 전체는 `git reset --hard v1.9-phase6`.
+
 ---
 
 ## 5. 리스크와 대응
