@@ -67,24 +67,27 @@
     };
 
     // グローバル状態
-    let currentImageBase64 = null;
-    let currentProblems = [];        // 認識されたすべての問題（小問リスト）
-    let currentProblemIndex = 0;     // 現在表示中の問題インデックス
-    let currentQuizData = null;      // 自分で解く類題データ { problem, answer, hint, choices, displayCorrectIndex ... }
-    let quizInputMode = 'choice';    // 'choice' (4択) または 'text' (直接入力)
-    let selectedChoiceIndex = -1;    // 選択中の4択インデックス (0~3)
-    let stepChats = {};              // ステップ別フォローアップ会話 { `${problemIndex}:${stepIndex}`: [ {role, text, speech_ja} ] }
-    let stepChatBusy = {};           // ステップ別質問送信中フラグ
-    let overallChats = {};           // 問題全体の解法・別解フォローアップ会話 { [problemIndex]: [ {role, text, method_name, comparison_note, speech_ja, createdAt} ] }
-    let overallChatBusy = false;     // 全体質問送信中フラグ
-    let currentSteps = [];
-    let isPlayingQueue = false;
-    let autoPlayTimer = null;        // 自動再生用タイマーID（タブ切替時の重複防止）
-    let toastTimer = null;           // トースト表示用タイマーID
-    let currentModelId = null;       // 「もっとやさしく」再生成で使う
-    let currentProblemText = '';     // 同上（問題文のコンテキスト）
-    let tutorHistory = [];           // マイノート（過去の解説記録）
 
     // 埋め込み API キー（空のデフォルト）
     const EMBEDDED_GEMINI_API_KEY = '';
 
+    // ==== Phase 4-B: 공유 가변 상태 (ESM import 바인딩은 재할당 불가) ====
+    const state = {
+      currentImageBase64: null,
+      currentProblems: [], // 認識されたすべての問題（小問リスト）
+      currentProblemIndex: 0, // 現在表示中の問題インデックス
+      currentQuizData: null, // 自分で解く類題データ { problem, answer, hint, choices, displayCorrectIndex ... }
+      quizInputMode: 'choice', // 'choice' (4択) または 'text' (直接入力)
+      selectedChoiceIndex: -1, // 選択中の4択インデックス (0~3)
+      stepChats: {}, // ステップ別フォローアップ会話 { `${problemIndex}:${stepIndex}`: [ {role, text, speech_ja} ] }
+      stepChatBusy: {}, // ステップ別質問送信中フラグ
+      overallChats: {}, // 問題全体の解法・別解フォローアップ会話 { [problemIndex]: [ {role, text, method_name, comparison_note, speech_ja, createdAt} ] }
+      overallChatBusy: false, // 全体質問送信中フラグ
+      currentSteps: [],
+      isPlayingQueue: false,
+      autoPlayTimer: null, // 自動再生用タイマーID（タブ切替時の重複防止）
+      toastTimer: null, // トースト表示用タイマーID
+      currentModelId: null, // 「もっとやさしく」再生成で使う
+      currentProblemText: '', // 同上（問題文のコンテキスト）
+      tutorHistory: [], // マイノート（過去の解説記録）
+    };

@@ -11,8 +11,8 @@
       toast.textContent = text;
       toast.classList.remove('hidden');
 
-      if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => {
+      if (state.toastTimer) clearTimeout(state.toastTimer);
+      state.toastTimer = setTimeout(() => {
         toast.classList.add('hidden');
       }, 4000);
     }

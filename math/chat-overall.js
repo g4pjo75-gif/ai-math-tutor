@@ -4,7 +4,7 @@
       const container = document.getElementById('overallChatLogs');
       if (!container) return;
 
-      const logs = overallChats[currentProblemIndex] || [];
+      const logs = state.overallChats[state.currentProblemIndex] || [];
       if (logs.length === 0) {
         container.innerHTML = `
           <div class="text-center py-3 text-slate-400 dark:text-slate-500 space-y-1">
@@ -71,11 +71,11 @@
       const question = (directQuestion || inputEl?.value || '').trim();
       if (!question) return;
 
-      if (overallChatBusy) return;
+      if (state.overallChatBusy) return;
 
-      const reqIndex = currentProblemIndex;
-      const currentProb = currentProblems[reqIndex] || {};
-      const currentProblem = currentProb.recognized_problem || (reqIndex === currentProblemIndex ? currentProblemText : '') || '';
+      const reqIndex = state.currentProblemIndex;
+      const currentProb = state.currentProblems[reqIndex] || {};
+      const currentProblem = currentProb.recognized_problem || (reqIndex === state.currentProblemIndex ? state.currentProblemText : '') || '';
       if (!currentProblem) {
         showStatus('⚠️ 先に問題を解析してください。', 'amber');
         return;
@@ -90,18 +90,18 @@
         return;
       }
 
-      if (!overallChats[reqIndex]) {
-        overallChats[reqIndex] = [];
+      if (!state.overallChats[reqIndex]) {
+        state.overallChats[reqIndex] = [];
       }
 
-      overallChats[reqIndex].push({
+      state.overallChats[reqIndex].push({
         role: 'user',
         text: question,
         createdAt: Date.now()
       });
 
       if (inputEl) inputEl.value = '';
-      if (reqIndex === currentProblemIndex) {
+      if (reqIndex === state.currentProblemIndex) {
         renderOverallChatLogs();
       }
 
@@ -111,12 +111,12 @@
       if (btn) btn.disabled = true;
       if (btnText) btnText.textContent = '解説を作成中…';
       if (btnSpinner) btnSpinner.classList.remove('hidden');
-      overallChatBusy = true;
+      state.overallChatBusy = true;
 
       const unitHint = document.getElementById('unitSelect').value;
-      const probSteps = Array.isArray(currentProb.steps) && currentProb.steps.length ? currentProb.steps : currentSteps;
+      const probSteps = Array.isArray(currentProb.steps) && currentProb.steps.length ? currentProb.steps : state.currentSteps;
       const originalStepsSummary = probSteps.map(s => `・ステップ${s.step_number} (${s.title}): ${s.why || ''} 黒板式: ${s.display_math || ''}`).join('\n');
-      const pastChatContext = overallChats[reqIndex].slice(-4).map(m => `${m.role === 'user' ? '生徒' : '先生'}: ${m.text}`).join('\n');
+      const pastChatContext = state.overallChats[reqIndex].slice(-4).map(m => `${m.role === 'user' ? '生徒' : '先生'}: ${m.text}`).join('\n');
 
       const prompt = `あなたは日本の高校1年生を教えるあたたかくて優秀なプロ数学教師です。
 生徒が以下の問題について、AIが最初に行った解法（解法A）とは「別の解法（解法B、別解）」や、問題全体の解き方についての質問をしています。
@@ -178,15 +178,15 @@ ${question}
           createdAt: Date.now()
         };
 
-        if (!overallChats[reqIndex]) overallChats[reqIndex] = [];
-        overallChats[reqIndex].push(assistantMsg);
+        if (!state.overallChats[reqIndex]) state.overallChats[reqIndex] = [];
+        state.overallChats[reqIndex].push(assistantMsg);
 
         // currentProblems および tutorHistory と同期
-        if (currentProblems[reqIndex]) {
-          currentProblems[reqIndex].overall_chat = overallChats[reqIndex].slice(-10);
+        if (state.currentProblems[reqIndex]) {
+          state.currentProblems[reqIndex].overall_chat = state.overallChats[reqIndex].slice(-10);
         }
 
-        if (reqIndex === currentProblemIndex) {
+        if (reqIndex === state.currentProblemIndex) {
           renderOverallChatLogs();
           if (assistantMsg.speech_ja) {
             speakJapanese(assistantMsg.speech_ja);
@@ -201,7 +201,7 @@ ${question}
           showStatus(`❌ 別解解説エラー: ${escapeHtml(err.message)}`, 'red');
         }
       } finally {
-        overallChatBusy = false;
+        state.overallChatBusy = false;
         const curBtn = document.getElementById('overallChatBtn');
         const curBtnText = document.getElementById('overallChatBtnText');
         const curBtnSpinner = document.getElementById('overallChatBtnSpinner');

@@ -3,7 +3,7 @@
     // 8. 4択クイズ (Choice Quiz) & 直接入力切替・記号パレット
     // =========================================================================
     function setQuizInputMode(mode, { persist = true } = {}) {
-      quizInputMode = mode;
+      state.quizInputMode = mode;
       if (persist) {
         safeStorage.setItem('quiz_input_mode', mode);
       }
@@ -82,11 +82,11 @@
 
     function renderQuizChoiceButtons() {
       const grid = document.getElementById('quizChoiceGrid');
-      if (!grid || !currentQuizData || !currentQuizData.displayChoices) return;
+      if (!grid || !state.currentQuizData || !state.currentQuizData.displayChoices) return;
 
       const labels = ['ア', 'イ', 'ウ', 'エ'];
-      grid.innerHTML = currentQuizData.displayChoices.map((choiceText, idx) => {
-        const isSelected = selectedChoiceIndex === idx;
+      grid.innerHTML = state.currentQuizData.displayChoices.map((choiceText, idx) => {
+        const isSelected = state.selectedChoiceIndex === idx;
         const selectedClass = isSelected
           ? 'selected border-emerald-500 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100 ring-2 ring-emerald-500'
           : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60';
@@ -101,7 +101,7 @@
         `;
       }).join('');
 
-      currentQuizData.displayChoices.forEach((choiceText, idx) => {
+      state.currentQuizData.displayChoices.forEach((choiceText, idx) => {
         const el = document.getElementById(`quiz-choice-text-${idx}`);
         if (el) {
           el.textContent = formatChoiceMath(choiceText);
@@ -111,25 +111,25 @@
     }
 
     function selectQuizChoice(idx) {
-      selectedChoiceIndex = idx;
+      state.selectedChoiceIndex = idx;
       renderQuizChoiceButtons();
     }
 
     // 4択ローカル即時採点（通信なし・待ち時間0秒）
     function submitChoiceAnswer() {
-      if (!currentQuizData || selectedChoiceIndex < 0) {
+      if (!state.currentQuizData || state.selectedChoiceIndex < 0) {
         showStatus('⚠️ 選択肢を1つ選んでから決定ボタンを押してください。', 'amber');
         return;
       }
 
-      const isCorrect = selectedChoiceIndex === currentQuizData.displayCorrectIndex;
-      const chosenText = currentQuizData.displayChoices[selectedChoiceIndex];
-      const correctText = currentQuizData.displayChoices[currentQuizData.displayCorrectIndex];
-      const feedback = (currentQuizData.choiceFeedback && currentQuizData.choiceFeedback[selectedChoiceIndex]) || '';
+      const isCorrect = state.selectedChoiceIndex === state.currentQuizData.displayCorrectIndex;
+      const chosenText = state.currentQuizData.displayChoices[state.selectedChoiceIndex];
+      const correctText = state.currentQuizData.displayChoices[state.currentQuizData.displayCorrectIndex];
+      const feedback = (state.currentQuizData.choiceFeedback && state.currentQuizData.choiceFeedback[state.selectedChoiceIndex]) || '';
 
       const comment = isCorrect
-        ? (currentQuizData.explanation || '素晴らしい！正しく解法を理解できています。')
-        : (feedback || currentQuizData.wrongHint || '惜しい！もう一度計算や符号を確認してみましょう。');
+        ? (state.currentQuizData.explanation || '素晴らしい！正しく解法を理解できています。')
+        : (feedback || state.currentQuizData.wrongHint || '惜しい！もう一度計算や符号を確認してみましょう。');
 
       const judge = {
         is_correct: isCorrect,
@@ -137,8 +137,8 @@
         comment: comment,
         correct_answer: correctText,
         speech_ja: isCorrect
-          ? (currentQuizData.speechCorrect || '正解です！素晴らしいですね。')
-          : (currentQuizData.speechWrong || '惜しいです。ヒントを見て再挑戦してみましょう。')
+          ? (state.currentQuizData.speechCorrect || '正解です！素晴らしいですね。')
+          : (state.currentQuizData.speechWrong || '惜しいです。ヒントを見て再挑戦してみましょう。')
       };
 
       renderQuizResult(judge, chosenText);
@@ -166,7 +166,7 @@
         : [];
 
       if (!valid) {
-        currentQuizData = {
+        state.currentQuizData = {
           problem: sanitizeMathString(quizRes?.problem || '類題の生成に失敗しました。もう一度お試しください。'),
           answer: formatChoiceMath(quizRes?.answer || ''),
           acceptedAnswers: acceptedAnswers,
@@ -183,7 +183,7 @@
         setQuizInputMode('text', { persist: false });
       } else {
         const shuffledData = shuffleChoices(rawChoices, correctIdx, rawFeedback);
-        currentQuizData = {
+        state.currentQuizData = {
           problem: sanitizeMathString(quizRes.problem || ''),
           answer: formatChoiceMath(quizRes.answer || ''),
           acceptedAnswers: acceptedAnswers,
@@ -200,20 +200,20 @@
         setQuizInputMode(safeStorage.getItem('quiz_input_mode') || 'choice');
       }
 
-      selectedChoiceIndex = -1;
+      state.selectedChoiceIndex = -1;
 
       const probEl = document.getElementById('quizProblemText');
-      probEl.textContent = currentQuizData.problem;
+      probEl.textContent = state.currentQuizData.problem;
       renderMathIn(probEl);
 
       const hintEl = document.getElementById('quizHintContent');
-      hintEl.textContent = currentQuizData.hint;
+      hintEl.textContent = state.currentQuizData.hint;
       renderMathIn(hintEl);
       hintEl.classList.add('hidden');
       document.getElementById('quizHintIcon').textContent = '▼';
 
       renderQuizChoiceButtons();
-      setQuizInputMode(quizInputMode, { persist: false });
+      setQuizInputMode(state.quizInputMode, { persist: false });
 
       document.getElementById('studentAnswerInput').value = '';
       const resultBox = document.getElementById('quizResultBox');
@@ -228,7 +228,7 @@
     }
 
     async function startQuizChallenge() {
-      const currentProb = currentProblems[currentProblemIndex] || {};
+      const currentProb = state.currentProblems[state.currentProblemIndex] || {};
 
       // ① ワンショット統合済み twin_quiz があれば API呼び出し0回・待ち時間0秒で即時表示！
       if (currentProb.twin_quiz && !currentProb._twinQuizConsumed && isValidQuizObject(currentProb.twin_quiz)) {
@@ -262,7 +262,7 @@
       }
 
       const unitHint = document.getElementById('unitSelect').value;
-      const currentProblem = currentProb.recognized_problem || document.getElementById('recognizedProblem')?.dataset?.rawMath || currentProblemText || '';
+      const currentProblem = currentProb.recognized_problem || document.getElementById('recognizedProblem')?.dataset?.rawMath || state.currentProblemText || '';
       const keyPoint = currentProb.key_point || document.getElementById('keyPoint')?.dataset?.rawMath || '';
 
       // v1.6 4択クイズ生成スキーマ (choices, correct_index, choice_feedback, accepted_answers)

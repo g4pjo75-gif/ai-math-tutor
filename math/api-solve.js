@@ -118,7 +118,7 @@
       const unitHint = document.getElementById('unitSelect').value;
       const userText = document.getElementById('questionInput').value.trim();
 
-      if (!currentImageBase64 && !userText) {
+      if (!state.currentImageBase64 && !userText) {
         showStatus('⚠️ 問題の写真をアップロードするか、テキストで質問を入力してください。', 'amber');
         return;
       }
@@ -129,7 +129,7 @@
             mode: 'math_solve',
             unit: unitHint,
             text: userText,
-            imageBase64: currentImageBase64
+            imageBase64: state.currentImageBase64
           })
         : null;
 
@@ -139,10 +139,10 @@
           : null;
 
         // テキストのみ入力時はマイノート（tutorHistory）に同一問題があるかも照合
-        if (!cachedData && !currentImageBase64 && userText && window.TutorCore && Array.isArray(tutorHistory)) {
+        if (!cachedData && !state.currentImageBase64 && userText && window.TutorCore && Array.isArray(state.tutorHistory)) {
           const normInput = window.TutorCore.normalizeMathExpr(userText);
           if (normInput && normInput.length >= 3) {
-            const matchedHistory = tutorHistory.find(
+            const matchedHistory = state.tutorHistory.find(
               item => item && window.TutorCore.normalizeMathExpr(item.recognized_problem) === normInput
             );
             if (matchedHistory) {
@@ -152,8 +152,8 @@
         }
 
         if (cachedData) {
-          currentModelId = selectedModel;
-          currentProblemText = userText || '添付画像の問題';
+          state.currentModelId = selectedModel;
+          state.currentProblemText = userText || '添付画像の問題';
           const renderedOk = renderTutorResult(cachedData);
           if (renderedOk) {
             showStatus('⚡ 同じ問題の解説データが保存されていたため、APIを消費せず即座に表示しました！', 'blue');
@@ -174,8 +174,8 @@
         : '添付された画像の問題を、写真の中の式を読み取りながら解説してください。';
       const fullPrompt = `${buildSystemPrompt(unitHint)}\n\n${userPrompt}`;
 
-      currentModelId = selectedModel;
-      currentProblemText = userText || '添付画像の問題';
+      state.currentModelId = selectedModel;
+      state.currentProblemText = userText || '添付画像の問題';
 
       showStatus('⏳ AI先生が問題を解いています...（最大30秒）', 'blue');
       document.getElementById('solveBtn').disabled = true;
@@ -186,7 +186,7 @@
       try {
         let resultData;
         try {
-          resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, currentImageBase64);
+          resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64);
         } catch (firstErr) {
           // 混雑・レート制限・タイムアウト時は3秒待って1回だけ自動再試行
           const retryable = firstErr.name === 'AbortError' ||
@@ -196,7 +196,7 @@
           if (retryable) {
             showStatus(`⚠️ <strong>${escapeHtml(selectedModel)}</strong> が混雑しています。3秒後に自動で再試行します…`, 'amber');
             await new Promise(r => setTimeout(r, 3000));
-            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, currentImageBase64, { timeoutMs: 40000 });
+            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { timeoutMs: 40000 });
           } else {
             throw firstErr;
           }

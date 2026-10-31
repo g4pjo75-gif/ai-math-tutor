@@ -80,7 +80,7 @@
       const tabBar = document.getElementById('problemTabBar');
       if (!tabBar) return;
 
-      if (!currentProblems || currentProblems.length <= 1) {
+      if (!state.currentProblems || state.currentProblems.length <= 1) {
         tabBar.classList.add('hidden');
         tabBar.innerHTML = '';
         const badge = document.getElementById('currentProblemBadge');
@@ -91,14 +91,14 @@
       tabBar.classList.remove('hidden');
       tabBar.innerHTML = '';
 
-      currentProblems.forEach((prob, idx) => {
+      state.currentProblems.forEach((prob, idx) => {
         const label = prob.problem_label || `問題 (${idx + 1})`;
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.id = `problem-tab-${idx}`;
         btn.onclick = () => switchProblemTab(idx);
 
-        const isActive = idx === currentProblemIndex;
+        const isActive = idx === state.currentProblemIndex;
         btn.className = isActive
           ? 'bg-emerald-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm shadow flex items-center gap-1.5 shrink-0 transition'
           : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 shrink-0 transition';
@@ -109,39 +109,39 @@
     }
 
     function switchProblemTab(index) {
-      if (index < 0 || index >= currentProblems.length) return;
+      if (index < 0 || index >= state.currentProblems.length) return;
       stopSpeech();
       closeQuizSection();
-      currentQuizData = null;
-      currentProblemIndex = index;
+      state.currentQuizData = null;
+      state.currentProblemIndex = index;
       renderProblemTabs();
       displayCurrentProblem(true);
     }
 
     function displayCurrentProblem(autoPlay = true) {
-      if (autoPlayTimer) {
-        clearTimeout(autoPlayTimer);
-        autoPlayTimer = null;
+      if (state.autoPlayTimer) {
+        clearTimeout(state.autoPlayTimer);
+        state.autoPlayTimer = null;
       }
 
-      const prob = currentProblems[currentProblemIndex];
+      const prob = state.currentProblems[state.currentProblemIndex];
       if (!prob) return;
 
-      currentSteps = Array.isArray(prob.steps) ? prob.steps : [];
-      currentProblemText = prob.recognized_problem || '';
+      state.currentSteps = Array.isArray(prob.steps) ? prob.steps : [];
+      state.currentProblemText = prob.recognized_problem || '';
 
       // ステップ別Q&A履歴の復元 (Hydrate)
-      currentSteps.forEach((step, sIdx) => {
-        const cKey = `${currentProblemIndex}:${sIdx}`;
-        if (Array.isArray(step.followups) && step.followups.length > 0 && !stepChats[cKey]) {
-          stepChats[cKey] = [...step.followups];
+      state.currentSteps.forEach((step, sIdx) => {
+        const cKey = `${state.currentProblemIndex}:${sIdx}`;
+        if (Array.isArray(step.followups) && step.followups.length > 0 && !state.stepChats[cKey]) {
+          state.stepChats[cKey] = [...step.followups];
         }
       });
 
       const badge = document.getElementById('currentProblemBadge');
       if (badge) {
-        if (currentProblems.length > 1) {
-          badge.textContent = prob.problem_label || `問題 (${currentProblemIndex + 1})`;
+        if (state.currentProblems.length > 1) {
+          badge.textContent = prob.problem_label || `問題 (${state.currentProblemIndex + 1})`;
           badge.classList.remove('hidden');
         } else {
           badge.classList.add('hidden');
@@ -163,8 +163,8 @@
       renderMathIn(finalEl);
 
       // 問題全体の解法・別解Q&A履歴の復元 & 描画
-      if (Array.isArray(prob.overall_chat) && prob.overall_chat.length > 0 && (!overallChats[currentProblemIndex] || overallChats[currentProblemIndex].length === 0)) {
-        overallChats[currentProblemIndex] = [...prob.overall_chat];
+      if (Array.isArray(prob.overall_chat) && prob.overall_chat.length > 0 && (!state.overallChats[state.currentProblemIndex] || state.overallChats[state.currentProblemIndex].length === 0)) {
+        state.overallChats[state.currentProblemIndex] = [...prob.overall_chat];
       }
       renderOverallChatLogs();
 
@@ -186,9 +186,9 @@
         saveBtn.classList.replace('dark:text-emerald-400', 'dark:text-slate-300');
       }
 
-      if (autoPlay && currentSteps.length > 0) {
-        autoPlayTimer = setTimeout(() => {
-          autoPlayTimer = null;
+      if (autoPlay && state.currentSteps.length > 0) {
+        state.autoPlayTimer = setTimeout(() => {
+          state.autoPlayTimer = null;
           playAllSteps();
         }, 600);
       }
@@ -202,14 +202,14 @@
       }
 
       closeQuizSection();
-      currentQuizData = null;
-      stepChats = {};
-      stepChatBusy = {};
+      state.currentQuizData = null;
+      state.stepChats = {};
+      state.stepChatBusy = {};
       stepQuotes = {};
-      overallChats = {};
-      overallChatBusy = false;
-      currentProblems = normalized;
-      currentProblemIndex = 0;
+      state.overallChats = {};
+      state.overallChatBusy = false;
+      state.currentProblems = normalized;
+      state.currentProblemIndex = 0;
 
       showSectionWithFade('resultSection');
       renderProblemTabs();
@@ -349,7 +349,7 @@
       const stepsContainer = document.getElementById('stepsContainer');
       stepsContainer.innerHTML = '';
 
-      currentSteps.forEach((step, idx) => {
+      state.currentSteps.forEach((step, idx) => {
         const card = document.createElement('div');
         card.id = `step-card-${idx}`;
         card.className = 'step-card bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 space-y-2.5';

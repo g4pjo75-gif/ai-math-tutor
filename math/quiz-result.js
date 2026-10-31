@@ -12,7 +12,7 @@
 
     // 3. 生徒の答えを採点（② 1次判定はローカルJS正規化でAPI消費0、不一致時のみAI精密採点）
     async function submitStudentAnswer() {
-      if (!currentQuizData) return;
+      if (!state.currentQuizData) return;
       const inputEl = document.getElementById('studentAnswerInput');
       const studentAns = (inputEl.value || '').trim();
 
@@ -23,22 +23,22 @@
       }
 
       // ② 1次ローカルJS正規化判定（空白・全角半角・不等号・因数順序を吸収して即時正解判定）
-      const correctChoiceText = (currentQuizData.displayChoices && currentQuizData.displayCorrectIndex >= 0)
-        ? currentQuizData.displayChoices[currentQuizData.displayCorrectIndex]
+      const correctChoiceText = (state.currentQuizData.displayChoices && state.currentQuizData.displayCorrectIndex >= 0)
+        ? state.currentQuizData.displayChoices[state.currentQuizData.displayCorrectIndex]
         : '';
       const referenceCandidates = [
-        currentQuizData.answer,
+        state.currentQuizData.answer,
         correctChoiceText,
-        ...(Array.isArray(currentQuizData.acceptedAnswers) ? currentQuizData.acceptedAnswers : [])
+        ...(Array.isArray(state.currentQuizData.acceptedAnswers) ? state.currentQuizData.acceptedAnswers : [])
       ].filter(Boolean);
 
       if (window.TutorCore && window.TutorCore.isLocalMathMatch(studentAns, referenceCandidates)) {
         const localJudge = {
           is_correct: true,
           judgement_title: '正解！素晴らしい！（⚡即時判定）',
-          comment: currentQuizData.explanation || '素晴らしい！自分の力で正確に答えを導き出せましたね。',
-          correct_answer: currentQuizData.answer || correctChoiceText,
-          speech_ja: currentQuizData.speechCorrect || '大正解です！自分の力でしっかり解けましたね。素晴らしいです。'
+          comment: state.currentQuizData.explanation || '素晴らしい！自分の力で正確に答えを導き出せましたね。',
+          correct_answer: state.currentQuizData.answer || correctChoiceText,
+          speech_ja: state.currentQuizData.speechCorrect || '大正解です！自分の力でしっかり解けましたね。素晴らしいです。'
         };
         renderQuizResult(localJudge, studentAns);
         return;
@@ -77,10 +77,10 @@
 
       const prompt = `あなたは高校数学の採点担当プロ講師です。生徒が解いた答えを厳密かつ優しく採点してください。
 【出題された問題】
-${currentQuizData.problem}
+${state.currentQuizData.problem}
 
 【基準正解】
-${currentQuizData.answer}
+${state.currentQuizData.answer}
 
 【生徒が入力した答え】
 ${studentAns}
@@ -125,7 +125,7 @@ ${studentAns}
 
       box.className = `rounded-xl p-4 space-y-3 border shadow-sm ${bgClass}`;
 
-      const correctAnsText = formatChoiceMath(judge.correct_answer || currentQuizData?.answer || '');
+      const correctAnsText = formatChoiceMath(judge.correct_answer || state.currentQuizData?.answer || '');
 
       box.innerHTML = `
         <div class="flex items-center justify-between">
@@ -183,10 +183,10 @@ ${studentAns}
     }
 
     function showQuizFullSolution() {
-      if (!currentQuizData || !currentQuizData.problem) return;
+      if (!state.currentQuizData || !state.currentQuizData.problem) return;
       const questionInput = document.getElementById('questionInput');
       if (questionInput) {
-        questionInput.value = currentQuizData.problem;
+        questionInput.value = state.currentQuizData.problem;
       }
       clearImage();
       closeQuizSection();
@@ -194,29 +194,29 @@ ${studentAns}
     }
 
     function saveQuizToHistory() {
-      if (!currentQuizData) return;
+      if (!state.currentQuizData) return;
       const unitHint = document.getElementById('unitSelect').value;
-      const studentAnsText = quizInputMode === 'choice' && currentQuizData.displayChoices && selectedChoiceIndex >= 0
-        ? currentQuizData.displayChoices[selectedChoiceIndex]
+      const studentAnsText = state.quizInputMode === 'choice' && state.currentQuizData.displayChoices && state.selectedChoiceIndex >= 0
+        ? state.currentQuizData.displayChoices[state.selectedChoiceIndex]
         : (document.getElementById('studentAnswerInput')?.value || '');
 
       const data = {
         unitHint: unitHint,
         problem_label: '類題チャレンジ (正解)',
-        recognized_problem: currentQuizData.problem,
-        key_point: currentQuizData.hint,
+        recognized_problem: state.currentQuizData.problem,
+        key_point: state.currentQuizData.hint,
         steps: [
           {
             step_number: 1,
             title: '類題チャレンジ 正解達成',
             focus: '自力で解法を導き出しました！',
             why: '学んだ考え方を数字が変わった類題に正しく応用できました。',
-            display_math: `生徒の解答: ${studentAnsText}\n正解: ${currentQuizData.answer}`,
+            display_math: `生徒の解答: ${studentAnsText}\n正解: ${state.currentQuizData.answer}`,
             watch_out: '',
             speech_ja: '類題チャレンジ、見事に正解できましたね！素晴らしいです。'
           }
         ],
-        final_answer: currentQuizData.answer,
+        final_answer: state.currentQuizData.answer,
         overall_chat: []
       };
       const savedId = saveTutorHistory(data, { attachChat: false });

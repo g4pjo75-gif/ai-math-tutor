@@ -51,7 +51,7 @@
             ctx.drawImage(img, 0, 0, width, height);
 
             const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-            currentImageBase64 = dataUrl.split(',')[1];
+            state.currentImageBase64 = dataUrl.split(',')[1];
 
             setUploadProgress(100, '準備完了');
             setTimeout(() => setUploadProgress(0, ''), 600);
@@ -71,7 +71,7 @@
     }
 
     function clearImage() {
-      currentImageBase64 = null;
+      state.currentImageBase64 = null;
       document.getElementById('imagePreview').src = '';
       const previewContainer = document.getElementById('imagePreviewContainer');
       previewContainer.classList.add('hidden', 'opacity-0', 'translate-y-4');

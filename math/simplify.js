@@ -4,7 +4,7 @@
       return `あなたは日本の高校1年生に数学を教える、とてもやさしい先生です。
 生徒から「このステップがまだ難しい」と言われました。同じ内容を、もっとやさしく、かみくだいて説明し直してください。
 
-【問題】${currentProblemText}
+【問題】${state.currentProblemText}
 【ステップ】${step.title || ''}
 【今の説明】${step.display_math || ''}
 ${step.why ? `【今の意図】${step.why}` : ''}
@@ -31,7 +31,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
     }
 
     async function simplifyStep(idx) {
-      const step = currentSteps[idx];
+      const step = state.currentSteps[idx];
       if (!step) return;
 
       const key = safeStorage.getItem('gemini_api_key');
@@ -41,7 +41,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
         return;
       }
 
-      const model = currentModelId || safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
+      const model = state.currentModelId || safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
       const btn = document.getElementById(`simplify-btn-${idx}`);
       if (btn) {
         btn.disabled = true;
@@ -63,7 +63,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           ? data.visual
           : (existingVisual && existingVisual.type !== 'none' ? existingVisual : null);
 
-        currentSteps[idx] = {
+        state.currentSteps[idx] = {
           ...step,
           title: data.title || step.title,
           focus: data.focus || step.focus,
@@ -74,19 +74,19 @@ ${step.why ? `【今の意図】${step.why}` : ''}
           speech_ja: data.speech_ja || step.speech_ja,
           followups: []
         };
-        if (currentProblems[currentProblemIndex]) {
-          currentProblems[currentProblemIndex].steps = currentSteps;
+        if (state.currentProblems[state.currentProblemIndex]) {
+          state.currentProblems[state.currentProblemIndex].steps = state.currentSteps;
         }
 
         // 質問履歴をリセットして古い文脈との混線を防止
-        const chatKey = `${currentProblemIndex}:${idx}`;
-        stepChats[chatKey] = [];
+        const chatKey = `${state.currentProblemIndex}:${idx}`;
+        state.stepChats[chatKey] = [];
         delete stepQuotes[chatKey];
 
         renderStepCards();
         highlightStepCard(idx);
 
-        const simplified = currentSteps[idx];
+        const simplified = state.currentSteps[idx];
         setTimeout(() => {
           highlightStepCard(idx);
           speakJapanese(simplified.speech_ja || simplified.title || '', () => highlightStepCard(-1));

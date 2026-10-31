@@ -4,7 +4,7 @@
         const parsed = parseFunctionFromText(visual.caption || '') ||
                        parseFunctionFromText(stepContext?.content || '') ||
                        parseFunctionFromText(stepContext?.explanation || '') ||
-                       parseFunctionFromText(currentProblemText || '');
+                       parseFunctionFromText(state.currentProblemText || '');
         if (parsed) curves.push(parsed);
       }
 

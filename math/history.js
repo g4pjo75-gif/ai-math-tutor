@@ -5,9 +5,9 @@
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          tutorHistory = Array.isArray(parsed) ? parsed : [];
+          state.tutorHistory = Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          tutorHistory = [];
+          state.tutorHistory = [];
         }
       }
     }
@@ -26,27 +26,27 @@
         twin_quiz: data.twin_quiz || null,
         overall_chat: Array.isArray(data.overall_chat)
           ? data.overall_chat
-          : (attachChat && overallChats[currentProblemIndex] ? overallChats[currentProblemIndex] : [])
+          : (attachChat && state.overallChats[state.currentProblemIndex] ? state.overallChats[state.currentProblemIndex] : [])
       };
 
       // 最大100件まで保持、古いものから削除
-      tutorHistory.unshift(entry);
-      if (tutorHistory.length > 100) {
-        tutorHistory = tutorHistory.slice(0, 100);
+      state.tutorHistory.unshift(entry);
+      if (state.tutorHistory.length > 100) {
+        state.tutorHistory = state.tutorHistory.slice(0, 100);
       }
 
-      let ok = safeStorage.setItem('tutor_history', JSON.stringify(tutorHistory));
+      let ok = safeStorage.setItem('tutor_history', JSON.stringify(state.tutorHistory));
       // ストレージ容量超過時は古い履歴を削って再試行
-      if (!ok && tutorHistory.length > 10) {
-        tutorHistory = tutorHistory.slice(0, Math.max(10, Math.floor(tutorHistory.length / 2)));
-        ok = safeStorage.setItem('tutor_history', JSON.stringify(tutorHistory));
+      if (!ok && state.tutorHistory.length > 10) {
+        state.tutorHistory = state.tutorHistory.slice(0, Math.max(10, Math.floor(state.tutorHistory.length / 2)));
+        ok = safeStorage.setItem('tutor_history', JSON.stringify(state.tutorHistory));
       }
       return ok ? entry.id : null;
     }
 
     function deleteFromTutorHistory(id) {
-      tutorHistory = tutorHistory.filter(item => item.id !== id);
-      safeStorage.setItem('tutor_history', JSON.stringify(tutorHistory));
+      state.tutorHistory = state.tutorHistory.filter(item => item.id !== id);
+      safeStorage.setItem('tutor_history', JSON.stringify(state.tutorHistory));
       renderTutorHistoryList();
     }
 
@@ -54,7 +54,7 @@
       const container = document.getElementById('tutorHistoryList');
       if (!container) return;
 
-      if (tutorHistory.length === 0) {
+      if (state.tutorHistory.length === 0) {
         container.innerHTML = `
           <div class="text-center py-8">
             <p class="text-slate-500 dark:text-slate-400 text-sm">記録がまだありません。</p>
@@ -64,7 +64,7 @@
         return;
       }
 
-      container.innerHTML = tutorHistory.map((item) => {
+      container.innerHTML = state.tutorHistory.map((item) => {
         const parsedDate = item.savedAt ? new Date(item.savedAt) : null;
         const dateStr = (parsedDate && !isNaN(parsedDate.getTime()))
           ? parsedDate.toLocaleDateString('ja-JP', {
@@ -100,7 +100,7 @@
 
 
     async function restoreFromHistory(id) {
-      const item = tutorHistory.find(it => it.id === id);
+      const item = state.tutorHistory.find(it => it.id === id);
       if (!item) return;
 
       if (item.unitHint) {
@@ -130,13 +130,13 @@
     }
 
     function saveCurrentToTutorHistory() {
-      if (!currentSteps.length && !currentProblemText) {
+      if (!state.currentSteps.length && !state.currentProblemText) {
         showStatus('⚠️ 保存する解説データがありません。', 'amber');
         return;
       }
 
       const unitHint = document.getElementById('unitSelect').value;
-      const currentProb = currentProblems[currentProblemIndex] || {};
+      const currentProb = state.currentProblems[state.currentProblemIndex] || {};
       const recEl = document.getElementById('recognizedProblem');
       const keyEl = document.getElementById('keyPoint');
       const ansEl = document.getElementById('finalAnswer');
@@ -145,12 +145,12 @@
       const data = {
         unitHint: unitHint,
         problem_label: currentProb.problem_label || '',
-        recognized_problem: currentProb.recognized_problem || recEl?.dataset?.rawMath || currentProblemText || '',
+        recognized_problem: currentProb.recognized_problem || recEl?.dataset?.rawMath || state.currentProblemText || '',
         key_point: currentProb.key_point || keyEl?.dataset?.rawMath || '',
-        steps: currentSteps,
+        steps: state.currentSteps,
         final_answer: currentProb.final_answer || ansEl?.dataset?.rawMath || '',
         twin_quiz: currentProb.twin_quiz || null,
-        overall_chat: overallChats[currentProblemIndex] || []
+        overall_chat: state.overallChats[state.currentProblemIndex] || []
       };
 
       const savedId = saveTutorHistory(data);

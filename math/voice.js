@@ -1,6 +1,6 @@
 
     function highlightStepCard(activeIndex) {
-      currentSteps.forEach((_, idx) => {
+      state.currentSteps.forEach((_, idx) => {
         const el = document.getElementById(`step-card-${idx}`);
         const speechEl = document.getElementById(`step-speech-${idx}`);
         const detailsEl = document.getElementById(`step-speech-details-${idx}`);
@@ -210,8 +210,8 @@
     }
 
     function playSingleStep(idx) {
-      isPlayingQueue = false;
-      const step = currentSteps[idx];
+      state.isPlayingQueue = false;
+      const step = state.currentSteps[idx];
       if (!step) return;
       highlightStepCard(idx);
       speakJapanese(step.speech_ja || step.title || '', () => {
@@ -220,28 +220,28 @@
     }
 
     function playAllSteps(startIndex = 0) {
-      if (!currentSteps.length) return;
-      isPlayingQueue = true;
+      if (!state.currentSteps.length) return;
+      state.isPlayingQueue = true;
 
       function next(i) {
-        if (!isPlayingQueue || i >= currentSteps.length) {
+        if (!state.isPlayingQueue || i >= state.currentSteps.length) {
           highlightStepCard(-1);
-          isPlayingQueue = false;
+          state.isPlayingQueue = false;
           return;
         }
         highlightStepCard(i);
         const lead = i === startIndex && startIndex === 0 ? 'では、一緒に見ていきましょう。' : '';
-        speakJapanese(`${lead}${currentSteps[i].speech_ja || ''}`, () => next(i + 1));
+        speakJapanese(`${lead}${state.currentSteps[i].speech_ja || ''}`, () => next(i + 1));
       }
       next(startIndex);
     }
 
     function stopSpeech() {
-      isPlayingQueue = false;
+      state.isPlayingQueue = false;
       speechToken++;
-      if (autoPlayTimer) {
-        clearTimeout(autoPlayTimer);
-        autoPlayTimer = null;
+      if (state.autoPlayTimer) {
+        clearTimeout(state.autoPlayTimer);
+        state.autoPlayTimer = null;
       }
       if (chunkWatchdogTimer) {
         clearTimeout(chunkWatchdogTimer);

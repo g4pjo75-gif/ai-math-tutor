@@ -2,10 +2,10 @@
     // =========================================================================
     function buildSimilarProblemPrompt() {
       const unitHint = document.getElementById('unitSelect').value;
-      const currentProb = currentProblems[currentProblemIndex] || {};
+      const currentProb = state.currentProblems[state.currentProblemIndex] || {};
       const recognizedProblem = currentProb.recognized_problem || document.getElementById('recognizedProblem')?.dataset?.rawMath || '';
       const keyPoint = currentProb.key_point || document.getElementById('keyPoint')?.dataset?.rawMath || '';
-      const currentProblem = recognizedProblem || currentProblemText;
+      const currentProblem = recognizedProblem || state.currentProblemText;
 
       return `${buildSystemPrompt(unitHint)}
 
@@ -57,7 +57,7 @@ ${keyPoint}`;
         clearImage();
         const renderedOk = renderTutorResult(resultData);
         if (renderedOk) {
-          const firstProb = currentProblems[0];
+          const firstProb = state.currentProblems[0];
           const questionInput = document.getElementById('questionInput');
           if (questionInput && firstProb?.recognized_problem) {
             questionInput.value = sanitizeMathString(firstProb.recognized_problem);

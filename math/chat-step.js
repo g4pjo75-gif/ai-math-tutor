@@ -19,7 +19,7 @@
       panel.classList.remove('hidden');
 
       const quoteEl = document.getElementById(`step-chat-quote-${stepIdx}`);
-      const step = currentSteps[stepIdx] || {};
+      const step = state.currentSteps[stepIdx] || {};
 
       let quoteText = '';
       if (partKey === 'focus') quoteText = `【着眼点】${step.focus || ''}`;
@@ -27,7 +27,7 @@
       else if (partKey === 'math') quoteText = `【計算式】${step.display_math || ''}`;
       else if (partKey === 'watch') quoteText = `【注意点】${step.watch_out || ''}`;
 
-      const chatKey = `${currentProblemIndex}:${stepIdx}`;
+      const chatKey = `${state.currentProblemIndex}:${stepIdx}`;
       stepQuotes[chatKey] = quoteText;
 
       if (quoteEl && quoteText) {
@@ -47,8 +47,8 @@
       const logsEl = document.getElementById(`step-chat-logs-${stepIdx}`);
       if (!logsEl) return;
 
-      const chatKey = `${currentProblemIndex}:${stepIdx}`;
-      const messages = stepChats[chatKey] || [];
+      const chatKey = `${state.currentProblemIndex}:${stepIdx}`;
+      const messages = state.stepChats[chatKey] || [];
 
       if (messages.length === 0) {
         logsEl.innerHTML = `
@@ -94,13 +94,13 @@
       const question = (inputEl.value || '').trim();
       if (!question) return;
 
-      const reqProblemIndex = currentProblemIndex;
+      const reqProblemIndex = state.currentProblemIndex;
       const reqStepIdx = stepIdx;
       const chatKey = `${reqProblemIndex}:${reqStepIdx}`;
-      if (stepChatBusy[chatKey]) return;
+      if (state.stepChatBusy[chatKey]) return;
 
-      if (!stepChats[chatKey]) stepChats[chatKey] = [];
-      const userTurnCount = stepChats[chatKey].filter(m => m.role === 'user').length;
+      if (!state.stepChats[chatKey]) state.stepChats[chatKey] = [];
+      const userTurnCount = state.stepChats[chatKey].filter(m => m.role === 'user').length;
       if (userTurnCount >= 6) {
         showToast('⚠️ このステップへの質問は上限（6回）に達しました。次のステップに進むか、新しい問題で質問してください。', 'amber');
         inputEl.disabled = true;
@@ -119,16 +119,16 @@
         return;
       }
 
-      const reqProb = currentProblems[reqProblemIndex] || {};
-      const probSteps = Array.isArray(reqProb.steps) && reqProb.steps.length ? reqProb.steps : currentSteps;
+      const reqProb = state.currentProblems[reqProblemIndex] || {};
+      const probSteps = Array.isArray(reqProb.steps) && reqProb.steps.length ? reqProb.steps : state.currentSteps;
       const step = probSteps[reqStepIdx] || {};
-      const probText = reqProb.recognized_problem || (reqProblemIndex === currentProblemIndex ? currentProblemText : '') || '';
+      const probText = reqProb.recognized_problem || (reqProblemIndex === state.currentProblemIndex ? state.currentProblemText : '') || '';
       const unitHint = document.getElementById('unitSelect').value;
 
-      stepChats[chatKey].push({ role: 'user', text: question, createdAt: Date.now() });
+      state.stepChats[chatKey].push({ role: 'user', text: question, createdAt: Date.now() });
 
       inputEl.value = '';
-      if (reqProblemIndex === currentProblemIndex) {
+      if (reqProblemIndex === state.currentProblemIndex) {
         renderStepChatLogs(reqStepIdx);
       }
 
@@ -137,10 +137,10 @@
         btn.disabled = true;
         btn.textContent = '考え中…';
       }
-      stepChatBusy[chatKey] = true;
+      state.stepChatBusy[chatKey] = true;
 
       // 過去2ターンの会話コンテキスト
-      const pastMessages = stepChats[chatKey].slice(-4).map(m => `${m.role === 'user' ? '生徒' : '先生'}: ${m.text}`).join('\n');
+      const pastMessages = state.stepChats[chatKey].slice(-4).map(m => `${m.role === 'user' ? '生徒' : '先生'}: ${m.text}`).join('\n');
       const activeQuote = stepQuotes[chatKey] ? `【生徒が疑問に思ってハイライトした部分】\n${stepQuotes[chatKey]}\n\n` : '';
 
       const prompt = `あなたは日本の高校1年生に数学を教える優しい先生です。生徒が以下の【該当ステップ】の一部について質問しています。問題全体を最初から解き直すのではなく、このステップの疑問点に対してピンポイントで、中学生でも分かるように優しく答えてください。
@@ -182,7 +182,7 @@ ${question}
           timeoutMs: 25000
         });
 
-        stepChats[chatKey].push({
+        state.stepChats[chatKey].push({
           role: 'assistant',
           text: sanitizeMathString(res.answer || ''),
           speech_ja: res.speech_ja || '',
@@ -190,14 +190,14 @@ ${question}
         });
 
         // step.followups に保存（ノート保存・復元と同期）
-        step.followups = stepChats[chatKey].slice(-8);
-        if (currentProblems[reqProblemIndex] && currentProblems[reqProblemIndex].steps && currentProblems[reqProblemIndex].steps[reqStepIdx]) {
-          currentProblems[reqProblemIndex].steps[reqStepIdx].followups = step.followups;
+        step.followups = state.stepChats[chatKey].slice(-8);
+        if (state.currentProblems[reqProblemIndex] && state.currentProblems[reqProblemIndex].steps && state.currentProblems[reqProblemIndex].steps[reqStepIdx]) {
+          state.currentProblems[reqProblemIndex].steps[reqStepIdx].followups = step.followups;
         }
 
         delete stepQuotes[chatKey];
 
-        if (reqProblemIndex === currentProblemIndex) {
+        if (reqProblemIndex === state.currentProblemIndex) {
           const quoteEl = document.getElementById(`step-chat-quote-${reqStepIdx}`);
           if (quoteEl) quoteEl.classList.add('hidden');
 
@@ -215,8 +215,8 @@ ${question}
           showStatus(`❌ 質問エラー: ${escapeHtml(err.message)}`, 'red');
         }
       } finally {
-        stepChatBusy[chatKey] = false;
-        if (reqProblemIndex === currentProblemIndex) {
+        state.stepChatBusy[chatKey] = false;
+        if (reqProblemIndex === state.currentProblemIndex) {
           const curBtn = document.getElementById(`step-chat-btn-${reqStepIdx}`);
           if (curBtn) {
             curBtn.disabled = false;
