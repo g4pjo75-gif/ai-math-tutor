@@ -150,7 +150,7 @@
                 <div class="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">${Number(data.score || 90)} <span class="text-xs font-normal">/ 100点</span></div>
               </div>
             </div>
-            <button onclick="saveWritingToHistory()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
+            <button data-action="save-writing-history" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
               📁 添削結果をマイノートに保存
             </button>
           </div>
@@ -159,7 +159,7 @@
           <div class="p-4 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 space-y-2">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold text-emerald-900 dark:text-emerald-200">✅ 添削後の正しい英文 (Corrected)</span>
-              <button onclick="speakEnglishText('${escapeJsString(data.corrected_text || '')}')" class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-lg font-bold">🔊 発音を聞く</button>
+              <button data-action="speak-en" data-text="${escapeAttr(data.corrected_text || '')}" class="text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-lg font-bold">🔊 発音を聞く</button>
             </div>
             <p class="text-base sm:text-lg font-serif font-bold text-emerald-950 dark:text-emerald-100">${escapeHtml(data.corrected_text || '')}</p>
             ${data.translation_ja ? `<p class="text-xs text-slate-600 dark:text-slate-300">意味: ${escapeHtml(data.translation_ja)}</p>` : ''}
@@ -170,7 +170,7 @@
           <div class="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold text-blue-900 dark:text-blue-200">🌟 さらに自然なネイティブ表現 (Level Up!)</span>
-              <button onclick="speakEnglishText('${escapeJsString(data.natural_alternative)}')" class="text-xs text-blue-600 dark:text-blue-400 font-bold">🔊 発音</button>
+              <button data-action="speak-en" data-text="${escapeAttr(data.natural_alternative)}" class="text-xs text-blue-600 dark:text-blue-400 font-bold">🔊 発音</button>
             </div>
             <p class="text-sm font-serif font-bold text-slate-900 dark:text-white">${escapeHtml(data.natural_alternative)}</p>
           </div>` : ''}

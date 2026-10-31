@@ -161,7 +161,7 @@
               <div class="breakdown-item p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1.5">
                 <div class="flex items-start justify-between gap-2">
                   <p class="font-serif font-bold text-slate-900 dark:text-white text-xs sm:text-sm"><span class="text-blue-600 dark:text-blue-400 mr-1">(${idx + 1})</span>${escapeHtml(item.en)}</p>
-                  <button onclick="speakEnglishText('${escapeJsString(item.en)}')" class="shrink-0 text-[11px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg font-bold">🔊</button>
+                  <button data-action="speak-en" data-text="${escapeAttr(item.en)}" class="shrink-0 text-[11px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg font-bold">🔊</button>
                 </div>
                 <p class="text-xs text-slate-700 dark:text-slate-300">${escapeHtml(item.ja)}</p>
                 ${item.structure_note ? `<p class="text-[11px] text-indigo-700 dark:text-indigo-300 bg-indigo-50/70 dark:bg-indigo-950/40 px-2.5 py-1 rounded-lg">💡 ${escapeHtml(item.structure_note)}</p>` : ''}
@@ -180,7 +180,7 @@
               <span>🔤</span>
               <span>重要英単語・イディオム (${vocabItems.length}語)</span>
             </div>
-            <button onclick="saveAllLessonWords()" class="text-xs bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1 rounded-xl shadow-sm transition">
+            <button data-action="save-all-words" class="text-xs bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1 rounded-xl shadow-sm transition">
               ＋ すべての単語をマイ単語帳に一括登録
             </button>
           </div>
@@ -189,11 +189,11 @@
               <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col justify-between gap-2">
                 <div>
                   <div class="flex items-center justify-between gap-2">
-                    <button onclick="speakEnglishText('${escapeJsString(v.word)}')" class="font-bold text-blue-700 dark:text-blue-400 text-sm hover:underline flex items-center gap-1 text-left">
+                    <button data-action="speak-en" data-text="${escapeAttr(v.word)}" class="font-bold text-blue-700 dark:text-blue-400 text-sm hover:underline flex items-center gap-1 text-left">
                       <span>🔊</span>
                       <span>${escapeHtml(v.word)}</span>
                     </button>
-                    <button onclick="addWordToWordbook(${i})" class="text-[11px] bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <button data-action="add-word-index" data-idx="${i}" class="text-[11px] bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
                       ＋ 単語帳へ
                     </button>
                   </div>
@@ -233,7 +233,7 @@
         <div class="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/60 space-y-2">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-blue-900 dark:text-blue-200">📖 英文 (Passage)</span>
-            <button onclick="speakEnglishText('${escapeJsString(data.passage_en || '')}')" class="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline">🔊 全文読み上げ</button>
+            <button data-action="speak-en" data-text="${escapeAttr(data.passage_en || '')}" class="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline">🔊 全文読み上げ</button>
           </div>
           <p class="text-sm sm:text-base font-serif leading-relaxed text-slate-900 dark:text-slate-100 whitespace-pre-wrap">${escapeHtml(data.passage_en || '')}</p>
         </div>

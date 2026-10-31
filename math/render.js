@@ -240,15 +240,15 @@
             <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 leading-snug pt-0.5">${escapeHtml(step.title || '')}</h4>
           </div>
           <div class="shrink-0 flex flex-col items-stretch gap-1">
-            <button onclick="playSingleStep(${idx})"
+            <button data-action="play-step" data-idx="${idx}"
               class="bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 transition">
               🔊 もう一度聞く
             </button>
-            <button onclick="simplifyStep(${idx})" id="simplify-btn-${idx}"
+            <button data-action="simplify-step" data-idx="${idx}" id="simplify-btn-${idx}"
               class="bg-fuchsia-50 hover:bg-fuchsia-100 dark:bg-fuchsia-950/60 dark:hover:bg-fuchsia-900/80 text-fuchsia-700 dark:text-fuchsia-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-fuchsia-200 dark:border-fuchsia-800 transition">
               🪄 もっとやさしく
             </button>
-            <button onclick="toggleStepChat(${idx})" id="chat-toggle-btn-${idx}"
+            <button data-action="toggle-step-chat" data-idx="${idx}" id="chat-toggle-btn-${idx}"
               class="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 transition flex items-center justify-center gap-1">
               <span>❓ この部分を質問</span>
             </button>
@@ -261,7 +261,7 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center justify-between mb-0.5">
               <span class="text-[11px] font-bold text-amber-800 dark:text-amber-300">着眼点（どこを見る？）</span>
-              <button type="button" onclick="openStepChatWithQuote(${idx}, 'focus')" class="text-[10px] text-amber-700 dark:text-amber-400 hover:underline">❓ ここを聞く</button>
+              <button type="button" data-action="step-quote" data-idx="${idx}" data-part="focus" class="text-[10px] text-amber-700 dark:text-amber-400 hover:underline">❓ ここを聞く</button>
             </div>
             <div id="step-focus-${idx}" class="text-xs text-amber-900 dark:text-amber-100 leading-relaxed"></div>
           </div>
@@ -273,7 +273,7 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center justify-between mb-0.5">
               <span class="text-[11px] font-bold text-indigo-800 dark:text-indigo-300">なぜこのやり方？</span>
-              <button type="button" onclick="openStepChatWithQuote(${idx}, 'why')" class="text-[10px] text-indigo-700 dark:text-indigo-400 hover:underline">❓ ここを聞く</button>
+              <button type="button" data-action="step-quote" data-idx="${idx}" data-part="why" class="text-[10px] text-indigo-700 dark:text-indigo-400 hover:underline">❓ ここを聞く</button>
             </div>
             <div id="step-why-${idx}" class="text-xs text-indigo-900 dark:text-indigo-100 leading-relaxed"></div>
           </div>
@@ -281,7 +281,7 @@
 
         <div class="relative">
           <div id="step-math-${idx}" class="text-sm text-slate-800 dark:text-slate-100 leading-relaxed bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700 rounded-xl p-3 whitespace-pre-wrap"></div>
-          <button type="button" onclick="openStepChatWithQuote(${idx}, 'math')" class="absolute top-2 right-2 text-[10px] text-slate-500 dark:text-slate-400 hover:underline bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">❓ この式を聞く</button>
+          <button type="button" data-action="step-quote" data-idx="${idx}" data-part="math" class="absolute top-2 right-2 text-[10px] text-slate-500 dark:text-slate-400 hover:underline bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">❓ この式を聞く</button>
         </div>
 
         <!-- グラフ・図形描画コンテナ (SVG) -->
@@ -293,7 +293,7 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center justify-between mb-0.5">
               <span class="text-[11px] font-bold text-rose-800 dark:text-rose-300">ここでつまずきやすい</span>
-              <button type="button" onclick="openStepChatWithQuote(${idx}, 'watch')" class="text-[10px] text-rose-700 dark:text-rose-400 hover:underline">❓ ここを聞く</button>
+              <button type="button" data-action="step-quote" data-idx="${idx}" data-part="watch" class="text-[10px] text-rose-700 dark:text-rose-400 hover:underline">❓ ここを聞く</button>
             </div>
             <div id="step-watch-${idx}" class="text-xs text-rose-900 dark:text-rose-100 leading-relaxed"></div>
           </div>
@@ -311,7 +311,7 @@
               <span class="text-base">👨‍🏫</span>
               <span class="text-xs font-bold text-emerald-800 dark:text-emerald-300">Step ${step.step_number || idx + 1} の先生に質問</span>
             </div>
-            <button onclick="toggleStepChat(${idx})" class="text-xs text-slate-400 hover:text-slate-600 font-bold p-1">✕ 閉じる</button>
+            <button data-action="toggle-step-chat" data-idx="${idx}" class="text-xs text-slate-400 hover:text-slate-600 font-bold p-1">✕ 閉じる</button>
           </div>
 
           <!-- 引用プレビュー（クリックした箇所） -->
@@ -320,9 +320,9 @@
           <!-- クイック質問チップ群 -->
           <div class="flex flex-wrap items-center gap-1.5">
             <span class="text-[10px] text-slate-500 font-bold">よくある質問:</span>
-            <button type="button" onclick="sendQuickQuestion(${idx}, 'なぜこの式や変形になるのですか？もう少し噛み砕いて教えてください。')" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">🧭 なぜこの式？</button>
-            <button type="button" onclick="sendQuickQuestion(${idx}, '符号や不等号の向き（＋・ー・≦・≧）がこうなる理由を教えてください。')" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">± 符号・不等号の理由</button>
-            <button type="button" onclick="sendQuickQuestion(${idx}, '具体的な数字の例を1つ使ってわかりやすく説明してください。')" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">💡 具体例で教えて</button>
+            <button type="button" data-action="quick-question" data-idx="${idx}" data-text="なぜこの式や変形になるのですか？もう少し噛み砕いて教えてください。" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">🧭 なぜこの式？</button>
+            <button type="button" data-action="quick-question" data-idx="${idx}" data-text="符号や不等号の向き（＋・ー・≦・≧）がこうなる理由を教えてください。" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">± 符号・不等号の理由</button>
+            <button type="button" data-action="quick-question" data-idx="${idx}" data-text="具体的な数字の例を1つ使ってわかりやすく説明してください。" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">💡 具体例で教えて</button>
           </div>
 
           <!-- 会話ログエリア -->
@@ -335,8 +335,8 @@
             <input type="text" id="step-chat-input-${idx}"
               placeholder="このステップで分からない部分を質問（例: なぜマイナスで割るの？）"
               class="flex-1 text-xs border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-white dark:bg-slate-900 dark:text-white focus:outline-none focus:border-emerald-600"
-              onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) sendStepQuestion(${idx})" />
-            <button onclick="sendStepQuestion(${idx})" id="step-chat-btn-${idx}"
+              data-enter="step-question-send" data-idx="${idx}" />
+            <button data-action="step-question-send" data-idx="${idx}" id="step-chat-btn-${idx}"
               class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-2 rounded-xl text-xs shadow flex items-center gap-1 shrink-0">
               <span>送信 🚀</span>
             </button>

@@ -65,7 +65,7 @@
         .slice(0, 4);
 
       const fallbackButtons = otherModels.map(m =>
-        `<button onclick="solveProblem('${escapeJsString(m)}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${escapeHtml(m)} で再試行</button>`
+        `<button data-action="solve" data-model="${escapeAttr(m)}" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${escapeHtml(m)} で再試行</button>`
       ).join('');
 
       showStatus(`
@@ -73,7 +73,7 @@
           <div class="font-bold text-red-700 dark:text-red-300">⚠️ このモデル（${escapeHtml(selectedModel)}）の無料枠が上限に達しました。</div>
           <div class="text-xs text-slate-600 dark:text-slate-300">別のモデルに切り替えるか、「⚙️ 設定」から「モデル一覧を自動取得」を押して、利用可能なモデルを確認してください。</div>
           <div class="pt-1">${fallbackButtons}
-            <button onclick="openSettings()" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
+            <button data-action="open-settings" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
           </div>
         </div>
       `, 'red');

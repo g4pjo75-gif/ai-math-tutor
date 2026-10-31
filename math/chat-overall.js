@@ -38,7 +38,7 @@
           </div>
         ` : '';
         const speechBtn = msg.speech_ja ? `
-          <button onclick="speakJapanese('${escapeJsString(msg.speech_ja)}')" class="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1 mt-1">
+          <button data-action="speak-ja" data-text="${escapeAttr(msg.speech_ja)}" class="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1 mt-1">
             <span>🔊 声で解説を聞く</span>
           </button>
         ` : '';

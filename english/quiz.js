@@ -141,7 +141,7 @@ ${contextText}
           ? 'selected border-blue-600 bg-blue-50 text-blue-950 dark:bg-blue-950/60 dark:text-blue-100 ring-2 ring-blue-500'
           : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60';
         return `
-          <button type="button" role="radio" aria-checked="${isSelected}" onclick="selectEnglishQuizChoice(${idx})"
+          <button type="button" role="radio" aria-checked="${isSelected}" data-action="select-quiz-choice" data-idx="${idx}"
             class="choice-btn ${cls} border-2 rounded-2xl p-3.5 text-left flex items-center gap-3 transition">
             <span class="shrink-0 w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 font-bold text-xs flex items-center justify-center">${labels[idx]}</span>
             <span class="text-sm sm:text-base font-serif font-bold flex-1 break-words">${escapeHtml(text)}</span>
@@ -198,18 +198,18 @@ ${contextText}
 
         <div class="p-3 rounded-xl ${isCorrect ? 'bg-emerald-100/70 dark:bg-emerald-900/40' : 'bg-amber-100/70 dark:bg-amber-900/40'} text-xs sm:text-sm font-bold flex items-center justify-between">
           <span>🎯 正解： <span class="font-serif text-base underline ml-1">${escapeHtml(correctText)}</span></span>
-          <button onclick="speakQuizFullSentence('${escapeJsString(correctText)}')" class="text-xs bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg shadow-sm">🔊 正解の英文を聞く</button>
+          <button data-action="speak-quiz-sentence" data-text="${escapeAttr(correctText)}" class="text-xs bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg shadow-sm">🔊 正解の英文を聞く</button>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 pt-1">
-          <button onclick="saveQuizRecordToHistory(${isCorrect})" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
+          <button data-action="save-quiz-record" data-correct="${isCorrect ? '1' : '0'}" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
             📁 この問題をマイノートに保存
           </button>
-          <button onclick="addWordDirect('${escapeJsString(correctText)}', '${escapeJsString(currentQuizData.translationJa)}', '${escapeJsString(currentQuizData.questionEn)}')"
+          <button data-action="add-word-direct" data-word="${escapeAttr(correctText)}" data-meaning="${escapeAttr(currentQuizData.translationJa)}" data-example="${escapeAttr(currentQuizData.questionEn)}"
             class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
             🔤 正解表現を単語帳に登録
           </button>
-          <button onclick="generateEnglishQuiz(false)" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition ml-auto">
+          <button data-action="generate-quiz" data-force="0" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition ml-auto">
             🎲 次の問題へ
           </button>
         </div>

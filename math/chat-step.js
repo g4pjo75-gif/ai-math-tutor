@@ -70,7 +70,7 @@
               <div class="step-chat-text">${escapeHtml(msg.text)}</div>
             </div>
             ${msg.speech_ja ? `
-            <button onclick="speakJapanese('${escapeJsString(msg.speech_ja)}')" class="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1">
+            <button data-action="speak-ja" data-text="${escapeAttr(msg.speech_ja)}" class="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1">
               <span>🔊 声で聞く</span>
             </button>` : ''}
           </div>

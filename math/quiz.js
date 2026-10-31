@@ -92,7 +92,7 @@
           : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60';
 
         return `
-          <button type="button" role="radio" aria-checked="${isSelected}" onclick="selectQuizChoice(${idx})"
+          <button type="button" role="radio" aria-checked="${isSelected}" data-action="select-choice" data-idx="${idx}"
             class="choice-btn ${selectedClass} border-2 rounded-xl p-3 text-left flex items-start gap-2.5 transition">
             <span class="shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 font-bold text-xs flex items-center justify-center">${labels[idx]}</span>
             <span id="quiz-choice-text-${idx}" class="text-sm font-medium leading-relaxed min-w-0 flex-1 break-words"></span>

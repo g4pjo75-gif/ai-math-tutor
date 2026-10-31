@@ -234,22 +234,22 @@
         <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border ${item.memorized ? 'border-emerald-300 dark:border-emerald-800/70 opacity-75' : 'border-slate-200 dark:border-slate-700'} flex items-start justify-between gap-3">
           <div class="space-y-1 flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
-              <button onclick="speakEnglishText('${escapeJsString(item.word)}')" class="font-serif font-black text-sm sm:text-base text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1">
+              <button data-action="speak-en" data-text="${escapeAttr(item.word)}" class="font-serif font-black text-sm sm:text-base text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1">
                 <span>🔊</span>
                 <span>${escapeHtml(item.word)}</span>
               </button>
               ${item.memorized ? '<span class="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full">✓ 覚えた！</span>' : ''}
             </div>
-            <div onclick="this.classList.remove('blur-sm')" class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer ${hideMeaning ? 'blur-sm select-none' : ''}" title="タップで表示">
+            <div data-action="unblur" class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 transition cursor-pointer ${hideMeaning ? 'blur-sm select-none' : ''}" title="タップで表示">
               ${escapeHtml(item.meaning)}
             </div>
             ${item.example ? `<p class="text-[11px] text-slate-500 dark:text-slate-400 italic font-serif">"${escapeHtml(item.example)}"</p>` : ''}
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
-            <button onclick="toggleWordMemorized('${escapeJsString(item.id)}')" class="text-[11px] px-2.5 py-1 rounded-lg font-bold border ${item.memorized ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700'}">
+            <button data-action="toggle-memorized" data-id="${escapeAttr(item.id)}" class="text-[11px] px-2.5 py-1 rounded-lg font-bold border ${item.memorized ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700'}">
               ${item.memorized ? '覚えた' : '未暗記'}
             </button>
-            <button onclick="deleteWordItem('${escapeJsString(item.id)}')" class="text-slate-400 hover:text-rose-500 text-xs font-bold px-1.5 py-1">🗑️</button>
+            <button data-action="delete-word" data-id="${escapeAttr(item.id)}" class="text-slate-400 hover:text-rose-500 text-xs font-bold px-1.5 py-1">🗑️</button>
           </div>
         </div>
       `).join('');
@@ -280,7 +280,7 @@
         const dateStr = item.savedAt ? new Date(item.savedAt).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
         return `
           <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
-            <div onclick="restoreHistoryItem('${escapeJsString(item.id)}')" class="space-y-1 flex-1 min-w-0 cursor-pointer">
+            <div data-action="restore-history-item" data-id="${escapeAttr(item.id)}" class="space-y-1 flex-1 min-w-0 cursor-pointer">
               <div class="flex items-center gap-2">
                 ${typeBadges[item.type] || ''}
                 <span class="text-[10px] text-slate-400">${escapeHtml(dateStr)}</span>
@@ -289,8 +289,8 @@
               <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">${escapeHtml(item.summary)}</p>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
-              <button onclick="restoreHistoryItem('${escapeJsString(item.id)}')" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1.5 rounded-xl">開く</button>
-              <button onclick="deleteHistoryItem('${escapeJsString(item.id)}')" class="text-slate-400 hover:text-rose-500 text-xs font-bold px-1.5 py-1">🗑️</button>
+              <button data-action="restore-history-item" data-id="${escapeAttr(item.id)}" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1.5 rounded-xl">開く</button>
+              <button data-action="delete-history-item" data-id="${escapeAttr(item.id)}" class="text-slate-400 hover:text-rose-500 text-xs font-bold px-1.5 py-1">🗑️</button>
             </div>
           </div>
         `;

@@ -83,11 +83,11 @@
                 <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">${escapeHtml(dateStr)}</div>
               </div>
               <div class="flex items-start gap-1">
-                <button onclick="restoreFromHistory('${escapeJsString(item.id)}')" 
+                <button data-action="restore-history" data-id="${escapeAttr(item.id)}" 
                   class="bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 transition">
                   🔄 もう一度見る
                 </button>
-                <button onclick="deleteFromTutorHistory('${escapeJsString(item.id)}')" 
+                <button data-action="delete-tutor-history" data-id="${escapeAttr(item.id)}" 
                   class="bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800 transition">
                   🗑️ 削除
                 </button>

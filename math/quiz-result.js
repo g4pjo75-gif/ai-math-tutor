@@ -149,14 +149,14 @@ ${studentAns}
 
         <div class="flex flex-wrap items-center gap-2 pt-1">
           ${isCorrect ? `
-          <button onclick="saveQuizToHistory()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition flex items-center gap-1.5">
+          <button data-action="save-quiz-history" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition flex items-center gap-1.5">
             📁 この成果をマイノートに記録
           </button>
           ` : `
-          <button onclick="document.getElementById('studentAnswerInput').focus()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
+          <button data-action="focus-student-answer" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
             ✏️ もう一度解き直す
           </button>
-          <button onclick="showQuizFullSolution()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
+          <button data-action="show-full-solution" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
             📖 完全なステップ解説を見る
           </button>
           `}
