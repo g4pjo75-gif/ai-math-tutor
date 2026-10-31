@@ -1548,6 +1548,468 @@ self.addEventListener('activate', (event) => {
 
 ---
 
+### 4.4 Phase 4-A (인라인 핸들러 제거, classic script 유지)
+
+**전제**: Phase 3 완료(`78e004d`), 태그 `v1.9-phase3` 생성.
+**목표**: 인라인 `on*="..."` **138개를 전부** `data-*` 속성 + 위임 리스너 1곳으로 교체한다.
+**이 단계에서는 ESM으로 바꾸지 않는다.** 함수는 계속 전역이며, `type="module"`을 쓰지 않는다.
+
+**원칙**
+
+1. 함수 시그니처·본문·호출 순서를 **바꾸지 않는다.** 호출 "방법"만 바꾼다.
+2. 인라인 속성은 **0개**가 되어야 한다. 하나라도 남으면 실패다.
+3. 이벤트 종류별로 속성을 **분리**한다. 하나의 속성으로 click/change를 겸하지 않는다(오발동 방지).
+
+| 이벤트 | 속성 | 읽는 리스너 | 예 |
+|---|---|---|---|
+| `click` | `data-action` | click 위임 1곳 | `data-action="restore-history" data-id="1729"` |
+| `change` | `data-change` | change 위임 1곳 | `data-change="image-upload"` |
+| `input` | `data-input` | input 위임 1곳 | `data-input="word-count"` |
+| `keydown`(Enter) | `data-enter` | keydown 위임 1곳 | `data-enter="unlock"` |
+
+4. 생성 문자열의 값은 `escapeJsString` 대신 **`escapeAttr`** 로 감싼다.
+5. `escapeHtml`은 **지우지 않는다.** (텍스트 노드 출력용, 계속 사용)
+6. `event.preventDefault()`를 **추가하지 않는다.** 원본 인라인 핸들러도 하지 않았다.
+
+**인자 규칙 (`data-*` → 호출 인자)**
+
+| 접미 | 타입 | 변환 |
+|---|---|---|
+| `data-idx` | number | `Number(el.dataset.idx)` |
+| `data-id` | string | 그대로 |
+| `data-theme` / `data-mode` / `data-part` / `data-tab` / `data-symbol` | string | 그대로 |
+| `data-model` | string \| null | `el.dataset.model \|\| null` |
+| `data-force` / `data-correct` | boolean | `el.dataset.force === '1'` / `el.dataset.correct === '1'` |
+| `data-text` | string | 그대로 (일본어 프롬프트 원문, `"` 없음) |
+| `data-word` / `data-meaning` / `data-example` | string | 그대로 (`example`은 `\|\| ''`) |
+
+#### 4.4.1 새 파일 3개
+
+**`shared/actions.js`** (classic script, `shared/` 중 **가장 먼저** 로드)
+
+```js
+// shared/actions.js — Phase 4-A: 인라인 핸들러 위임 디스패처 (classic script)
+(function (global) {
+  'use strict';
+
+  var registry = Object.create(null);
+
+  function register(map) {
+    Object.keys(map).forEach(function (name) {
+      if (registry[name]) console.warn('[actions] duplicate action:', name);
+      registry[name] = map[name];
+    });
+  }
+
+  function escapeAttr(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/\r/g, '')
+      .replace(/\n/g, '&#10;'); // 원본 escapeJsString과 동일하게 개행 보존
+  }
+
+  function run(name, el, event) {
+    var fn = registry[name];
+    if (!fn) { console.warn('[actions] unregistered:', name); return; }
+    try { fn(el, event); } catch (err) { console.error('[actions] failed:', name, err); }
+  }
+
+  function closest(target, selector) {
+    return target && target.closest ? target.closest(selector) : null;
+  }
+
+  document.addEventListener('click', function (event) {
+    var el = closest(event.target, '[data-action]');
+    if (el) run(el.dataset.action, el, event);
+  });
+
+  document.addEventListener('change', function (event) {
+    var el = closest(event.target, '[data-change]');
+    if (el) run(el.dataset.change, el, event);
+  });
+
+  document.addEventListener('input', function (event) {
+    var el = closest(event.target, '[data-input]');
+    if (el) run(el.dataset.input, el, event);
+  });
+
+  document.addEventListener('keydown', function (event) {
+    // 원본 인라인 조건과 완전히 동일하게 유지한다.
+    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+    var el = closest(event.target, '[data-enter]');
+    if (el) run(el.dataset.enter, el, event);
+  });
+
+  global.TutorActions = {
+    register: register,
+    escapeAttr: escapeAttr,
+    run: run,
+    audit: function () {
+      var nodes = document.querySelectorAll('[data-action],[data-change],[data-input],[data-enter]');
+      var missing = [];
+      Array.prototype.forEach.call(nodes, function (el) {
+        var name = el.dataset.action || el.dataset.change || el.dataset.input || el.dataset.enter;
+        if (!registry[name]) missing.push(name);
+      });
+      return { nodes: nodes.length, actions: Object.keys(registry).length, missing: missing };
+    }
+  };
+  global.escapeAttr = escapeAttr; // Phase 4-B에서 export로 대체
+})(window);
+```
+
+**`math/actions-map.js` / `english/actions-map.js`** — 각 앱의 **마지막** script. 등록표만 담는다.
+
+```js
+// math/actions-map.js
+TutorActions.register({
+  'unlock': () => unlockApp(),
+  'change-theme': (el) => changeTheme(el.dataset.theme),
+  // ...
+});
+```
+
+- 값은 **arrow 함수**로 감싼다(호출 시점 지연 평가 → 로드 순서·hoisting 논쟁 제거).
+- 두 앱의 등록표는 **합치지 않는다.** `openSettings`/`changeTheme`/`clearImage` 등은 이름이 같지만 구현이 다르다.
+
+**로드 순서 (고정)**
+
+```
+shared/storage.js … shared/ui.js
+[shared/actions.js]          ← shared 중 맨 앞
+math/state.js … math/chat-overall.js
+[math/actions-map.js]        ← 맨 뒤
+```
+
+`index.html` 수정은 2줄 추가뿐이다.
+
+```html
+<script src="../shared/actions.js?v=20261031"></script>   <!-- storage.js 앞 -->
+...
+<script src="actions-map.js?v=20261031"></script>          <!-- chat-overall.js 뒤 -->
+```
+
+#### 4.4.2 수학 등록표 (42개)
+
+| # | `data-action` | `data-*` | 실행 |
+|---:|---|---|---|
+| 1 | `unlock` | — | `unlockApp()` |
+| 2 | `open-settings` | — | `openSettings()` |
+| 3 | `toggle-dark-mode` | — | `toggleDarkMode()` |
+| 4 | `show-tutor-history` | — | `showTutorHistory()` |
+| 5 | `change-theme` | `theme` | `changeTheme(theme)` |
+| 6 | `model-change` | — | `onModelDropdownChange()` |
+| 7 | `image-upload` | — | `handleImageUpload(event)` |
+| 8 | `clear-image` | — | `clearImage()` |
+| 9 | `solve` | `model?` `force?` | `solveProblem(model \|\| null, force)` |
+| 10 | `play-all-steps` | — | `playAllSteps()` |
+| 11 | `stop-speech` | — | `stopSpeech()` |
+| 12 | `voice-change` | — | `onVoiceChange()` |
+| 13 | `test-voice` | — | `testVoice()` |
+| 14 | `speech-rate-change` | — | `onSpeechRateChange()` |
+| 15 | `overall-quick` | `text` | `sendOverallQuickQuestion(text)` |
+| 16 | `overall-send` | — | `sendOverallQuestion()` |
+| 17 | `start-quiz` | — | `startQuizChallenge()` |
+| 18 | `generate-similar` | — | `generateSimilarProblem()` |
+| 19 | `save-current-history` | — | `saveCurrentToTutorHistory()` |
+| 20 | `close-quiz` | — | `closeQuizSection()` |
+| 21 | `toggle-quiz-hint` | — | `toggleQuizHint()` |
+| 22 | `quiz-mode` | `mode` | `setQuizInputMode(mode)` |
+| 23 | `submit-choice` | — | `submitChoiceAnswer()` |
+| 24 | `insert-symbol` | `symbol` | `insertMathSymbol(symbol)` |
+| 25 | `submit-student` | — | `submitStudentAnswer()` |
+| 26 | `close-settings` | — | `closeSettings()` |
+| 27 | `fetch-models` | — | `fetchAvailableModels()` |
+| 28 | `save-settings` | — | `saveSettings()` |
+| 29 | `close-tutor-history` | — | `closeTutorHistoryModal()` |
+| 30 | `restore-history` | `id` | `restoreFromHistory(id)` |
+| 31 | `delete-tutor-history` | `id` | `deleteFromTutorHistory(id)` |
+| 32 | `select-choice` | `idx` | `selectQuizChoice(Number(idx))` |
+| 33 | `save-quiz-history` | — | `saveQuizToHistory()` |
+| 34 | `focus-student-answer` | — | `document.getElementById('studentAnswerInput')?.focus()` |
+| 35 | `show-full-solution` | — | `showQuizFullSolution()` |
+| 36 | `play-step` | `idx` | `playSingleStep(Number(idx))` |
+| 37 | `simplify-step` | `idx` | `simplifyStep(Number(idx))` |
+| 38 | `toggle-step-chat` | `idx` | `toggleStepChat(Number(idx))` |
+| 39 | `step-quote` | `idx` `part` | `openStepChatWithQuote(Number(idx), part)` |
+| 40 | `quick-question` | `idx` `text` | `sendQuickQuestion(Number(idx), text)` |
+| 41 | `step-question-send` | `idx` | `sendStepQuestion(Number(idx))` |
+| 42 | `speak-ja` | `text` | `speakJapanese(text)` |
+
+#### 4.4.3 영어 등록표 (43개)
+
+| # | `data-action` | `data-*` | 실행 |
+|---:|---|---|---|
+| 1 | `unlock` | — | `unlockApp()` |
+| 2 | `open-settings` | — | `openSettings()` |
+| 3 | `toggle-dark-mode` | — | `toggleDarkMode()` |
+| 4 | `open-history` | `tab?` | `openHistoryModal(tab \|\| 'wordbook')` |
+| 5 | `change-theme` | `theme` | `changeTheme(theme)` |
+| 6 | `model-change` | — | `onModelChange()` |
+| 7 | `switch-mode` | `mode` | `switchMode(mode)` |
+| 8 | `quiz-generate` | `force` | `switchMode('quiz'); generateEnglishQuiz(force)` |
+| 9 | `pick-image` | — | `const i = document.getElementById('fileInput'); if (!i \|\| event.target === i) return; i.click();` |
+| 10 | `image-upload` | — | `handleImageUpload(event)` |
+| 11 | `clear-image` | — | `clearImage()` |
+| 12 | `analyze` | — | `analyzeEnglishProblem()` |
+| 13 | `play-speech` | — | `playEnglishSpeech()` |
+| 14 | `stop-speech` | — | `stopAllSpeech()` |
+| 15 | `save-lesson-history` | — | `saveCurrentLessonToHistory()` |
+| 16 | `generate-quiz` | `force` | `generateEnglishQuiz(force)` |
+| 17 | `speak-question` | — | `speakQuizQuestion()` |
+| 18 | `toggle-quiz-hint` | — | `toggleQuizHint()` |
+| 19 | `submit-quiz` | — | `submitEnglishQuizAnswer()` |
+| 20 | `writing-prompt` | — | `generateWritingPrompt()` |
+| 21 | `word-count` | — | `updateWordCount()` |
+| 22 | `submit-writing` | — | `submitWritingForCorrection()` |
+| 23 | `close-history` | — | `closeHistoryModal()` |
+| 24 | `history-tab` | `tab` | `switchHistoryTab(tab)` |
+| 25 | `render-wordbook` | — | `renderWordbookList()` |
+| 26 | `open-custom-word` | — | `openAddCustomWord()` |
+| 27 | `close-custom-word` | — | `document.getElementById('customWordForm')?.classList.add('hidden')` |
+| 28 | `save-custom-word` | — | `saveCustomWord()` |
+| 29 | `clear-history-tab` | — | `clearCurrentHistoryTab()` |
+| 30 | `save-settings` | — | `saveSettings()` |
+| 31 | `speak-en` | `text` | `speakEnglishText(text)` |
+| 32 | `save-all-words` | — | `saveAllLessonWords()` |
+| 33 | `add-word-index` | `idx` | `addWordToWordbook(Number(idx))` |
+| 34 | `select-quiz-choice` | `idx` | `selectEnglishQuizChoice(Number(idx))` |
+| 35 | `speak-quiz-sentence` | `text` | `speakQuizFullSentence(text)` |
+| 36 | `save-quiz-record` | `correct` | `saveQuizRecordToHistory(correct)` |
+| 37 | `add-word-direct` | `word` `meaning` `example?` | `addWordDirect(word, meaning, example \|\| '')` |
+| 38 | `save-writing-history` | — | `saveWritingToHistory()` |
+| 39 | `unblur` | — | `el.classList.remove('blur-sm')` |
+| 40 | `toggle-memorized` | `id` | `toggleWordMemorized(id)` |
+| 41 | `delete-word` | `id` | `deleteWordItem(id)` |
+| 42 | `restore-history-item` | `id` | `restoreHistoryItem(id)` |
+| 43 | `delete-history-item` | `id` | `deleteHistoryItem(id)` |
+
+#### 4.4.4 파일별 변환 수량 (합계 138)
+
+| 앱 | 파일 | 개수 | 비고 |
+|---|---|---:|---|
+| 수학 | `index.html` | 51 | 정적 (click 44, change 4, keydown 3) |
+| 수학 | `render.js` | 13 | 생성 문자열 |
+| 수학 | `quiz-result.js` | 3 | 생성 문자열 |
+| 수학 | `history.js` | 2 | `escapeJsString` 2 |
+| 수학 | `api-solve.js` | 2 | `escapeJsString` 1 |
+| 수학 | `ui-status.js` | 2 | `escapeJsString` 1 |
+| 수학 | `quiz.js` | 1 | |
+| 수학 | `chat-step.js` | 1 | `escapeJsString` 1 |
+| 수학 | `chat-overall.js` | 1 | `escapeJsString` 1 |
+| 영어 | `index.html` | 42 | 정적 (click 37, change 3, input 1, keydown 1) |
+| 영어 | `wordbook.js` | 7 | `escapeJsString` 6 |
+| 영어 | `reading.js` | 5 | `escapeJsString` 3 |
+| 영어 | `quiz.js` | 5 | `escapeJsString` 4 |
+| 영어 | `writing.js` | 3 | `escapeJsString` 2 |
+
+> `escapeJsString`은 총 23회 등장한다(호출 21 + 정의 2). 호출 21곳은 **전부** 위 생성 문자열 안에 있고, 4.4.7(커밋 3)에서 정의 2개와 함께 사라진다.
+> `english/voice.js`의 1회는 정의뿐이므로 호출 표에 없다(그래서 21 + 2 = 23).
+
+#### 4.4.5 변환 예시
+
+**① 정적 HTML — 인자 없음**
+
+```html
+<!-- before -->
+<button onclick="openSettings()">
+<!-- after -->
+<button data-action="open-settings">
+```
+
+**② 정적 HTML — 문자열 인자**
+
+```html
+<!-- before -->
+<button onclick="changeTheme('minimal')">
+<button onclick="insertMathSymbol('√')">
+<button onclick="sendOverallQuickQuestion('この問題の「別の解き方（別解）」があれば詳しく教えてください。')">
+<!-- after -->
+<button data-action="change-theme" data-theme="minimal">
+<button data-action="insert-symbol" data-symbol="√">
+<button data-action="overall-quick" data-text="この問題の「別の解き方（別解）」があれば詳しく教えてください。">
+```
+
+**③ 정적 HTML — change / input / Enter**
+
+```html
+<!-- before -->
+<select onchange="onModelDropdownChange()">
+<input id="fileInput" type="file" onchange="handleImageUpload(event)">
+<textarea oninput="updateWordCount()">
+<input id="pinInput" onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) unlockApp()">
+<!-- after -->
+<select data-change="model-change">
+<input id="fileInput" type="file" data-change="image-upload">
+<textarea data-input="word-count">
+<input id="pinInput" data-enter="unlock">
+```
+
+> `keydown` 5곳은 **모두** `data-enter` + 위임 1곳으로 바뀐다. 조건식은 `shared/actions.js`에 **한 번만** 존재한다.
+
+**④ 생성 문자열 — `escapeJsString` → `escapeAttr`**
+
+```js
+// before
+`<button onclick="restoreFromHistory('${escapeJsString(item.id)}')">`
+`<button onclick="playSingleStep(${idx})">`
+// after
+`<button data-action="restore-history" data-id="${escapeAttr(item.id)}">`
+`<button data-action="play-step" data-idx="${idx}">`
+```
+
+**⑤ 생성 문자열 — 인자 3개**
+
+```js
+// before
+<button onclick="addWordDirect('${escapeJsString(correctText)}', '${escapeJsString(currentQuizData.translationJa)}', '${escapeJsString(currentQuizData.questionEn)}')"
+// after
+<button data-action="add-word-direct"
+        data-word="${escapeAttr(correctText)}"
+        data-meaning="${escapeAttr(currentQuizData.translationJa)}"
+        data-example="${escapeAttr(currentQuizData.questionEn)}"
+```
+
+**⑥ 특수 케이스 6개 (그대로 옮기지 말 것)**
+
+| 원본 | 처리 |
+|---|---|
+| `onclick="document.getElementById('fileInput').click()"` | `data-action="pick-image"` + 등록표에서 `event.target === input`이면 return (프로그램 `.click()` 재진입 차단) |
+| `onclick="document.getElementById('studentAnswerInput').focus()"` | `data-action="focus-student-answer"` |
+| `onclick="document.getElementById('customWordForm').classList.add('hidden')"` | `data-action="close-custom-word"` |
+| `onclick="this.classList.remove('blur-sm')"` | `data-action="unblur"` → `(el) => el.classList.remove('blur-sm')` |
+| `onclick="switchMode('quiz'); generateEnglishQuiz();"` | `data-action="quiz-generate" data-force="0"` (한 액션 안에서 두 호출, 순서 유지) |
+| `onclick="switchMode('quiz'); generateEnglishQuiz(true);"` | `data-action="quiz-generate" data-force="1"` |
+
+#### 4.4.6 검증 스크립트 `tests/check-actions.js`
+
+```js
+// tests/check-actions.js — Phase 4-A gate
+const fs = require('fs');
+const path = require('path');
+
+const APPS = ['math', 'english'];
+const partial = process.argv.includes('--partial');
+let failed = false;
+
+for (const app of APPS) {
+  const dir = path.join(__dirname, '..', app);
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.js')).map((f) => path.join(dir, f));
+  files.push(path.join(dir, 'index.html'));
+
+  const used = new Set();
+  let inline = 0;
+  let escapeCalls = 0;
+
+  for (const file of files) {
+    const src = fs.readFileSync(file, 'utf8');
+    inline += (src.match(/\son(click|change|input|keydown)\s*=/g) || []).length;
+    escapeCalls += (src.match(/escapeJsString\s*\(/g) || []).length;
+    const NAME = /data-(?:action|change|input|enter)\s*=\s*"([^"]+)"/g;
+    let m;
+    while ((m = NAME.exec(src))) used.add(m[1]);
+  }
+
+  const mapSrc = fs.readFileSync(path.join(dir, 'actions-map.js'), 'utf8');
+  const defined = new Set();
+  const KEY = /^\s*'([a-z0-9-]+)':/gm;
+  let k;
+  while ((k = KEY.exec(mapSrc))) defined.add(k[1]);
+
+  const missing = [...used].filter((n) => !defined.has(n));
+  const unused = [...defined].filter((n) => !used.has(n));
+
+  console.log(`[${app}] used=${used.size} defined=${defined.size} inline=${inline} escapeJsString=${escapeCalls}`);
+  if (missing.length) { console.log(`  FAIL undefined actions: ${missing.join(', ')}`); failed = true; }
+  if (unused.length) console.log(`  WARN unused actions: ${unused.join(', ')}`);
+  if (!partial && inline) { console.log(`  FAIL inline handlers remain: ${inline}`); failed = true; }
+}
+
+if (failed) process.exit(1);
+console.log(partial ? 'PARTIAL OK' : 'ALL PASSED');
+```
+
+**단계별 기대값**
+
+| 시점 | `inline` (수학+영어) | `escapeJsString` | 결과 |
+|---|---:|---:|---|
+| 커밋 1 직후 | 45 (JS 생성 문자열만) | 23 | `--partial` → `PARTIAL OK` |
+| 커밋 2 직후 | 0 | 2 (정의 2개만 잔존) | `--partial` → `PARTIAL OK` |
+| 커밋 3 직후 | 0 | 0 | 기본 실행 → `ALL PASSED` |
+
+> 등록표 키는 **반드시 작은따옴표 + kebab-case**로 쓴다(`'restore-history':`). 검증 스크립트가 이 형식으로만 키를 읽는다.
+
+**런타임 검증 (브라우저 콘솔)**
+
+```js
+TutorActions.audit()            // 수학 → { nodes: 51, actions: 42, missing: [] }
+TutorActions.audit()            // 영어 → { nodes: 42, actions: 43, missing: [] }
+TutorActions.audit().missing.length === 0
+```
+
+- `audit()`는 **정적 DOM만** 본다. 생성 문자열은 각 화면을 실제로 렌더한 뒤 다시 호출한다.
+  - 수학: 解説 1건 렌더 → 노트 저장/복원 → 4択 1문항 시작 → 각 단계 채팅 열기
+  - 영어: 読解 1건 → 4択 1문항 → 単語帳 1건 → 作文添削 1건
+- 각 상태에서 `audit().missing`이 `[]`이어야 한다.
+- 콘솔에 `[actions] unregistered:` **0건**, `[actions] failed:` **0건**.
+
+#### 4.4.7 커밋 3개
+
+**커밋 1 — 인프라 + 정적 93개**
+
+```
+refactor(actions): add delegated data-action dispatcher
+```
+
+- 신규: `shared/actions.js`, `math/actions-map.js`, `english/actions-map.js`, `tests/check-actions.js`
+- 수정: `math/index.html` (script 2줄 + 정적 51개), `english/index.html` (script 2줄 + 정적 42개)
+- SW: `amt-cache-v2.9 → v3.0`, `aet-cache-v1.9 → v2.0`, ASSETS에 `'../shared/actions.js'`, `'./actions-map.js'` 추가
+- gate: `node tests/check-actions.js --partial` → 수학 `inline=25` / 영어 `inline=20` (합 45), `missing 0`
+- 스모크: 정적 버튼 전수 클릭(설정 모달·테마·PIN·모드 전환·기록 모달), 콘솔 에러 0
+
+**커밋 2 — 생성 문자열 45개**
+
+```
+refactor(math,english): convert generated inline handlers to data attributes
+```
+
+- 수정: `math/{history,quiz,quiz-result,api-solve,render,ui-status,chat-step,chat-overall}.js`,
+  `english/{reading,quiz,writing,wordbook}.js`
+- gate: `node tests/check-actions.js --partial` → `inline=0`, `escapeJsString=2`(정의만), `used=42`/`43`, `missing 0`
+- 스모크: **M1·M3·M4·M7** + 렌더 후 `audit().missing === []`
+
+**커밋 3 — `escapeJsString` 삭제**
+
+```
+refactor: remove escapeJsString
+```
+
+- 수정: `math/history.js`, `english/voice.js` — 함수 정의 2개 삭제
+- gate: `node tests/check-actions.js` → `ALL PASSED`, `grep -rn 'escapeJsString' math english shared` → 0
+- 스모크: M1~M8 전체
+
+**Phase 4-A DoD**
+
+- [ ] 인라인 `on(click|change|input|keydown)` **0개** (HTML + JS 전수)
+- [ ] `[data-action]`에서 추출한 액션 이름이 등록표에 **100% 존재**
+- [ ] `escapeJsString` 호출 0, 정의 0
+- [ ] `TutorActions.audit().missing.length === 0` (정적 + 렌더 후 각 1회)
+- [ ] 콘솔 `[actions] unregistered` / `[actions] failed` 0건
+- [ ] 스모크 M1·M3·M4·M7 통과 (4-A 종료 시), M1~M8 (4-C 종료 시)
+- [ ] SW 캐시 `v3.0` / `v2.0`, JS 자산 26 / 15개(ASSETS 전체 33 / 22개)
+
+**롤백**: `git reset --hard v1.9-phase3`
+
+> 4-A가 끝나면 앱은 여전히 전역 함수지만, **HTML과 JS 사이의 문자열 결합은 사라진다.**
+> `escapeJsString`(21곳 호출)이 없어지고, 이벤트 진입점이 `shared/actions.js` 1곳으로 모인다.
+> 다음 4-B에서 `type="module"`로 바꾸면 `onclick`이 없으므로 **깨질 지점이 없다.**
+
+---
+
 ## 5. 리스크와 대응
 
 | 리스크 | 영향 | 대응 |
