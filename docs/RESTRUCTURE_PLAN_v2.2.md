@@ -1283,26 +1283,97 @@ self.addEventListener('activate', (event) => {
 
 ### 4.2 Phase 2 (셸 분리)
 
+**전제**: Phase 1 완료(`263e196`), `/math/` · `/english/` 정상 동작, 태그 `v1.9-phase1` 생성.
+
+**경계 확인 (2026-10-31 실측)**
+
+| 파일 | 여는 태그 | 내용 시작 | 내용 끝 | 닫는 태그 | 추출 줄 수 |
+|---|---:|---:|---:|---:|---:|
+| `math/index.html` | 690 | 691 | 4500 | 4501 | **3,810** |
+| `english/index.html` | 569 | 570 | 2015 | 2016 | **1,446** |
+
+함수 개수 기준선: 수학 **97**, 영어 **60** (추출 전후 동일해야 함)
+
 ```
 [Phase 2] 인라인 스크립트 분리 (동작 무변경)
 
-수학
-1) math/index.html 의 <script> ... </script> 내용을 math/app.js 로 추출
-   - 경계: 여는 태그 다음 줄 ~ 닫는 태그 이전 줄 (양 끝 포함)
-   - 선행 공백 4칸 유지, 수동 복사 금지
-2) 태그 2줄을 <script src="app.js?v=20261030"></script> 로 교체
-3) math/sw.js: ASSETS 에 './app.js' 추가, CACHE_NAME 'amt-cache-v2.7' → 'v2.8'
-4) node --check math/app.js
+0) 태그: git tag -a v1.9-phase1 -m "phase1 complete: hub + math/ move"
+   백업: backup/pre-phase2/ 에 math/index.html, english/index.html, math/sw.js, english/sw.js
 
-영어
-5) english/index.html 570~2015행 → english/app.js, 태그 교체
-6) english/sw.js: ASSETS 에 './app.js' 추가, CACHE_NAME 'aet-cache-v1.7' → 'v1.8'
-7) node --check english/app.js
+1) 추출 (수동 복사 금지, 아래 스크립트 사용)
+   python3 - <<'PY'
+   import io
+   def extract(src, out, start, end):  # start~end: 1-based, 포함
+       lines = io.open(src, encoding='utf-8').read().split('\n')
+       body = lines[start-1:end]
+       io.open(out, 'w', encoding='utf-8').write('\n'.join(body) + '\n')
+       print(out, len(body), 'lines')
+   extract('math/index.html', 'math/app.js', 691, 4500)
+   extract('english/index.html', 'english/app.js', 570, 2015)
+   PY
 
-검증
-8) 스모크 4종 + 콘솔 에러 0 + 각 index.html 700줄 이하
-9) 커밋: refactor: extract inline scripts to app.js (no logic change)
+   ※ 추출 전 경계 재확인:
+     awk 'NR==690||NR==691||NR==4500||NR==4501{print NR": "$0}' math/index.html
+     → 690:<script>  691:내용  4500:내용  4501:</script>
+     (영어는 569:<script>  570:내용  2015:내용  2016:</script>)
+
+2) 태그 교체
+   math/index.html    : 690~4501행(태그 2줄 포함)을
+                        <script src="app.js?v=20261031"></script> 1줄로 교체
+   english/index.html : 569~2016행을
+                        <script src="app.js?v=20261031"></script> 1줄로 교체
+
+3) SW 갱신
+   math/sw.js    : ASSETS 에 './app.js' 추가, CACHE_NAME 'amt-cache-v2.7' → 'amt-cache-v2.8'
+   english/sw.js : ASSETS 에 './app.js' 추가, CACHE_NAME 'aet-cache-v1.7' → 'aet-cache-v1.8'
+
+4) 문법 검사
+   node --check math/app.js && node --check english/app.js
+
+5) 동일성 증명 (가장 중요)
+   git show HEAD:math/index.html | sed -n '691,4500p' > /tmp/math_old.js
+   diff /tmp/math_old.js math/app.js        → 차이 0
+   git show HEAD:english/index.html | sed -n '570,2015p' > /tmp/eng_old.js
+   diff /tmp/eng_old.js english/app.js      → 차이 0
+   grep -c '^\s*\(async \)\?function ' math/app.js     → 97
+   grep -c '^\s*\(async \)\?function ' english/app.js  → 60
+
+6) 검증 (반드시 localhost 사용)
+   python3 -m http.server 8765 --bind 127.0.0.1
+   → http://localhost:8765/math/ , http://localhost:8765/english/
+   ※ 127.0.0.1 로 열면 SW 가 등록되지 않는다(앱 코드가 hostname === 'localhost' 만 허용).
+     이것은 기존 동작이며 Phase 2에서 고치지 않는다.
+   - 콘솔 에러 0, Network 404 0
+   - 수학: 解説 1件 / 4択 1問 / ノート復元
+   - 영어: 読解 1件 / 4択 1問 / 単語帳 1件
+   - caches.keys() → amt-cache-v2.8, aet-cache-v1.8
+   - 캐시에 ./app.js 포함 확인
+
+7) 파일 크기
+   wc -l math/index.html english/index.html       → 각 700줄 이하
+   wc -l math/app.js english/app.js               → 3810 / 1446
+
+보고 / 커밋 (2개로 분리)
+  refactor(math): extract inline script to app.js (no logic change)
+  refactor(english): extract inline script to app.js (no logic change)
 ```
+
+**Phase 2에서 하지 않는 것**
+
+- 함수 이동·이름 변경·`'use strict'` 추가·들여쓰기 정리 (전부 Phase 3)
+- `escapeJsString` 손대기 (Phase 4까지 사용 중)
+- `?v=` 값을 올리는 것은 **파일 내용이 바뀌었기 때문**이며, 로직 변경이 아니다
+
+**Phase 2 DoD**
+
+- [ ] `math/app.js` 3,810줄 / `english/app.js` 1,446줄
+- [ ] 5)의 `diff` 2건 모두 0
+- [ ] 함수 97 / 60 유지
+- [ ] 콘솔 에러 0, 404 0
+- [ ] 캐시명 v2.8 / v1.8, `./app.js` 포함
+- [ ] 스모크 M1·M3·M4·M7
+
+**롤백**: `git reset --hard v1.9-phase1`
 
 ---
 
