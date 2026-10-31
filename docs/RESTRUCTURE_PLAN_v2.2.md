@@ -1126,6 +1126,161 @@ english
   test: add baseline fixtures and smoke checklist (Phase 0 산출물 미커밋 시)
 ```
 
+#### 4.1-A 루트 `index.html` (허브) — 이 내용을 그대로 저장
+
+> 외부 의존 0 (CDN·폰트·JS 라이브러리 없음). 약 95줄. 디자인을 더 넣지 않는다.
+> `?hub` 를 붙이면 standalone 리다이렉트를 건너뛴다(설치본에서 허브를 확인할 때 사용).
+
+```html
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI家庭教師 | 数学・英語</title>
+<meta name="description" content="高校数学I・A と 英語を、写真1枚で質問できるAI家庭教師。">
+<meta name="theme-color" content="#1e3a2f">
+<!-- 旧・数学アプリ(scope "/")としてインストール済みの端末は、起動時に直接 math/ へ送る -->
+<script>
+  if (window.matchMedia('(display-mode: standalone)').matches &&
+      !location.search.includes('hub')) {
+    location.replace('./math/');
+  }
+</script>
+<style>
+  :root {
+    --bg: #f6f7f5; --fg: #1f2933; --sub: #5b6b7a;
+    --card: #ffffff; --line: #e3e8ec; --accent: #1e6b4f; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1512; --fg:#e8eeea; --sub:#9fb0a8; --card:#17201c; --line:#26332d; --accent:#4ade80; --shadow: 0 1px 2px rgba(0,0,0,.4); }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg); min-height: 100vh; min-height: 100dvh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', Meiryo, 'Noto Sans JP', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: calc(32px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  .logo { font-size: 44px; line-height: 1; }
+  h1 { font-size: 24px; margin: 12px 0 8px; letter-spacing: .02em; }
+  .lead { color: var(--sub); font-size: 14px; line-height: 1.8; margin: 0; }
+  .cards { display: grid; gap: 14px; }
+  .card {
+    position: relative; display: grid; gap: 2px; text-decoration: none; color: inherit;
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px 18px; box-shadow: var(--shadow); transition: transform .15s ease, border-color .15s ease;
+  }
+  .card:active { transform: scale(.99); }
+  .card:hover { border-color: var(--accent); }
+  .icon { font-size: 28px; line-height: 1.2; }
+  .title { font-size: 18px; font-weight: 700; margin-top: 4px; }
+  .desc { font-size: 13px; color: var(--sub); line-height: 1.6; }
+  .go { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--accent); }
+  .badge {
+    position: absolute; top: 14px; right: 14px; font-size: 11px; font-weight: 700;
+    color: #0b2e1f; background: #86efac; border-radius: 999px; padding: 3px 9px;
+  }
+  .notes { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .notes p { margin: 0 0 6px; font-size: 12px; color: var(--sub); line-height: 1.7; }
+  footer { margin-top: 22px; text-align: center; }
+  footer p { font-size: 11px; color: var(--sub); margin: 0; line-height: 1.7; }
+  @media (min-width: 560px) { .cards { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">🎓</div>
+    <h1>AI家庭教師</h1>
+    <p class="lead">写真を撮って質問するだけ。<br>数学I・A と 英語、どちらから始めますか？</p>
+  </header>
+
+  <nav class="cards">
+    <a class="card" href="./math/" data-subject="math">
+      <span class="badge" hidden>前回の続き</span>
+      <span class="icon">📐</span>
+      <span class="title">数学 I・A</span>
+      <span class="desc">写真で質問・ステップ解説・音声授業</span>
+      <span class="go">はじめる →</span>
+    </a>
+    <a class="card" href="./english/" data-subject="english">
+      <span class="badge" hidden>前回の続き</span>
+      <span class="icon">🇬🇧</span>
+      <span class="title">英語</span>
+      <span class="desc">長文読解・4択クイズ・英作文添削</span>
+      <span class="go">はじめる →</span>
+    </a>
+  </nav>
+
+  <section class="notes">
+    <p>🔒 APIキーは端末内にのみ保存されます</p>
+    <p>🔑 初回PIN（初期値 1234）は各アプリの設定画面から変更できます</p>
+  </section>
+
+  <footer>
+    <p>数学I・A / 英語 ・ ホーム画面に追加するとアプリとして使えます</p>
+  </footer>
+</main>
+<script>
+  (function () {
+    var last = null;
+    try { last = localStorage.getItem('tutor_last_subject'); } catch (e) {}
+    if (last) {
+      var el = document.querySelector('.card[data-subject="' + last + '"]');
+      if (el) el.querySelector('.badge').hidden = false;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (a) {
+      a.addEventListener('click', function () {
+        try { localStorage.setItem('tutor_last_subject', a.dataset.subject); } catch (e) {}
+      });
+    });
+  })();
+</script>
+</body>
+</html>
+```
+
+**주의**: 이 파일에는 `manifest` 링크도, `serviceWorker.register` 도 넣지 않는다. 허브는 설치 불가다.
+
+#### 4.1-B 루트 `sw.js` (cleanup) — 이 내용을 그대로 저장
+
+```js
+// 旧ルートSWの後始末用。
+// 旧・数学アプリ(scope "/")としてインストールされた端末が更新チェックに来た時だけ動作する。
+// 役目: amt- キャッシュの削除 → 自分自身の登録解除。
+// 注意: このファイルは2リリース(約2〜3ヶ月)後に削除してよい。
+//       それまでは削除しないこと(404になると旧SWが残留する)。
+self.addEventListener('install', () => self.skipWaiting());
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys.filter((k) => k.startsWith('amt-')).map((k) => caches.delete(k))
+    );
+    await self.registration.unregister();
+  })());
+});
+```
+
+**검증 포인트**: `aet-` 캐시는 **삭제 대상이 아니다**. 영어 앱의 오프라인 자산이 날아간다.
+
+#### 4.1-C Phase 1 완료 후 반드시 남길 기록
+
+```
+[Phase 1 결과 기록]
+- 이동한 파일 6개 (git mv)
+- 치환한 경로 6곳 (24, 224, 248, 685~688행)
+- 신규 파일 2개 (루트 index.html, 루트 sw.js 교체)
+- 캐시명: amt v2.6→v2.7 / aet v1.6→v1.7
+- 검증: /  /math/  /english/  각 콘솔 에러 0, localStorage 유지, SW 스코프
+- 스모크: M1, M3, M4, M7 결과
+```
+
 ### 4.2 Phase 2 (셸 분리)
 
 ```
