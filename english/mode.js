@@ -1,7 +1,10 @@
+import { state } from './state.js';
+import { stopAllSpeech } from './voice.js';
+
     // =========================================================================
     // 4. モード切替 (長文読解 / 4択クイズ / 英作文添削)
     // =========================================================================
-    function switchMode(mode) {
+export function switchMode(mode) {
       state.currentMode = mode;
       stopAllSpeech();
       hideStatus();
@@ -45,7 +48,7 @@
       });
     }
 
-    function showStatus(msg, color = 'blue') {
+export function showStatus(msg, color = 'blue') {
       const box = document.getElementById('statusBox');
       if (!box) return;
       const styles = {
@@ -58,7 +61,7 @@
       box.classList.remove('hidden');
     }
 
-    function hideStatus() {
+export function hideStatus() {
       const box = document.getElementById('statusBox');
       if (box) box.classList.add('hidden');
     }

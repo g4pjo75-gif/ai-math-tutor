@@ -1,3 +1,6 @@
+import { engStore, sharedStore } from './state.js';
+import { loadWordbookAndHistory } from './wordbook.js';
+
 
     // =========================================================================
     // 3. 初期化 & 共通設定
@@ -37,7 +40,7 @@
       }
     });
 
-    function initModelDropdown() {
+export function initModelDropdown() {
       const selectEl = document.getElementById('modelSelect');
       if (!selectEl) return;
       const customModel = (engStore && engStore.getItem('custom_model_id')) || (sharedStore && sharedStore.getItem('custom_model_id')) || '';
@@ -51,29 +54,29 @@
       }
     }
 
-    function onModelChange() {
+export function onModelChange() {
       const val = document.getElementById('modelSelect').value;
       if (engStore) engStore.setItem('selected_model', val);
     }
 
-    function getActiveModel() {
+export function getActiveModel() {
       const custom = (engStore && engStore.getItem('custom_model_id')) || '';
       if (custom) return custom;
       return document.getElementById('modelSelect')?.value || 'gemini-3.8-flash';
     }
 
-    function getApiKey() {
+export function getApiKey() {
       return (sharedStore && sharedStore.getItem('gemini_api_key')) || '';
     }
 
-    function checkApiKeyBanner() {
+export function checkApiKeyBanner() {
       const banner = document.getElementById('apiWarningBanner');
       if (!banner) return;
       if (!getApiKey()) banner.classList.remove('hidden');
       else banner.classList.add('hidden');
     }
 
-    function unlockApp() {
+export function unlockApp() {
       const input = document.getElementById('pinInput').value.trim();
       const savedPin = (sharedStore ? (sharedStore.getItem('app_pin') || sharedStore.getItem('pin')) : null) || '1234';
       if (input === savedPin) {
@@ -84,30 +87,30 @@
       }
     }
 
-    function toggleDarkMode() {
+export function toggleDarkMode() {
       if (window.TutorUI) {
         window.TutorUI.toggleDarkMode({ storage: sharedStore, key: 'dark_mode' });
       }
     }
 
-    function changeTheme(theme) {
+export function changeTheme(theme) {
       if (window.TutorUI && typeof window.TutorUI.applyTheme === 'function') {
         window.TutorUI.applyTheme(theme, { storage: sharedStore, key: 'ui_theme' });
       }
     }
 
-    function openSettings() {
+export function openSettings() {
       document.getElementById('geminiKeyInput').value = getApiKey();
       document.getElementById('customModelInput').value = (engStore && engStore.getItem('custom_model_id')) || '';
       document.getElementById('newPinInput').value = (sharedStore && (sharedStore.getItem('app_pin') || sharedStore.getItem('pin'))) || '1234';
       window.TutorUI.openModal('settingsModal');
     }
 
-    function closeSettings() {
+export function closeSettings() {
       window.TutorUI.closeModal('settingsModal');
     }
 
-    function saveSettings() {
+export function saveSettings() {
       const key = document.getElementById('geminiKeyInput').value.trim();
       const customModel = document.getElementById('customModelInput').value.trim();
       const pin = document.getElementById('newPinInput').value.trim() || '1234';

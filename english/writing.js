@@ -1,14 +1,20 @@
+import { engStore, state } from './state.js';
+import { WRITING_CORRECTION_SCHEMA } from './schema.js';
+import { getActiveModel, getApiKey, openSettings } from './init.js';
+import { hideStatus, showStatus } from './mode.js';
+import { escapeHtml } from './voice.js';
+
     // =========================================================================
     // 7. 英作文 AI添削モード (Writing Correction Mode)
     // =========================================================================
-    function updateWordCount() {
+export function updateWordCount() {
       const text = (document.getElementById('writingStudentInput')?.value || '').trim();
       const words = text ? text.split(/\s+/).length : 0;
       const el = document.getElementById('writingWordCount');
       if (el) el.textContent = `${words} word${words === 1 ? '' : 's'}`;
     }
 
-    async function generateWritingPrompt() {
+export async function generateWritingPrompt() {
       const apiKey = getApiKey();
       if (!apiKey) {
         openSettings();
@@ -48,7 +54,7 @@
       }
     }
 
-    async function submitWritingForCorrection() {
+export async function submitWritingForCorrection() {
       const studentText = (document.getElementById('writingStudentInput')?.value || '').trim();
       if (!studentText) {
         window.TutorUI.showToast('⚠️ 添削するあなたの英文を入力してください。', 'amber');
@@ -122,7 +128,7 @@
       }
     }
 
-    function renderWritingCorrection(data) {
+export function renderWritingCorrection(data) {
       const box = document.getElementById('writingResultSection');
       if (!box) return;
 

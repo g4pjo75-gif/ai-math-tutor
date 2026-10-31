@@ -2,7 +2,7 @@
     // =========================================================================
     // 2. Gemini 構造化出力スキーマ定義
     // =========================================================================
-    const ENGLISH_READING_SCHEMA = {
+export const ENGLISH_READING_SCHEMA = {
       type: 'OBJECT',
       properties: {
         passage_en: { type: 'STRING', description: '認識された英文全文または問題文' },
@@ -69,7 +69,7 @@
       required: ['passage_en', 'translation_ja', 'twin_quiz']
     };
 
-    const ENGLISH_QUIZ_SCHEMA = {
+export const ENGLISH_QUIZ_SCHEMA = {
       type: 'OBJECT',
       properties: {
         target_point: { type: 'STRING', description: '出題単元・文法ポイント名' },
@@ -92,7 +92,7 @@
       required: ['question_en', 'translation_ja', 'choices', 'correct_index', 'choice_feedback', 'explanation']
     };
 
-    const WRITING_CORRECTION_SCHEMA = {
+export const WRITING_CORRECTION_SCHEMA = {
       type: 'OBJECT',
       properties: {
         score: { type: 'INTEGER', description: '100点満点の評価スコア' },

@@ -1,3 +1,11 @@
+import { changeTheme, closeSettings, onModelChange, openSettings, saveSettings, toggleDarkMode, unlockApp } from './init.js';
+import { switchMode } from './mode.js';
+import { analyzeEnglishProblem, clearImage, handleImageUpload } from './reading.js';
+import { generateEnglishQuiz, selectEnglishQuizChoice, speakQuizFullSentence, speakQuizQuestion, submitEnglishQuizAnswer, toggleQuizHint } from './quiz.js';
+import { generateWritingPrompt, submitWritingForCorrection, updateWordCount } from './writing.js';
+import { addWordDirect, addWordToWordbook, clearCurrentHistoryTab, closeHistoryModal, deleteHistoryItem, deleteWordItem, openAddCustomWord, openHistoryModal, renderWordbookList, restoreHistoryItem, saveAllLessonWords, saveCurrentLessonToHistory, saveCustomWord, saveQuizRecordToHistory, saveWritingToHistory, switchHistoryTab, toggleWordMemorized } from './wordbook.js';
+import { playEnglishSpeech, speakEnglishText, stopAllSpeech } from './voice.js';
+
 // english/actions-map.js — Phase 4-A: 영어 액션 등록표
 TutorActions.register({
   'unlock': () => unlockApp(),

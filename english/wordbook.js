@@ -1,7 +1,14 @@
+import { engStore, state } from './state.js';
+import { switchMode } from './mode.js';
+import { renderEnglishResult } from './reading.js';
+import { renderEnglishQuizChoices } from './quiz.js';
+import { renderWritingCorrection, updateWordCount } from './writing.js';
+import { escapeHtml } from './voice.js';
+
     // =========================================================================
     // 8. マイ単語帳 & 復習ノート (Wordbook & Study History)
     // =========================================================================
-    function loadWordbookAndHistory() {
+export function loadWordbookAndHistory() {
       if (!engStore) return;
       try {
         const wb = JSON.parse(engStore.getItem('wordbook') || '[]');
@@ -18,7 +25,7 @@
       updateWordbookBadges();
     }
 
-    function persistWordbook() {
+export function persistWordbook() {
       if (!engStore) return false;
       if (state.wordbookList.length > 300) state.wordbookList = state.wordbookList.slice(0, 300);
       const ok = engStore.setItem('wordbook', JSON.stringify(state.wordbookList));
@@ -26,7 +33,7 @@
       return ok;
     }
 
-    function persistHistory() {
+export function persistHistory() {
       if (!engStore) return false;
       if (state.englishHistory.length > 80) state.englishHistory = state.englishHistory.slice(0, 80);
       const ok = engStore.setItem('history', JSON.stringify(state.englishHistory));
@@ -34,7 +41,7 @@
       return ok;
     }
 
-    function updateWordbookBadges() {
+export function updateWordbookBadges() {
       const badge = document.getElementById('wordbookBadge');
       if (badge) badge.textContent = String(state.wordbookList.length);
       const wbLabel = document.getElementById('wordbookCountLabel');
@@ -43,7 +50,7 @@
       if (notesLabel) notesLabel.textContent = String(state.englishHistory.length);
     }
 
-    function addWordDirect(word, meaning, example = '') {
+export function addWordDirect(word, meaning, example = '') {
       const cleanWord = String(word || '').trim();
       if (!cleanWord) return;
       const exists = state.wordbookList.some(w => w.word.toLowerCase() === cleanWord.toLowerCase());
@@ -66,14 +73,14 @@
       }
     }
 
-    function addWordToWordbook(idx) {
+export function addWordToWordbook(idx) {
       if (!state.lastLessonData || !Array.isArray(state.lastLessonData.vocabulary)) return;
       const v = state.lastLessonData.vocabulary[idx];
       if (!v) return;
       addWordDirect(v.word, v.meaning, v.example || '');
     }
 
-    function saveAllLessonWords() {
+export function saveAllLessonWords() {
       if (!state.lastLessonData || !Array.isArray(state.lastLessonData.vocabulary)) return;
       let addedCount = 0;
       state.lastLessonData.vocabulary.forEach(v => {
@@ -95,12 +102,12 @@
       window.TutorUI.showToast(`🔤 新しく ${addedCount} 個の単語をマイ単語帳に一括登録しました！`, 'green');
     }
 
-    function openAddCustomWord() {
+export function openAddCustomWord() {
       document.getElementById('customWordForm').classList.remove('hidden');
       document.getElementById('customWordInput').focus();
     }
 
-    function saveCustomWord() {
+export function saveCustomWord() {
       const w = document.getElementById('customWordInput').value.trim();
       const m = document.getElementById('customMeaningInput').value.trim();
       const ex = document.getElementById('customExampleInput').value.trim();
@@ -116,7 +123,7 @@
       renderWordbookList();
     }
 
-    function toggleWordMemorized(id) {
+export function toggleWordMemorized(id) {
       const item = state.wordbookList.find(w => w.id === id);
       if (item) {
         item.memorized = !item.memorized;
@@ -125,14 +132,14 @@
       }
     }
 
-    function deleteWordItem(id) {
+export function deleteWordItem(id) {
       state.wordbookList = state.wordbookList.filter(w => w.id !== id);
       persistWordbook();
       renderWordbookList();
     }
 
     // 学習履歴の保存（長文解説・4択クイズ・英作文）
-    function saveCurrentLessonToHistory() {
+export function saveCurrentLessonToHistory() {
       if (!state.lastLessonData) return;
       const { _twinQuizConsumed, ...persistPayload } = state.lastLessonData;
       const entry = {
@@ -151,7 +158,7 @@
       }
     }
 
-    function saveQuizRecordToHistory(isCorrect) {
+export function saveQuizRecordToHistory(isCorrect) {
       if (!state.currentQuizData) return;
       const correctText = state.currentQuizData.displayChoices[state.currentQuizData.displayCorrectIndex];
       const entry = {
@@ -168,7 +175,7 @@
       }
     }
 
-    function saveWritingToHistory() {
+export function saveWritingToHistory() {
       if (!state.lastWritingData) return;
       const entry = {
         id: Date.now().toString(),
@@ -184,17 +191,17 @@
       }
     }
 
-    function openHistoryModal(defaultTab = 'wordbook') {
+export function openHistoryModal(defaultTab = 'wordbook') {
       loadWordbookAndHistory();
       window.TutorUI.openModal('historyModal');
       switchHistoryTab(defaultTab);
     }
 
-    function closeHistoryModal() {
+export function closeHistoryModal() {
       window.TutorUI.closeModal('historyModal');
     }
 
-    function switchHistoryTab(tab) {
+export function switchHistoryTab(tab) {
       state.currentHistoryTab = tab;
       const wbBtn = document.getElementById('tabBtnWordbook');
       const notesBtn = document.getElementById('tabBtnNotes');
@@ -214,7 +221,7 @@
       }
     }
 
-    function renderWordbookList() {
+export function renderWordbookList() {
       const container = document.getElementById('historyListContainer');
       if (!container) return;
       const hideMeaning = document.getElementById('hideMeaningToggle')?.checked || false;
@@ -255,7 +262,7 @@
       `).join('');
     }
 
-    function renderNotesHistoryList() {
+export function renderNotesHistoryList() {
       const container = document.getElementById('historyListContainer');
       if (!container) return;
 
@@ -297,7 +304,7 @@
       }).join('');
     }
 
-    function restoreHistoryItem(id) {
+export function restoreHistoryItem(id) {
       const item = state.englishHistory.find(h => h.id === id);
       if (!item || !item.payload) return;
       closeHistoryModal();
@@ -336,13 +343,13 @@
       window.TutorUI.showToast('📂 ノートから学習記録を復元しました！', 'blue');
     }
 
-    function deleteHistoryItem(id) {
+export function deleteHistoryItem(id) {
       state.englishHistory = state.englishHistory.filter(h => h.id !== id);
       persistHistory();
       renderNotesHistoryList();
     }
 
-    function clearCurrentHistoryTab() {
+export function clearCurrentHistoryTab() {
       if (state.currentHistoryTab === 'wordbook') {
         if (!state.wordbookList.length) return;
         state.wordbookList = [];

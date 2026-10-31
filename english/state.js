@@ -1,15 +1,15 @@
     // =========================================================================
     // 1. ストレージ・音声エンジンの初期化
     // =========================================================================
-    const sharedStore = window.TutorStorage
+export const sharedStore = window.TutorStorage
       ? window.TutorStorage.create({ prefix: 'tutor_', legacyPrefixes: ['amt_'] })
       : null;
-    const engStore = window.TutorStorage
+export const engStore = window.TutorStorage
       ? window.TutorStorage.create({ prefix: 'aet_', legacyPrefixes: [''] })
       : null;
 
     // 英語音声 (en-US)
-    const englishSpeech = window.TutorSpeech
+export const englishSpeech = window.TutorSpeech
       ? window.TutorSpeech.create({
           lang: 'en-US',
           defaultRate: 0.95,
@@ -18,7 +18,7 @@
       : null;
 
     // 日本語音声 (解説読み上げ補助用 ja-JP)
-    const japaneseSpeech = window.TutorSpeech
+export const japaneseSpeech = window.TutorSpeech
       ? window.TutorSpeech.create({
           lang: 'ja-JP',
           defaultRate: 1.0,
@@ -29,7 +29,7 @@
     // アプリ状態
 
     // ==== Phase 4-B: 공유 가변 상태 (ESM import 바인딩은 재할당 불가) ====
-    const state = {
+export const state = {
       currentMode: 'reading', // 'reading' | 'quiz' | 'writing'
       currentImageBase64: null,
       lastLessonData: null,

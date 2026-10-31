@@ -1,7 +1,13 @@
+import { state } from './state.js';
+import { ENGLISH_QUIZ_SCHEMA } from './schema.js';
+import { getActiveModel, getApiKey, openSettings } from './init.js';
+import { hideStatus, showStatus } from './mode.js';
+import { escapeHtml, speakEnglishText } from './voice.js';
+
     // =========================================================================
     // 6. 4択 文法・語彙クイズモード (A-01 / A-02 監査基準完全準拠)
     // =========================================================================
-    function shuffleQuizChoices(choices, correctIndex, feedbacks = []) {
+export function shuffleQuizChoices(choices, correctIndex, feedbacks = []) {
       const items = choices.map((c, idx) => ({
         text: String(c).trim(),
         feedback: Array.isArray(feedbacks) ? String(feedbacks[idx] || '').trim() : '',
@@ -18,7 +24,7 @@
       };
     }
 
-    function isValidQuizResponse(q) {
+export function isValidQuizResponse(q) {
       if (!q || !Array.isArray(q.choices) || q.choices.length !== 4) return false;
       const cleaned = q.choices.map(c => String(c || '').trim());
       if (cleaned.some(c => !c)) return false;
@@ -27,7 +33,7 @@
       return true;
     }
 
-    function applyAndRenderEnglishQuiz(res, unitHint) {
+export function applyAndRenderEnglishQuiz(res, unitHint) {
       const shuffled = shuffleQuizChoices(res.choices, res.correct_index, res.choice_feedback);
       state.currentQuizData = {
         targetPoint: res.target_point || unitHint,
@@ -57,7 +63,7 @@
       renderEnglishQuizChoices();
     }
 
-    async function generateEnglishQuiz(useCurrentLesson = false) {
+export async function generateEnglishQuiz(useCurrentLesson = false) {
       const unitHint = document.getElementById('unitSelect').value;
 
       // ① ワンショット事前生成された twin_quiz があれば API消費0・待ち時間0秒で即座に出題！
@@ -130,7 +136,7 @@ ${contextText}
       }
     }
 
-    function renderEnglishQuizChoices() {
+export function renderEnglishQuizChoices() {
       const grid = document.getElementById('quizChoiceGrid');
       if (!grid || !state.currentQuizData) return;
       const labels = ['A', 'B', 'C', 'D'];
@@ -151,12 +157,12 @@ ${contextText}
       }).join('');
     }
 
-    function selectEnglishQuizChoice(idx) {
+export function selectEnglishQuizChoice(idx) {
       state.selectedChoiceIndex = idx;
       renderEnglishQuizChoices();
     }
 
-    function toggleQuizHint() {
+export function toggleQuizHint() {
       const el = document.getElementById('quizHintContent');
       const icon = document.getElementById('quizHintIcon');
       if (!el) return;
@@ -164,7 +170,7 @@ ${contextText}
       if (icon) icon.textContent = isHidden ? '▼' : '▲';
     }
 
-    function submitEnglishQuizAnswer() {
+export function submitEnglishQuizAnswer() {
       if (!state.currentQuizData || state.selectedChoiceIndex < 0) {
         window.TutorUI.showToast('⚠️ 選択肢 (A〜D) を1つ選んでください。', 'amber');
         return;
@@ -220,13 +226,13 @@ ${contextText}
       speakQuizFullSentence(correctText);
     }
 
-    function speakQuizQuestion() {
+export function speakQuizQuestion() {
       if (!state.currentQuizData) return;
       const text = state.currentQuizData.questionEn.replace(/\(\s*\)|_{2,}/g, ' blank ');
       speakEnglishText(text);
     }
 
-    function speakQuizFullSentence(correctChoice) {
+export function speakQuizFullSentence(correctChoice) {
       if (!state.currentQuizData) return;
       const filled = state.currentQuizData.questionEn.replace(/\(\s*\)|（\s*）|_{2,}/, ` ${correctChoice} `);
       speakEnglishText(filled);

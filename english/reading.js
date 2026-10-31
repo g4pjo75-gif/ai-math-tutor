@@ -1,7 +1,13 @@
+import { engStore, state } from './state.js';
+import { ENGLISH_READING_SCHEMA } from './schema.js';
+import { getActiveModel, getApiKey, openSettings } from './init.js';
+import { hideStatus, showStatus } from './mode.js';
+import { escapeHtml } from './voice.js';
+
     // =========================================================================
     // 5. 写真アップロード & 長文読解・文法解説
     // =========================================================================
-    function handleImageUpload(e) {
+export function handleImageUpload(e) {
       const file = e.target.files?.[0];
       if (!file) return;
 
@@ -47,7 +53,7 @@
       e.target.value = '';
     }
 
-    function clearImage() {
+export function clearImage() {
       state.currentImageBase64 = null;
       document.getElementById('uploadPrompt').classList.remove('hidden');
       const preview = document.getElementById('imagePreview');
@@ -56,7 +62,7 @@
       document.getElementById('clearImageBtn').classList.add('hidden');
     }
 
-    async function analyzeEnglishProblem() {
+export async function analyzeEnglishProblem() {
       const userText = document.getElementById('questionInput').value.trim();
       if (!state.currentImageBase64 && !userText) {
         window.TutorUI.showToast('⚠️ 写真を撮影するか、英文・質問を入力してください。', 'amber');
@@ -145,7 +151,7 @@
       }
     }
 
-    function renderEnglishResult(data) {
+export function renderEnglishResult(data) {
       const container = document.getElementById('resultContent');
       if (!container) return;
 
