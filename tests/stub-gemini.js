@@ -8,6 +8,7 @@ const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 const FIXTURE_FILES = {
   'math-solve-2problems': 'math-solve-2problems.json',
   'math-quiz': 'math-quiz.json',
+  'math-judge': 'math-judge.json',
   'math-simplify': 'math-simplify.json',
   'math-overall-chat': 'math-overall-chat.json',
   'math-step-chat': 'math-step-chat.json',
