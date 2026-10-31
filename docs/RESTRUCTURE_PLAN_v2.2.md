@@ -1375,6 +1375,177 @@ self.addEventListener('activate', (event) => {
 
 **롤백**: `git reset --hard v1.9-phase1`
 
+### 4.3 Phase 3 (파일 분해, classic script 유지)
+
+**전제**: Phase 2 완료(`13c95e1`), 태그 `v1.9-phase2` 생성.
+
+**원칙**
+
+1. **구간을 자르기만 한다.** 함수 이동·이름 변경·병합 금지.
+2. 각 파일은 `app.js`의 **연속 구간**이며, **적재 순서 = 원본 순서**다.
+3. 따라서 `cat 모듈들 > rebuilt.js` 결과가 원본과 **바이트 단위로 같아야** 한다. 이것이 유일한 합격 증거다.
+4. 파일 선두에 빈 줄 1개가 남는 경우가 있다. **정리하지 않는다**(정리하면 diff가 난다).
+
+**수학 — 20개**
+
+| # | 파일 | 구간 | 줄 | 내용 |
+|---:|---|---:|---:|---|
+| 1 | `state.js` | 1–90 | 90 | 스토리지 래퍼, 공용 상태, `EMBEDDED_GEMINI_API_KEY` |
+| 2 | `theme-ui.js` | 91–143 | 53 | 테마·다크모드·안전영역 |
+| 3 | `history.js` | 144–321 | 178 | マイノート 저장/복원/삭제 |
+| 4 | `similar.js` | 322–405 | 84 | 類題 생성 |
+| 5 | `quiz.js` | 406–755 | 350 | 4択 UI·선택·채점·힌트 |
+| 6 | `quiz-result.js` | 756–1012 | 257 | 결과 렌더·전체해설·기록·진행률·섹션 페이드 |
+| 7 | `init.js` | 1013–1081 | 69 | 초기화 + PIN 잠금해제 |
+| 8 | `settings.js` | 1082–1254 | 173 | 설정 모달·모델 목록 |
+| 9 | `upload.js` | 1255–1335 | 81 | 이미지 선택·리사이즈 |
+| 10 | `schema.js` | 1336–1694 | 359 | 프롬프트 + `TUTOR_RESPONSE_SCHEMA` 등 |
+| 11 | `api-solve.js` | 1695–1940 | 246 | `fetchWithTimeout`/`parseTutorJson`/`callGeminiModel`/`solveProblem` |
+| 12 | `render.js` | 1941–2321 | 381 | KaTeX 렌더·정규화·문제 탭·단계 카드 |
+| 13 | `simplify.js` | 2322–2426 | 105 | 「もっとやさしく」 |
+| 14 | `voice.js` | 2427–2681 | 255 | 음성 선택·분할·재생 |
+| 15 | `ui-status.js` | 2682–2762 | 81 | 토스트·상태·쿼터 안내 |
+| 16 | `visual.js` | 2763–2879 | 117 | SVG 진입점·파서 |
+| 17 | `visual-graph.js` | 2880–3269 | 390 | 그래프 렌더 |
+| 18 | `visual-numberline.js` | 3270–3360 | 91 | 수직선 렌더 |
+| 19 | `chat-step.js` | 3361–3589 | 229 | 단계 Q&A |
+| 20 | `chat-overall.js` | 3590–3810 | 221 | 문제 전체 Q&A |
+
+**영어 — 9개**
+
+| # | 파일 | 구간 | 줄 | 내용 |
+|---:|---|---:|---:|---|
+| 1 | `state.js` | 1–40 | 40 | 스토어·음성·앱 상태 |
+| 2 | `schema.js` | 41–158 | 118 | 읽기/퀴즈/작문 스키마 |
+| 3 | `init.js` | 159–289 | 131 | 초기화·모델 드롭다운·API키 배너·PIN |
+| 4 | `mode.js` | 290–354 | 65 | 모드 전환 |
+| 5 | `reading.js` | 355–616 | 262 | 사진/텍스트 읽기 분석 |
+| 6 | `quiz.js` | 617–850 | 234 | 4択 |
+| 7 | `writing.js` | 851–1042 | 192 | 작문 첨삭 |
+| 8 | `wordbook.js` | 1043–1402 | 360 | 단어장·복습노트 |
+| 9 | `voice.js` | 1403–1446 | 44 | 낭독 |
+
+```
+[Phase 3] 모듈 분해 (동작 무변경)
+
+0) 태그: git tag -a v1.9-phase2 -m "phase2 complete: app.js extraction"
+   백업: backup/pre-phase3/ 에 math/app.js, english/app.js, math/index.html, english/index.html
+
+1) 분해 (스크립트로 수행, 수동 복사 금지)
+   python3 - <<'PY'
+   import io, os
+
+   MATH = [
+     ('state.js',1,90),('theme-ui.js',91,143),('history.js',144,321),('similar.js',322,405),
+     ('quiz.js',406,755),('quiz-result.js',756,1012),('init.js',1013,1081),('settings.js',1082,1254),
+     ('upload.js',1255,1335),('schema.js',1336,1694),('api-solve.js',1695,1940),('render.js',1941,2321),
+     ('simplify.js',2322,2426),('voice.js',2427,2681),('ui-status.js',2682,2762),('visual.js',2763,2879),
+     ('visual-graph.js',2880,3269),('visual-numberline.js',3270,3360),('chat-step.js',3361,3589),
+     ('chat-overall.js',3590,3810),
+   ]
+   ENG = [
+     ('state.js',1,40),('schema.js',41,158),('init.js',159,289),('mode.js',290,354),
+     ('reading.js',355,616),('quiz.js',617,850),('writing.js',851,1042),('wordbook.js',1043,1402),
+     ('voice.js',1403,1446),
+   ]
+
+   def split(src, outdir, spec):
+       raw = io.open(src, encoding='utf-8').read()
+       lines = raw.splitlines(keepends=True)
+       assert ''.join(lines) == raw
+       prev = 0
+       for name, a, b in spec:
+           assert a == prev + 1, (name, 'gap', prev, a)
+           io.open(os.path.join(outdir, name), 'w', encoding='utf-8', newline='').write(''.join(lines[a-1:b]))
+           prev = b
+       assert prev == len(lines), (prev, len(lines))
+       print(src, '->', len(spec), 'files, total', len(lines), 'lines')
+
+   split('math/app.js', 'math', MATH)
+   split('english/app.js', 'english', ENG)
+   PY
+
+2) app.js 삭제
+   git rm math/app.js english/app.js
+   (분해 결과는 위 스크립트가 이미 생성했다. 삭제 전에 3)의 무손실 증명을 먼저 통과시킨다.)
+
+3) 무손실 증명 (필수, 통과 못하면 즉시 중단)
+   cat math/state.js math/theme-ui.js math/history.js math/similar.js math/quiz.js \
+       math/quiz-result.js math/init.js math/settings.js math/upload.js math/schema.js \
+       math/api-solve.js math/render.js math/simplify.js math/voice.js math/ui-status.js \
+       math/visual.js math/visual-graph.js math/visual-numberline.js math/chat-step.js \
+       math/chat-overall.js > /tmp/m_rebuilt.js
+   git show v1.9-phase2:math/app.js > /tmp/m_orig.js
+   diff /tmp/m_orig.js /tmp/m_rebuilt.js          → 0
+
+   cat english/state.js english/schema.js english/init.js english/mode.js english/reading.js \
+       english/quiz.js english/writing.js english/wordbook.js english/voice.js > /tmp/e_rebuilt.js
+   git show v1.9-phase2:english/app.js > /tmp/e_orig.js
+   diff /tmp/e_orig.js /tmp/e_rebuilt.js          → 0
+
+   grep -c '^\s*\(async \)\?function ' math/*.js | awk -F: '{s+=$2} END{print s}'      → 97
+   grep -c '^\s*\(async \)\?function ' english/*.js | awk -F: '{s+=$2} END{print s}'   → 60
+
+4) index.html 스크립트 태그 교체 (순서 고정)
+   math/index.html 의 <script src="app.js?v=20261031"></script> 1줄을 아래 20줄로 교체
+     <script src="state.js?v=20261031"></script>
+     <script src="theme-ui.js?v=20261031"></script>
+     <script src="history.js?v=20261031"></script>
+     <script src="similar.js?v=20261031"></script>
+     <script src="quiz.js?v=20261031"></script>
+     <script src="quiz-result.js?v=20261031"></script>
+     <script src="init.js?v=20261031"></script>
+     <script src="settings.js?v=20261031"></script>
+     <script src="upload.js?v=20261031"></script>
+     <script src="schema.js?v=20261031"></script>
+     <script src="api-solve.js?v=20261031"></script>
+     <script src="render.js?v=20261031"></script>
+     <script src="simplify.js?v=20261031"></script>
+     <script src="voice.js?v=20261031"></script>
+     <script src="ui-status.js?v=20261031"></script>
+     <script src="visual.js?v=20261031"></script>
+     <script src="visual-graph.js?v=20261031"></script>
+     <script src="visual-numberline.js?v=20261031"></script>
+     <script src="chat-step.js?v=20261031"></script>
+     <script src="chat-overall.js?v=20261031"></script>
+
+   english/index.html 도 동일하게 9줄 (state, schema, init, mode, reading, quiz,
+   writing, wordbook, voice 순)
+
+5) SW 갱신
+   math/sw.js    : CACHE_NAME 'amt-cache-v2.8' → 'v2.9'
+                   ASSETS 의 './app.js' 를 위 20개 파일로 교체
+   english/sw.js : CACHE_NAME 'aet-cache-v1.8' → 'v1.9'
+                   ASSETS 의 './app.js' 를 위 9개 파일로 교체
+
+6) 문법 검사
+   for f in math/*.js english/*.js *.js; do node --check "$f" || echo "FAIL $f"; done
+
+7) 런타임 검증 (localhost)
+   - 콘솔 에러 0, 404 0
+   - 수학: 解説 1件 / 4択 1問 / ノート復元 / 設定モーダル開閉
+   - 영어: 読解 1件 / 4択 1問 / 単語帳 1件 / 設定モーダル開閉
+   - 스모크 M1·M3·M4·M7
+   - caches.keys() → amt-cache-v2.9 / aet-cache-v1.9
+
+보고 / 커밋 (2개)
+  refactor(math): split app.js into modules (no logic change)
+  refactor(english): split app.js into modules (no logic change)
+```
+
+**Phase 3 DoD**
+
+- [ ] 수학 20파일 / 영어 9파일, 최대 390줄
+- [ ] `cat` 재구성 diff 2건 모두 0
+- [ ] 함수 97 / 60 유지
+- [ ] `app.js` 삭제, SW ASSETS에 모듈 등록
+- [ ] 콘솔 에러 0, 404 0, 캐시 v2.9 / v1.9
+
+**롤백**: `git reset --hard v1.9-phase2`
+
+> Phase 3이 끝나면 "3,810줄 단일 파일" 문제는 사라진다. 다만 이 시점의 모듈은 여전히 전역 함수다.
+> 의존 관계 정리(ESM)·`onclick` 제거는 Phase 4에서 한다.
+
 ---
 
 ## 5. 리스크와 대응
