@@ -1,3 +1,17 @@
+import { changeTheme, toggleDarkMode } from './theme-ui.js';
+import { closeTutorHistoryModal, deleteFromTutorHistory, restoreFromHistory, saveCurrentToTutorHistory, showTutorHistory } from './history.js';
+import { generateSimilarProblem } from './similar.js';
+import { insertMathSymbol, selectQuizChoice, setQuizInputMode, startQuizChallenge, submitChoiceAnswer } from './quiz.js';
+import { closeQuizSection, saveQuizToHistory, showQuizFullSolution, submitStudentAnswer, toggleQuizHint } from './quiz-result.js';
+import { unlockApp } from './init.js';
+import { closeSettings, fetchAvailableModels, onModelDropdownChange, openSettings, saveSettings } from './settings.js';
+import { clearImage, handleImageUpload } from './upload.js';
+import { solveProblem } from './api-solve.js';
+import { simplifyStep } from './simplify.js';
+import { onSpeechRateChange, onVoiceChange, playAllSteps, playSingleStep, speakJapanese, stopSpeech, testVoice } from './voice.js';
+import { openStepChatWithQuote, sendQuickQuestion, sendStepQuestion, toggleStepChat } from './chat-step.js';
+import { sendOverallQuestion, sendOverallQuickQuestion } from './chat-overall.js';
+
 // math/actions-map.js — Phase 4-A: 수학 액션 등록표
 TutorActions.register({
   'unlock': () => unlockApp(),

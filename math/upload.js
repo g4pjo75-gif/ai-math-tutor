@@ -1,8 +1,13 @@
+import { state } from './state.js';
+import { setUploadProgress } from './quiz-result.js';
+import { showStatus } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
 
     // =========================================================================
     // 4. 画像アップロード & Canvas リサイズ圧縮（最大幅 1280px, JPEG 0.85）
     // =========================================================================
-    function handleImageUpload(event) {
+export function handleImageUpload(event) {
       const inputEl = event.target;
       const file = inputEl?.files?.[0];
       // P0-5: 同じ写真を再選択できるよう input.value を即リセット
@@ -70,7 +75,7 @@
       reader.readAsDataURL(file);
     }
 
-    function clearImage() {
+export function clearImage() {
       state.currentImageBase64 = null;
       document.getElementById('imagePreview').src = '';
       const previewContainer = document.getElementById('imagePreviewContainer');

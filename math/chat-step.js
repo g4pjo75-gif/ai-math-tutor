@@ -1,7 +1,15 @@
+import { safeStorage, state } from './state.js';
+import { openSettings } from './settings.js';
+import { callGeminiModel } from './api-solve.js';
+import { renderMathIn, sanitizeMathString } from './render.js';
+import { speakJapanese, stopSpeech } from './voice.js';
+import { isQuotaError, showQuotaError, showStatus, showToast } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
     // =========================================================================
     // 9. ステップ別フォローアップ質問インラインチャット (Step Q&A)
     // =========================================================================
-    function toggleStepChat(stepIdx) {
+export function toggleStepChat(stepIdx) {
       const panel = document.getElementById(`step-chat-panel-${stepIdx}`);
       if (!panel) return;
       const isHidden = panel.classList.toggle('hidden');
@@ -13,7 +21,7 @@
       }
     }
 
-    function openStepChatWithQuote(stepIdx, partKey) {
+export function openStepChatWithQuote(stepIdx, partKey) {
       const panel = document.getElementById(`step-chat-panel-${stepIdx}`);
       if (!panel) return;
       panel.classList.remove('hidden');
@@ -43,7 +51,7 @@
       }
     }
 
-    function renderStepChatLogs(stepIdx) {
+export function renderStepChatLogs(stepIdx) {
       const logsEl = document.getElementById(`step-chat-logs-${stepIdx}`);
       if (!logsEl) return;
 
@@ -82,13 +90,13 @@
       logsEl.scrollTop = logsEl.scrollHeight;
     }
 
-    function sendQuickQuestion(stepIdx, text) {
+export function sendQuickQuestion(stepIdx, text) {
       const inputEl = document.getElementById(`step-chat-input-${stepIdx}`);
       if (inputEl) inputEl.value = text;
       sendStepQuestion(stepIdx);
     }
 
-    async function sendStepQuestion(stepIdx) {
+export async function sendStepQuestion(stepIdx) {
       const inputEl = document.getElementById(`step-chat-input-${stepIdx}`);
       if (!inputEl) return;
       const question = (inputEl.value || '').trim();

@@ -1,5 +1,8 @@
+import { state } from './state.js';
+import { escapeHtml } from './chat-overall.js';
+
     // ユーティリティ関数（上部ステータスボックス + 画面下部トースト通知で常時視認可能）
-    function showToast(text, color = 'blue') {
+export function showToast(text, color = 'blue') {
       const toast = document.getElementById('toastNotification');
       if (!toast) return;
       const styles = {
@@ -17,7 +20,7 @@
       }, 4000);
     }
 
-    function showStatus(html, color = 'blue') {
+export function showStatus(html, color = 'blue') {
       const box = document.getElementById('statusBox');
       const styles = {
         blue: 'bg-blue-50 border-blue-200 text-blue-900 dark:bg-blue-950/60 dark:border-blue-800 dark:text-blue-100',
@@ -38,19 +41,19 @@
       }
     }
 
-    function hideStatus() {
+export function hideStatus() {
       document.getElementById('statusBox').classList.add('hidden');
     }
 
     // クォータ超過エラーの判定
-    function isQuotaError(err) {
+export function isQuotaError(err) {
       const msg = (err?.message || '').toLowerCase();
       return msg.includes('quota') || msg.includes('rate limit') || msg.includes('resource_exhausted') ||
         msg.includes('billing') || msg.includes('limit: 0');
     }
 
     // クォータ超過時の推奨モデル一覧を取得
-    function getRecommendedModels() {
+export function getRecommendedModels() {
       const selectEl = document.getElementById('modelSelect');
       if (!selectEl) return [];
       return [...selectEl.options]
@@ -59,7 +62,7 @@
     }
 
     // クォータ超過エラー表示（モデル切り替えボタン付き）
-    function showQuotaError(selectedModel) {
+export function showQuotaError(selectedModel) {
       const otherModels = getRecommendedModels()
         .filter(v => v !== selectedModel)
         .slice(0, 4);

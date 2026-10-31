@@ -1,7 +1,13 @@
+import { safeStorage } from './state.js';
+import { checkApiKeyWarning } from './init.js';
+import { fetchWithTimeout } from './api-solve.js';
+import { showStatus } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
     // =========================================================================
     // 3. 設定モーダル & [解決策 1] ListModels API 利用可能モデル自動取得
     // =========================================================================
-    function openSettings() {
+export function openSettings() {
       document.getElementById('geminiKeyInput').value = safeStorage.getItem('gemini_api_key') || '';
       document.getElementById('customModelInput').value = safeStorage.getItem('custom_model_id') || '';
       document.getElementById('newPinInput').value = safeStorage.getItem('app_pin') || '1234';
@@ -10,13 +16,13 @@
       modal.classList.add('flex');
     }
 
-    function closeSettings() {
+export function closeSettings() {
       const modal = document.getElementById('settingsModal');
       modal.classList.add('hidden');
       modal.classList.remove('flex');
     }
 
-    function saveSettings() {
+export function saveSettings() {
       const geminiKey = document.getElementById('geminiKeyInput').value.trim();
       const customModel = document.getElementById('customModelInput').value.trim();
       const newPin = document.getElementById('newPinInput').value.trim() || '1234';
@@ -39,7 +45,7 @@
       }
     }
 
-    async function fetchAvailableModels() {
+export async function fetchAvailableModels() {
       const keyInputEl = document.getElementById('geminiKeyInput');
       const key = (keyInputEl ? keyInputEl.value.trim() : '') || safeStorage.getItem('gemini_api_key');
       const statusEl = document.getElementById('modelFetchStatus');
@@ -106,7 +112,7 @@
       }
     }
 
-    function populateModelSelect(models) {
+export function populateModelSelect(models) {
       const selectEl = document.getElementById('modelSelect');
       if (!selectEl) return;
 
@@ -150,7 +156,7 @@
       }
     }
 
-    function addOrSelectModelOption(modelId, label) {
+export function addOrSelectModelOption(modelId, label) {
       const selectEl = document.getElementById('modelSelect');
       let existing = [...selectEl.options].find(o => o.value === modelId);
       if (!existing) {
@@ -163,7 +169,7 @@
       safeStorage.setItem('selected_model', modelId);
     }
 
-    function onModelDropdownChange() {
+export function onModelDropdownChange() {
       const val = document.getElementById('modelSelect').value;
       safeStorage.setItem('selected_model', val);
       // ドロップダウンを直接変更すると Custom 入力欄の優先順位を解除し混乱を防ぐ

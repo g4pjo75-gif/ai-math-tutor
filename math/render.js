@@ -1,8 +1,16 @@
+import { state } from './state.js';
+import { closeQuizSection, showSectionWithFade } from './quiz-result.js';
+import { playAllSteps, stopSpeech } from './voice.js';
+import { showStatus } from './ui-status.js';
+import { renderVisual } from './visual.js';
+import { renderStepChatLogs } from './chat-step.js';
+import { escapeHtml, renderOverallChatLogs } from './chat-overall.js';
+
 
     // =========================================================================
     // 6. KaTeX 数式レンダリング & 不等号(leqq/geqq) 自動修復
     // =========================================================================
-    function sanitizeMathString(rawStr) {
+export function sanitizeMathString(rawStr) {
       if (!rawStr) return '';
       let s = String(rawStr);
       // JSONエスケープ脱落で壊れた 1leqqxleqq4 -> 1 \leqq x \leqq 4 の復元
@@ -13,7 +21,7 @@
       return s;
     }
 
-    function renderMathIn(el) {
+export function renderMathIn(el) {
       if (!el) return;
       if (typeof el === 'object' && el.textContent) {
         const cleaned = sanitizeMathString(el.textContent);
@@ -38,7 +46,7 @@
       }
     }
 
-    function normalizeTutorResult(data) {
+export function normalizeTutorResult(data) {
       if (!data) return [];
       const mapProblem = (p, i) => ({
         problem_label: p.problem_label || `問題 (${i + 1})`,
@@ -76,7 +84,7 @@
       return [];
     }
 
-    function renderProblemTabs() {
+export function renderProblemTabs() {
       const tabBar = document.getElementById('problemTabBar');
       if (!tabBar) return;
 
@@ -108,7 +116,7 @@
       });
     }
 
-    function switchProblemTab(index) {
+export function switchProblemTab(index) {
       if (index < 0 || index >= state.currentProblems.length) return;
       stopSpeech();
       closeQuizSection();
@@ -118,7 +126,7 @@
       displayCurrentProblem(true);
     }
 
-    function displayCurrentProblem(autoPlay = true) {
+export function displayCurrentProblem(autoPlay = true) {
       if (state.autoPlayTimer) {
         clearTimeout(state.autoPlayTimer);
         state.autoPlayTimer = null;
@@ -194,7 +202,7 @@
       }
     }
 
-    function renderTutorResult(data) {
+export function renderTutorResult(data) {
       const normalized = normalizeTutorResult(data);
       if (normalized.length === 0) {
         showStatus('⚠️ AIから有効な解説データを受け取れませんでした。もう一度お試しください。', 'amber');
@@ -228,7 +236,7 @@
     }
 
     // 1ステップカードの HTML（focus / why / watch_out を視覚的に分離 + ダークモード完全対応）
-    function stepCardHtml(step, idx) {
+export function stepCardHtml(step, idx) {
       const focus = String(step.focus || '').trim();
       const why = String(step.why || '').trim();
       const watch = String(step.watch_out || '').trim();
@@ -345,7 +353,7 @@
       `;
     }
 
-    function renderStepCards() {
+export function renderStepCards() {
       const stepsContainer = document.getElementById('stepsContainer');
       stepsContainer.innerHTML = '';
 

@@ -1,6 +1,13 @@
+import { safeStorage, state } from './state.js';
+import { openSettings } from './settings.js';
+import { callGeminiModel } from './api-solve.js';
+import { renderMathIn, sanitizeMathString } from './render.js';
+import { speakJapanese } from './voice.js';
+import { isQuotaError, showQuotaError, showStatus, showToast } from './ui-status.js';
+
     // 問題全体の解法・別解についての質問チャット (Alternative Solutions & Overall Q&A)
     // =========================================================================
-    function renderOverallChatLogs() {
+export function renderOverallChatLogs() {
       const container = document.getElementById('overallChatLogs');
       if (!container) return;
 
@@ -60,13 +67,13 @@
       container.scrollTop = container.scrollHeight;
     }
 
-    function sendOverallQuickQuestion(text) {
+export function sendOverallQuickQuestion(text) {
       const inputEl = document.getElementById('overallChatInput');
       if (inputEl) inputEl.value = text;
       sendOverallQuestion(text);
     }
 
-    async function sendOverallQuestion(directQuestion = null) {
+export async function sendOverallQuestion(directQuestion = null) {
       const inputEl = document.getElementById('overallChatInput');
       const question = (directQuestion || inputEl?.value || '').trim();
       if (!question) return;
@@ -211,7 +218,7 @@ ${question}
       }
     }
 
-    function escapeHtml(str) {
+export function escapeHtml(str) {
       return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')

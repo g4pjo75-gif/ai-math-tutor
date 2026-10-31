@@ -1,6 +1,17 @@
+import { safeStorage, state } from './state.js';
+import { closeQuizSection } from './quiz-result.js';
+import { openSettings } from './settings.js';
+import { clearImage } from './upload.js';
+import { TUTOR_RESPONSE_SCHEMA, buildSystemPrompt } from './schema.js';
+import { callGeminiModel } from './api-solve.js';
+import { renderTutorResult, sanitizeMathString } from './render.js';
+import { stopSpeech } from './voice.js';
+import { hideStatus, isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
     // 類題（数字を変えた問題）生成 & 自分で解く「類題チャレンジ」AI自動採点システム
     // =========================================================================
-    function buildSimilarProblemPrompt() {
+export function buildSimilarProblemPrompt() {
       const unitHint = document.getElementById('unitSelect').value;
       const currentProb = state.currentProblems[state.currentProblemIndex] || {};
       const recognizedProblem = currentProb.recognized_problem || document.getElementById('recognizedProblem')?.dataset?.rawMath || '';
@@ -18,7 +29,7 @@ ${keyPoint}`;
     }
 
     // 1. 類題の解説をすぐ見る（ワンショット1回呼び出しに最適化：従来の2回呼び出しを1回に削減）
-    async function generateSimilarProblem() {
+export async function generateSimilarProblem() {
       const btn = document.getElementById('similarProblemBtn');
       const btnText = document.getElementById('similarProblemBtnText');
       const btnSpinner = document.getElementById('similarProblemBtnSpinner');

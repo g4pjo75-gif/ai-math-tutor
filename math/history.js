@@ -1,6 +1,11 @@
+import { safeStorage, state } from './state.js';
+import { renderTutorResult } from './render.js';
+import { showStatus } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
     // マイノート（オ答ノート / 過去の解説記録）
     // =========================================================================
-    function initTutorHistory() {
+export function initTutorHistory() {
       const saved = safeStorage.getItem('tutor_history');
       if (saved) {
         try {
@@ -12,7 +17,7 @@
       }
     }
 
-    function saveTutorHistory(data, { attachChat = true } = {}) {
+export function saveTutorHistory(data, { attachChat = true } = {}) {
       if (!data) return null;
       const entry = {
         id: Date.now().toString(),
@@ -44,13 +49,13 @@
       return ok ? entry.id : null;
     }
 
-    function deleteFromTutorHistory(id) {
+export function deleteFromTutorHistory(id) {
       state.tutorHistory = state.tutorHistory.filter(item => item.id !== id);
       safeStorage.setItem('tutor_history', JSON.stringify(state.tutorHistory));
       renderTutorHistoryList();
     }
 
-    function renderTutorHistoryList() {
+export function renderTutorHistoryList() {
       const container = document.getElementById('tutorHistoryList');
       if (!container) return;
 
@@ -99,7 +104,7 @@
     }
 
 
-    async function restoreFromHistory(id) {
+export async function restoreFromHistory(id) {
       const item = state.tutorHistory.find(it => it.id === id);
       if (!item) return;
 
@@ -114,7 +119,7 @@
       renderTutorResult(item);
     }
 
-    function showTutorHistory() {
+export function showTutorHistory() {
       const modal = document.getElementById('tutorHistoryModal');
       if (!modal) return;
       renderTutorHistoryList();
@@ -122,14 +127,14 @@
       modal.classList.add('flex');
     }
 
-    function closeTutorHistoryModal() {
+export function closeTutorHistoryModal() {
       const modal = document.getElementById('tutorHistoryModal');
       if (!modal) return;
       modal.classList.add('hidden');
       modal.classList.remove('flex');
     }
 
-    function saveCurrentToTutorHistory() {
+export function saveCurrentToTutorHistory() {
       if (!state.currentSteps.length && !state.currentProblemText) {
         showStatus('⚠️ 保存する解説データがありません。', 'amber');
         return;

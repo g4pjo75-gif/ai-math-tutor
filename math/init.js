@@ -1,3 +1,9 @@
+import { EMBEDDED_GEMINI_API_KEY, safeStorage } from './state.js';
+import { initDarkMode, initTheme, updateSafeArea } from './theme-ui.js';
+import { initTutorHistory } from './history.js';
+import { addOrSelectModelOption, fetchAvailableModels, populateModelSelect } from './settings.js';
+import { initVoiceSelect } from './voice.js';
+
 
     // =========================================================================
     // 2. 初期化 及び PINロック解除
@@ -50,7 +56,7 @@
       }
     });
 
-    function unlockApp() {
+export function unlockApp() {
       const input = document.getElementById('pinInput').value.trim();
       const savedPin = safeStorage.getItem('app_pin') || '1234';
       if (input === savedPin) {
@@ -60,7 +66,7 @@
       }
     }
 
-    function checkApiKeyWarning() {
+export function checkApiKeyWarning() {
       const key = safeStorage.getItem('gemini_api_key');
       const banner = document.getElementById('apiWarningBanner');
       if (!key) banner.classList.remove('hidden');

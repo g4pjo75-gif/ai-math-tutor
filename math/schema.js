@@ -2,7 +2,7 @@
     // 5. 日本の高校1年生(数学I・A)チューター プロンプト & [解決策 3, 4] 25秒タイムアウト/自動再試行
     // =========================================================================
     // Gemini 構造化出力用スキーマ（複数小問・単数小問対応 + v1.6 visual グラフ/図形対応）
-    const TUTOR_RESPONSE_SCHEMA = {
+export const TUTOR_RESPONSE_SCHEMA = {
       type: 'OBJECT',
       properties: {
         problems: {
@@ -168,7 +168,7 @@
       propertyOrdering: ['problems']
     };
 
-    const SIMPLIFY_RESPONSE_SCHEMA = {
+export const SIMPLIFY_RESPONSE_SCHEMA = {
       type: 'OBJECT',
       properties: {
         title: { type: 'STRING' },
@@ -189,7 +189,7 @@
       propertyOrdering: ['title', 'focus', 'why', 'display_math', 'watch_out', 'visual', 'speech_ja']
     };
 
-    function buildSystemPrompt(unitHint) {
+export function buildSystemPrompt(unitHint) {
       return `あなたは日本の高校1年生（数学I・数学A）を教える、あたたかくて説明上手なプロ講師です。
 生徒は数学が苦手で、「なぜその式が出てくるのか」が分からないと、そのまま暗記して終わってしまいます。
 だから、答えや式だけを並べるのではなく、先生が黒板の前で話すように「どこを見るか → なぜその道具を使うか → どう解くか」の順で説明してください。

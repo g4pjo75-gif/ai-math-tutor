@@ -1,7 +1,9 @@
+import { safeStorage } from './state.js';
+
     // =========================================================================
     // 0. モバイルUI/UX ユーティリティ（ダークモード、アップロード進捗バー、セクション遷移）
     // =========================================================================
-    function toggleDarkMode() {
+export function toggleDarkMode() {
       const html = document.documentElement;
       const isDark = html.classList.toggle('dark');
       safeStorage.setItem('dark_mode', isDark ? '1' : '0');
@@ -9,7 +11,7 @@
       if (btn) btn.textContent = isDark ? '☀️' : '🌙';
     }
 
-    function initDarkMode() {
+export function initDarkMode() {
       const saved = safeStorage.getItem('dark_mode');
       const html = document.documentElement;
       const btn = document.getElementById('darkModeToggle');
@@ -22,7 +24,7 @@
       }
     }
 
-    function changeTheme(theme) {
+export function changeTheme(theme) {
       if (window.TutorUI && typeof window.TutorUI.applyTheme === 'function') {
         window.TutorUI.applyTheme(theme, { storage: safeStorage, key: 'ui_theme' });
       } else {
@@ -35,7 +37,7 @@
       }
     }
 
-    function initTheme() {
+export function initTheme() {
       if (window.TutorUI && typeof window.TutorUI.initTheme === 'function') {
         window.TutorUI.initTheme({ storage: safeStorage, key: 'ui_theme' });
       } else {
@@ -45,7 +47,7 @@
     }
 
     // セイフエリア・仮想キーボード高さの更新（iOSノッチを上書きしない）
-    function updateSafeArea() {
+export function updateSafeArea() {
       const kbHeight = Math.max(0, window.innerHeight - (window.visualViewport?.height || window.innerHeight));
       document.documentElement.style.setProperty('--keyboard-height', `${kbHeight}px`);
     }

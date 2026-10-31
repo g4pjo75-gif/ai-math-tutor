@@ -1,4 +1,7 @@
-    function renderGraphSvg(svg, visual, stepContext = null) {
+import { state } from './state.js';
+import { clampVal, formatCoordinateNumber, parseFunctionFromText } from './visual.js';
+
+export function renderGraphSvg(svg, visual, stepContext = null) {
       let curves = Array.isArray(visual.curves) ? visual.curves.filter(Boolean) : [];
       if (curves.length === 0) {
         const parsed = parseFunctionFromText(visual.caption || '') ||

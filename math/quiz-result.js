@@ -1,17 +1,28 @@
-    function toggleQuizHint() {
+import { safeStorage, state } from './state.js';
+import { saveTutorHistory } from './history.js';
+import { formatChoiceMath } from './quiz.js';
+import { openSettings } from './settings.js';
+import { clearImage } from './upload.js';
+import { callGeminiModel, solveProblem } from './api-solve.js';
+import { renderMathIn, sanitizeMathString } from './render.js';
+import { speakJapanese } from './voice.js';
+import { isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
+export function toggleQuizHint() {
       const content = document.getElementById('quizHintContent');
       const icon = document.getElementById('quizHintIcon');
       const isHidden = content.classList.toggle('hidden');
       icon.textContent = isHidden ? '▼' : '▲';
     }
 
-    function closeQuizSection() {
+export function closeQuizSection() {
       const quizSec = document.getElementById('quizSection');
       if (quizSec) quizSec.classList.add('hidden');
     }
 
     // 3. 生徒の答えを採点（② 1次判定はローカルJS正規化でAPI消費0、不一致時のみAI精密採点）
-    async function submitStudentAnswer() {
+export async function submitStudentAnswer() {
       if (!state.currentQuizData) return;
       const inputEl = document.getElementById('studentAnswerInput');
       const studentAns = (inputEl.value || '').trim();
@@ -114,7 +125,7 @@ ${studentAns}
       }
     }
 
-    function renderQuizResult(judge, studentAns) {
+export function renderQuizResult(judge, studentAns) {
       const box = document.getElementById('quizResultBox');
       if (!box) return;
 
@@ -182,7 +193,7 @@ ${studentAns}
       }
     }
 
-    function showQuizFullSolution() {
+export function showQuizFullSolution() {
       if (!state.currentQuizData || !state.currentQuizData.problem) return;
       const questionInput = document.getElementById('questionInput');
       if (questionInput) {
@@ -193,7 +204,7 @@ ${studentAns}
       solveProblem();
     }
 
-    function saveQuizToHistory() {
+export function saveQuizToHistory() {
       if (!state.currentQuizData) return;
       const unitHint = document.getElementById('unitSelect').value;
       const studentAnsText = state.quizInputMode === 'choice' && state.currentQuizData.displayChoices && state.selectedChoiceIndex >= 0
@@ -228,7 +239,7 @@ ${studentAns}
     }
 
     // アップロード進行バー制御
-    function setUploadProgress(percent, text) {
+export function setUploadProgress(percent, text) {
       const progress = document.getElementById('uploadProgress');
       const fill = document.getElementById('uploadProgressFill');
       const status = document.getElementById('uploadStatusText');
@@ -245,7 +256,7 @@ ${studentAns}
     }
 
     // セクション表示（フェードアニメーション）
-    function showSectionWithFade(id) {
+export function showSectionWithFade(id) {
       const el = document.getElementById(id);
       if (!el) return;
       el.classList.add('opacity-0', 'translate-y-4', 'section-fade');

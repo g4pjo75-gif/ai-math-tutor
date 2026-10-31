@@ -1,8 +1,17 @@
+import { safeStorage, state } from './state.js';
+import { renderQuizResult } from './quiz-result.js';
+import { openSettings } from './settings.js';
+import { callGeminiModel } from './api-solve.js';
+import { renderMathIn, sanitizeMathString } from './render.js';
+import { speakJapanese } from './voice.js';
+import { isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
 
     // =========================================================================
     // 8. 4択クイズ (Choice Quiz) & 直接入力切替・記号パレット
     // =========================================================================
-    function setQuizInputMode(mode, { persist = true } = {}) {
+export function setQuizInputMode(mode, { persist = true } = {}) {
       state.quizInputMode = mode;
       if (persist) {
         safeStorage.setItem('quiz_input_mode', mode);
@@ -36,7 +45,7 @@
       }
     }
 
-    function insertMathSymbol(sym) {
+export function insertMathSymbol(sym) {
       const inputEl = document.getElementById('studentAnswerInput');
       if (!inputEl) return;
       const start = inputEl.selectionStart || 0;
@@ -48,7 +57,7 @@
       inputEl.setSelectionRange(nextPos, nextPos);
     }
 
-    function shuffleChoices(choices, correctIndex, choiceFeedback = []) {
+export function shuffleChoices(choices, correctIndex, choiceFeedback = []) {
       const indexed = choices.map((c, i) => ({
         text: c,
         feedback: Array.isArray(choiceFeedback) ? (choiceFeedback[i] || '') : '',
@@ -65,7 +74,7 @@
       };
     }
 
-    function formatChoiceMath(text) {
+export function formatChoiceMath(text) {
       if (!text) return '';
       let str = sanitizeMathString(text).trim();
       // 多桁の指数（x^10など）を正規化
@@ -80,7 +89,7 @@
       return str;
     }
 
-    function renderQuizChoiceButtons() {
+export function renderQuizChoiceButtons() {
       const grid = document.getElementById('quizChoiceGrid');
       if (!grid || !state.currentQuizData || !state.currentQuizData.displayChoices) return;
 
@@ -110,13 +119,13 @@
       });
     }
 
-    function selectQuizChoice(idx) {
+export function selectQuizChoice(idx) {
       state.selectedChoiceIndex = idx;
       renderQuizChoiceButtons();
     }
 
     // 4択ローカル即時採点（通信なし・待ち時間0秒）
-    function submitChoiceAnswer() {
+export function submitChoiceAnswer() {
       if (!state.currentQuizData || state.selectedChoiceIndex < 0) {
         showStatus('⚠️ 選択肢を1つ選んでから決定ボタンを押してください。', 'amber');
         return;
@@ -145,7 +154,7 @@
     }
 
     // 2. 自分で解く「類題チャレンジ」出題（ワンショット事前取得データがあればAPI消費0で即時出題）
-    function isValidQuizObject(q) {
+export function isValidQuizObject(q) {
       if (!q || !Array.isArray(q.choices) || q.choices.length !== 4) return false;
       const cleaned = q.choices.map(c => sanitizeMathString(c).trim());
       if (cleaned.some(c => !c)) return false;
@@ -154,7 +163,7 @@
       return true;
     }
 
-    function applyAndRenderQuizData(quizRes) {
+export function applyAndRenderQuizData(quizRes) {
       const valid = isValidQuizObject(quizRes);
       const rawChoices = valid ? quizRes.choices.map(c => formatChoiceMath(c)) : [];
       const correctIdx = valid ? quizRes.correct_index : 0;
@@ -227,7 +236,7 @@
       speakJapanese('では、数字を変えた類題に挑戦してみましょう！4つの選択肢から選ぶか、自分で答えを入力してくださいね。');
     }
 
-    async function startQuizChallenge() {
+export async function startQuizChallenge() {
       const currentProb = state.currentProblems[state.currentProblemIndex] || {};
 
       // ① ワンショット統合済み twin_quiz があれば API呼び出し0回・待ち時間0秒で即時表示！

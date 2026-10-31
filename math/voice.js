@@ -1,5 +1,8 @@
+import { safeStorage, state } from './state.js';
+import { escapeHtml } from './chat-overall.js';
 
-    function highlightStepCard(activeIndex) {
+
+export function highlightStepCard(activeIndex) {
       state.currentSteps.forEach((_, idx) => {
         const el = document.getElementById(`step-card-${idx}`);
         const speechEl = document.getElementById(`step-speech-${idx}`);
@@ -22,17 +25,17 @@
     }
 
     // ===== 音声（端末内蔵 高品質日本語音声 Web Speech API）=====
-    let speechToken = 0;
-    let chunkWatchdogTimer = null;
+export let speechToken = 0;
+export let chunkWatchdogTimer = null;
 
-    function initVoiceSelect() {
+export function initVoiceSelect() {
       if (!('speechSynthesis' in window)) return;
       populateVoiceSelect();
       window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
       [300, 1000, 2500, 5000].forEach(ms => setTimeout(populateVoiceSelect, ms));
     }
 
-    function populateVoiceSelect() {
+export function populateVoiceSelect() {
       const sel = document.getElementById('voiceSelect');
       if (!sel || !('speechSynthesis' in window)) return;
 
@@ -53,18 +56,18 @@
       }
     }
 
-    function onVoiceChange() {
+export function onVoiceChange() {
       const val = document.getElementById('voiceSelect').value;
       safeStorage.setItem('preferred_voice_uri', val);
       testVoice();
     }
 
-    function onSpeechRateChange() {
+export function onSpeechRateChange() {
       const val = document.getElementById('speechRate')?.value || '0.95';
       safeStorage.setItem('speech_rate', val);
     }
 
-    function getSelectedVoice() {
+export function getSelectedVoice() {
       if (!('speechSynthesis' in window)) return null;
       const voices = window.speechSynthesis.getVoices();
       const saved = safeStorage.getItem('preferred_voice_uri');
@@ -87,12 +90,12 @@
         jaVoices[0] || null;
     }
 
-    function testVoice() {
+export function testVoice() {
       speakJapanese('こんにちは。今日も一緒に、数学をがんばりましょう。');
     }
 
     // 読み上げ前に記号（*, #, $, \, _ 等）を除去または日本語読みに置換
-    function cleanTextForSpeech(text) {
+export function cleanTextForSpeech(text) {
       return String(text || '')
         .replace(/[*#$\\_]+/g, ' ')
         .replace(/\s+/g, ' ')
@@ -100,7 +103,7 @@
     }
 
     // 文章を句読点・疑問符・感嘆符・改行単位で分割し、順次キューに入れる
-    function splitSpeech(text) {
+export function splitSpeech(text) {
       const clean = cleanTextForSpeech(text);
       if (!clean) return [];
 
@@ -136,7 +139,7 @@
     }
 
     // メイン音声読み上げ関数（単一エンジン・重複なし・iOS onend 欠落対策 watchdog 付き）
-    function speakJapanese(text, onEndCallback) {
+export function speakJapanese(text, onEndCallback) {
       if (!('speechSynthesis' in window)) {
         if (onEndCallback) onEndCallback();
         return;
@@ -209,7 +212,7 @@
       speakNextChunk();
     }
 
-    function playSingleStep(idx) {
+export function playSingleStep(idx) {
       state.isPlayingQueue = false;
       const step = state.currentSteps[idx];
       if (!step) return;
@@ -219,7 +222,7 @@
       });
     }
 
-    function playAllSteps(startIndex = 0) {
+export function playAllSteps(startIndex = 0) {
       if (!state.currentSteps.length) return;
       state.isPlayingQueue = true;
 
@@ -236,7 +239,7 @@
       next(startIndex);
     }
 
-    function stopSpeech() {
+export function stopSpeech() {
       state.isPlayingQueue = false;
       speechToken++;
       if (state.autoPlayTimer) {

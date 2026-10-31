@@ -1,18 +1,18 @@
     // =========================================================================
     // 1. 安全ストレージラッパー (sharedStore + mathStore による共有キー連携)
     // =========================================================================
-    const sharedStore = window.TutorStorage
+export const sharedStore = window.TutorStorage
       ? window.TutorStorage.create({ prefix: 'tutor_', legacyPrefixes: ['amt_'] })
       : null;
-    const mathStore = window.TutorStorage
+export const mathStore = window.TutorStorage
       ? window.TutorStorage.create({ prefix: 'amt_', legacyPrefixes: [''] })
       : null;
 
     // 共通キー（数学・英語・保護者画面で共有）
-    const COMMON_STORAGE_KEYS = new Set(['gemini_api_key', 'app_pin', 'dark_mode', 'ui_theme']);
+export const COMMON_STORAGE_KEYS = new Set(['gemini_api_key', 'app_pin', 'dark_mode', 'ui_theme']);
 
-    const memoryFallback = {};
-    const safeStorage = {
+export const memoryFallback = {};
+export const safeStorage = {
       getItem(key) {
         if (COMMON_STORAGE_KEYS.has(key) && sharedStore) {
           const sharedVal = sharedStore.getItem(key);
@@ -69,10 +69,10 @@
     // グローバル状態
 
     // 埋め込み API キー（空のデフォルト）
-    const EMBEDDED_GEMINI_API_KEY = '';
+export const EMBEDDED_GEMINI_API_KEY = '';
 
     // ==== Phase 4-B: 공유 가변 상태 (ESM import 바인딩은 재할당 불가) ====
-    const state = {
+export const state = {
       currentImageBase64: null,
       currentProblems: [], // 認識されたすべての問題（小問リスト）
       currentProblemIndex: 0, // 現在表示中の問題インデックス

@@ -1,6 +1,15 @@
+import { safeStorage, state } from './state.js';
+import { openSettings } from './settings.js';
+import { SIMPLIFY_RESPONSE_SCHEMA } from './schema.js';
+import { callGeminiModel } from './api-solve.js';
+import { renderStepCards } from './render.js';
+import { highlightStepCard, speakJapanese, stopSpeech } from './voice.js';
+import { isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
     // 6-2. 「もっとやさしく」：そのステップだけを、よりかみくだいて再生成
     // =========================================================================
-    function buildSimplifyPrompt(step) {
+export function buildSimplifyPrompt(step) {
       return `あなたは日本の高校1年生に数学を教える、とてもやさしい先生です。
 生徒から「このステップがまだ難しい」と言われました。同じ内容を、もっとやさしく、かみくだいて説明し直してください。
 
@@ -30,7 +39,7 @@ ${step.why ? `【今の意図】${step.why}` : ''}
 }`;
     }
 
-    async function simplifyStep(idx) {
+export async function simplifyStep(idx) {
       const step = state.currentSteps[idx];
       if (!step) return;
 

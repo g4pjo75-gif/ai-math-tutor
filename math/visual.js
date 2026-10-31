@@ -1,13 +1,16 @@
+import { renderGraphSvg } from './visual-graph.js';
+import { renderNumberlineSvg } from './visual-numberline.js';
+
     // =========================================================================
     // 7. 図形・グラフ描画エンジン (Visual SVG Renderer)
     // =========================================================================
-    function clampVal(val, min, max, defaultVal = 0) {
+export function clampVal(val, min, max, defaultVal = 0) {
       const num = Number(val);
       if (isNaN(num)) return defaultVal;
       return Math.max(min, Math.min(max, num));
     }
 
-    function evalFraction(str) {
+export function evalFraction(str) {
       if (!str) return 0;
       const s = String(str).trim();
       if (s.includes('/')) {
@@ -19,7 +22,7 @@
       return parseFloat(s) || 0;
     }
 
-    function parseFunctionFromText(text) {
+export function parseFunctionFromText(text) {
       if (!text || typeof text !== 'string') return null;
       const clean = text.replace(/\\mathrm\{|\\text\{|\}/g, '').replace(/\s+/g, ' ');
 
@@ -67,14 +70,14 @@
       return null;
     }
 
-    function formatCoordinateNumber(val) {
+export function formatCoordinateNumber(val) {
       if (val === null || val === undefined || isNaN(val)) return '';
       const rounded = Math.round(val);
       if (Math.abs(val - rounded) < 0.01) return String(rounded);
       return String(Number(val.toFixed(2)));
     }
 
-    function renderVisual(container, visual, stepContext = null) {
+export function renderVisual(container, visual, stepContext = null) {
       if (!container) return;
       if (!visual || typeof visual !== 'object' || !visual.type || visual.type === 'none') {
         container.classList.add('hidden');

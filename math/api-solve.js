@@ -1,4 +1,13 @@
-    async function fetchWithTimeout(url, options, timeoutMs = 25000) {
+import { safeStorage, state } from './state.js';
+import { setUploadProgress } from './quiz-result.js';
+import { openSettings } from './settings.js';
+import { TUTOR_RESPONSE_SCHEMA, buildSystemPrompt } from './schema.js';
+import { renderTutorResult } from './render.js';
+import { stopSpeech } from './voice.js';
+import { hideStatus, isQuotaError, showQuotaError, showStatus } from './ui-status.js';
+import { escapeHtml } from './chat-overall.js';
+
+export async function fetchWithTimeout(url, options, timeoutMs = 25000) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
@@ -9,7 +18,7 @@
       }
     }
 
-    function parseTutorJson(rawText) {
+export function parseTutorJson(rawText) {
       const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
       const firstBrace = cleaned.indexOf('{');
       const firstBracket = cleaned.indexOf('[');
@@ -31,7 +40,7 @@
       return JSON.parse(cleaned.slice(startIdx, endIdx + 1));
     }
 
-    async function callGeminiModel(modelId, apiKey, promptText, imageBase64, options = {}) {
+export async function callGeminiModel(modelId, apiKey, promptText, imageBase64, options = {}) {
       const cleanModelId = String(modelId).replace(/^models\//, '').trim();
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cleanModelId)}:generateContent`;
 
@@ -110,7 +119,7 @@
       }
     }
 
-    async function solveProblem(overrideModelId = null, forceRefresh = false) {
+export async function solveProblem(overrideModelId = null, forceRefresh = false) {
       stopSpeech();
       const geminiKey = safeStorage.getItem('gemini_api_key');
       const customModel = safeStorage.getItem('custom_model_id');

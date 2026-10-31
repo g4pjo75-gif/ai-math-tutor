@@ -1,4 +1,6 @@
-    function renderNumberlineSvg(svg, visual) {
+import { clampVal } from './visual.js';
+
+export function renderNumberlineSvg(svg, visual) {
       const nl = visual.numberline || {};
       const min = clampVal(nl.min, -50, 50, -5);
       const max = clampVal(nl.max, -50, 50, 5);
