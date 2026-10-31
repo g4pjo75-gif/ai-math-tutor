@@ -1,4 +1,4 @@
-const CACHE_NAME = 'amt-cache-v3.3';
+const CACHE_NAME = 'amt-cache-v3.4';
 const ASSETS = [
   './',
   './index.html',
@@ -40,7 +40,14 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).catch(() => {})
+    // HTTP キャッシュを迂回して常に最新ファイルを事前キャッシュ
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(ASSETS.map((url) =>
+        fetch(new Request(url, { cache: 'reload' }))
+          .then((res) => (res && res.ok ? cache.put(url, res) : null))
+          .catch(() => null)
+      ))
+    )
   );
 });
 
@@ -52,11 +59,18 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Network-first strategy: 常に最新を取得し、オフライン時のみキャッシュから返す
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // ESM importにはクエリバージョンがなくHTTPキャッシュが古い版を返す可能性がある
+  // same-origin GET（ナビゲーション除外）はキャッシュを迂回し、オフラインはcatchでキャッシュにフォールバック
+  const sameOrigin = new URL(event.request.url).origin === self.location.origin;
+  const isNavigation = event.request.mode === 'navigate';
+  const request = (sameOrigin && !isNavigation)
+    ? new Request(event.request, { cache: 'no-store' })
+    : event.request;
+
   event.respondWith(
-    fetch(event.request)
+    fetch(request)
       .then((response) => {
         if (response && response.status === 200 && response.type === 'basic') {
           const copy = response.clone();

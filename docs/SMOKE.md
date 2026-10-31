@@ -30,6 +30,7 @@
 - **Phase 4-A (이벤트 위임)**: 정적 버튼 전수 클릭 + `TutorActions.audit().missing === []` + M1·M3·M4·M7.
 - **Phase 4-B (ESM 전환)**: 8개 항목 전체 + 콘솔 에러 0.
 - **Phase 4-C (shared ESM + CSP)**: CSP 違反 0 + `import('/shared/actions.js').audit()` missing 0 + 8개 항목 전체.
+- **배포 시뮬레이션 (필수)**: 앱을 한 번 연 뒤 JS 파일을 1줄 수정 → 새로고침 → 변경이 즉시 반영되고 모듈 로드 에러 0.
 - **Phase 5 (core 추출)**: M1~M7 + 프롬프트/스키마 문자열 무변경 검증.
 - **Phase 6 (테스트 완성)**: L1/L2 자동화 스위트 통과 + L3 수동 체크 서명.
 

@@ -2875,6 +2875,140 @@ chore(csp): externalize tailwind config and enforce CSP
 > 4-C가 끝나면 **앱·shared 어디에도 전역이 없다.** 남은 외부 의존은 CDN 3개(Tailwind, KaTeX 2종)와
 > Google Fonts뿐이며, Phase 5에서 로컬화하면 `style-src`/`script-src`를 `'self'`로 좁힐 수 있다.
 
+### 4.7 Hotfix (4-C 직후) — ESM 모듈의 HTTP 캐시 고착
+
+**전제**: 4-C 완료(`416ec4b`). **이 수정은 배포 전 필수다.**
+
+#### 4.7.1 증상
+
+4-C 적용 후, 이미 앱을 한 번 이상 열었던 브라우저에서 앱이 **완전히 죽는다**.
+
+```
+Uncaught SyntaxError: The requested module '../shared/storage.js'
+does not provide an export named 'TutorStorage'
+```
+
+- `data-action` 버튼이 하나도 동작하지 않는다(`audit()` → `actions: 0`, `missing: [51개]`)
+- HTML/CSS/폰트는 정상이라 **화면은 멀쩡해 보인다**
+- 새 프로필(캐시 없음)에서는 정상 동작 → 발견이 늦어진다
+
+#### 4.7.2 원인
+
+두 가지가 겹쳤다.
+
+1. **4-B에서 script 태그의 `?v=` 캐시 버스터가 사라졌다.**
+   4-A까지는 `<script src="state.js?v=20261031">`였지만, ESM 전환 후 import는 `'./state.js'`처럼
+   **쿼리 없는 URL**이다.
+2. **SW의 "network-first"가 실제로는 HTTP 캐시를 존중한다.**
+   `fetch(event.request)`는 기본 cache mode(`default`)라, 아직 신선한 HTTP 캐시 항목을 그대로 반환한다.
+   즉 네트워크로 나가지 않는다.
+
+실측(같은 페이지, 같은 URL):
+
+```js
+await (await fetch('/shared/storage.js')).text()                  // → 구버전(classic IIFE)
+await (await fetch('/shared/storage.js', {cache:'reload'})).text() // → 신버전(export)
+```
+
+즉 파일은 서버에 정상으로 있는데, 브라우저가 구버전을 계속 준다.
+
+**영향 범위**: 앱 모듈·shared 모듈 **전부**(버전 쿼리가 없으므로). GitHub Pages는 `max-age=600`을
+보내므로 **배포 후 최대 10분간 기존 사용자에게 재현**되고, 파일이 바뀌는 **모든 배포마다 반복**된다.
+
+> 4-C 자체의 코드는 정상이다. 새 캐시(신규 프로필)에서는 모든 게이트를 통과한다.
+> 문제는 "이미 캐시를 가진 클라이언트"에게만 나타나는 **배포 시점 회귀**다.
+
+#### 4.7.3 수정 — `sw.js` 2곳 (수학·영어 동일)
+
+**(1) install: 프리캐시를 캐시 우회로 수행** (한 파일 실패가 전체를 막지 않도록 개별 처리)
+
+```js
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+  event.waitUntil(
+    // HTTP 캐시를 우회해 항상 최신 파일을 프리캐시한다.
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(ASSETS.map((url) =>
+        fetch(new Request(url, { cache: 'reload' }))
+          .then((res) => (res && res.ok ? cache.put(url, res) : null))
+          .catch(() => null)
+      ))
+    )
+  );
+});
+```
+
+**(2) fetch: same-origin GET(내비게이션 제외)은 `no-store`**
+
+```js
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  // ESM import에는 쿼리 버전이 없어 HTTP 캐시가 구버전을 돌려줄 수 있다.
+  // same-origin GET(내비게이션 제외)은 캐시를 우회하고, 오프라인은 catch에서 캐시로 폴백한다.
+  const sameOrigin = new URL(event.request.url).origin === self.location.origin;
+  const isNavigation = event.request.mode === 'navigate';
+  const request = (sameOrigin && !isNavigation)
+    ? new Request(event.request, { cache: 'no-store' })
+    : event.request;
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
+  );
+});
+```
+
+- 내비게이션(HTML)은 건드리지 않는다(`Request` 재구성 제약 회피 + HTML은 `no-cache` 메타 유지).
+- 오프라인 동작은 기존과 동일: 네트워크 실패 → `caches.match` 폴백.
+- 캐시 이름은 `amt-cache-v3.4` / `aet-cache-v2.4`로 올린다(프리캐시 재생성 신호).
+
+#### 4.7.4 검증 (프로토타입에서 실측)
+
+| 시도 | 결과 |
+|---|---|
+| 최초 로드 | `audit()` 51/42, 에러 0 |
+| `shared/actions.js` 내용 변경 후 **새로고침** | 변경 사항 **즉시 반영**(`mark: 9`), 에러 0 |
+| 프리캐시 | 37개 항목, shared 7개 포함 |
+| SW | `activated` + `controller` 존재 |
+| 영어 | 동일 |
+
+수정 전에는 같은 절차에서 `mark`가 반영되지 않았다(= 구버전 서빙).
+
+**재현/회귀 확인 절차 (스모크에 포함)**
+
+```bash
+# 1) 앱을 한 번 연다(캐시 데우기)
+# 2) 아무 JS 파일에 주석 한 줄 추가
+# 3) 새로고침 → 수정이 반영되면 OK, 안 되면 실패
+```
+
+#### 4.7.5 커밋
+
+```
+fix(sw): bypass HTTP cache for same-origin module requests
+```
+
+- 수정: `math/sw.js`, `english/sw.js`
+- SW 캐시: `v3.4` / `v2.4`
+
+**Phase 4-C+ DoD**
+
+- [ ] 새 프로필: 양쪽 앱 정상, `audit()` 51/42 · 42/44, CSP 위반 0
+- [ ] **기존 캐시가 있는 프로필**: 새로고침 후 JS 변경이 즉시 반영된다
+- [ ] 오프라인 재방문(M8): 캐시에서 정상 로드
+- [ ] 캐시 이름 `v3.4` / `v2.4`
+
+**전환 주의**: 이 수정을 배포한 직후, 구 SW를 가진 사용자는 **첫 로드에서 한 번 깨질 수 있다**
+(구 SW가 구버전을 서빙). 새 SW가 `skipWaiting`+`claim`으로 활성화되므로 **새로고침 1회면 복구**된다.
+완전 무중단이 필요하면 Phase 6에서 "모듈 로드 실패 감지 → 1회 자동 새로고침" 부트스트랩을 추가한다.
+
 ---
 
 ## 5. 리스크와 대응
