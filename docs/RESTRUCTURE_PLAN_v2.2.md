@@ -1,0 +1,1266 @@
+# 구조 재편 및 향후 수정 계획서 v2.2 (확정판)
+
+> 작성일: 2026-10-29
+> 기준 커밋: `cc07dcb` (working tree clean)
+> 대상: 수학 앱 / 영어 앱 / `shared/*`
+> 작성자: AI 어시스턴트 (계획 수립 전용 — 코드 수정 없음)
+> 실행: 전용 코드 작업 도구가 본 문서의 Phase 순서대로 수행
+>
+> **v2.1 변경점**: 루트를 수학 앱에서 **허브(과목 선택 랜딩)** 로 변경하고, 수학을 `math/` 로 이동.
+> 이에 따라 Phase 구성과 PWA/Service Worker 마이그레이션 절차를 추가했다.
+>
+> **v2.2 변경점 (확정판)**: 7장의 결정 사항을 **전부 확정**으로 전환(더 이상 선택지 아님).
+> Phase 0 실행 지시문(`4.0`)과 Phase 1의 **행 단위 경로 치환표**(`4.1`)를 추가해 코드 도구가
+> 판단 없이 그대로 실행할 수 있게 했다. Phase 0 → 1 핸드오프 계약을 명문화했다.
+
+### 확정된 방향 (v2.2에서 잠금)
+
+| 항목 | 확정 내용 |
+|---|---|
+| 루트 | **허브(과목 선택 랜딩)**. 설치 불가(manifest 없음) |
+| 수학 위치 | `/math/` (기존 `/`에서 이동) |
+| 영어 위치 | `/english/` **변경 없음** |
+| 공통 코드 | `core/` · `shared/` 는 루트 유지, `../` 참조 |
+| 루트 `sw.js` | **삭제 금지.** cleanup SW로 교체 후 최소 2회 배포 주기 유지 |
+| 수익화 | **BYOK 무료 + 구독 병행**, API 프록시(서버 키 보관), Stripe |
+| 테스트 | `node:test`(L1) + Playwright `page.route`(L2) + 수동(L3) |
+| 번들러 | Phase 7까지 도입하지 않음 (정적 배포 유지) |
+
+> 이 표의 항목은 **재논의 대상이 아니다.** 변경이 필요하면 문서를 v2.3으로 올리고
+> 영향받는 Phase의 DoD를 다시 계산한다.
+
+---
+
+## 0. 목적 · 범위 · 비목표
+
+### 목적
+
+1. 기능 수정을 **중단**하고 구조를 먼저 확정한다.
+2. 구조 확정 후 **테스트를 도입**한다(테스트 자산은 Phase 0에서 최소한만 선행).
+3. 최종 수익화(서버 프록시 · 계정 · 과금)로 이어질 수 있는 **경계**를 지금 만든다.
+4. 과목이 늘어나도(수학·영어·향후 국어/과학) URL과 배포가 깨지지 않는 형태로 만든다.
+
+### 범위
+
+- 루트 허브 + `math/` · `english/` 과목 폴더 구조
+- 모듈 경계, 의존 방향, 로드 방식, PWA/SW 자산 목록
+- 이벤트 처리 방식(인라인 핸들러 제거)
+- 테스트 계층과 회귀 체크리스트
+- 각 단계의 작업 지시 · 완료 조건(DoD) · 롤백 방법
+
+### 비목표 (이번 구조 작업에서 하지 않는 것)
+
+- **기능 추가·동작 변경·프롬프트 문구 수정 금지**
+- UI 디자인 변경 금지(허브는 최소 마크업만)
+- 새 라이브러리 도입 금지(번들러·프레임워크 포함)
+- 수익화 기능(결제·로그인) 구현 금지 — Phase 7에서 별도 저장소
+- 발견된 버그는 고치지 않고 `docs/AUDIT_v1.8.md` 백로그에 기록만
+
+> **핵심 규칙**: 구조 변경 커밋에는 로직 변경을 절대 섞지 않는다. 이동과 수정을 분리해야 문제 발생 시 원인을 특정할 수 있다.
+
+---
+
+## 1. 현재 상태 (기준선)
+
+### 1.1 수치
+
+| 항목 | 수학 | 영어 |
+|---|---:|---:|
+| 파일 크기 | 216,294 bytes | 105,600 bytes |
+| 줄 수 | 4,502 | 2,018 |
+| 인라인 스크립트 | 690~4,501행 (약 3,810줄, **단일 블록**) | 569~2,016행 (약 1,446줄) |
+| 함수 수 | 97 | 60 |
+| 인라인 `onclick` | 68 | 57 |
+| `<script>` 태그 | 9 | 7 |
+
+### 1.2 현재 URL 구조의 문제
+
+```
+/ai-math-tutor/            → 수학 앱 (manifest scope: /ai-math-tutor/)
+/ai-math-tutor/english/    → 영어 앱 (scope: /ai-math-tutor/english/)
+```
+
+- 루트가 수학 앱이라 **영어는 "부속 폴더"** 처럼 보인다. 과목이 늘어날수록 대칭이 깨진다.
+- 수익화에 필요한 **랜딩/가격/약관/로그인**을 놓을 자리가 없다.
+- 수학 SW가 루트 스코프(`/ai-math-tutor/`)를 차지해 영어를 예외 처리로 피해 가는 구조다(현재 `/english/` 가드).
+- 반면 `localStorage`는 **origin 단위**이므로 폴더를 옮겨도 학습 기록·API 키·설정은 그대로 유지된다. 이동 자체는 데이터 안전하다.
+
+### 1.3 구조적 문제
+
+| # | 문제 | 근거 |
+|---|---|---|
+| 1 | **단일 스크립트 = 단일 장애점** | 3,810줄 어디서든 문법 오류 1개면 해설·퀴즈·설정·저장 전부 정지 |
+| 2 | **중복 구현이 실제 버그를 생성** | 수학 인라인 `callGeminiModel`/`escapeJsString`과 `shared/*` 공존 → 영어만 `\"` 버그, `maxOutputTokens`가 양쪽에 따로 존재 |
+| 3 | **테스트 불가** | DOM·전역 상태에 강결합. 함수 단위 실행 경로 없음 |
+| 4 | **인라인 핸들러 125개** | 문자열 이스케이프 의존 → XSS/파손 취약점의 근원. CSP 적용 불가 |
+| 5 | **재사용 경계 없음** | 프롬프트·스키마·채점·캐시가 UI 코드에 섞여 서버/Next.js에서 재사용 불가 |
+| 6 | **의존성 CDN** | Tailwind CDN(JIT)·KaTeX CDN·Google Fonts → 오프라인 PWA 불완전, CSP 불가 |
+
+### 1.4 현재 정상 동작 (구조 변경 중 깨지면 안 되는 것)
+
+- 사진 업로드 → 해설 → 단계 카드 → 노트 저장/복원(대화·followups 포함)
+- 다문제 해설 + 문제 탭 전환
+- twin_quiz 재사용(추가 API 0회), 4択 로컬 채점, 오답 정답 표시
+- 요청 해시 캐시(동일 문제 2회 = API 1회)
+- 문제 전체 Q&A / 단계 Q&A (탭 전환 레이스 수정 반영)
+- 테마 3종 + 다크모드 영속, PIN/API키 공유
+- 영어 읽기/4択/작문/단어장/노트, en-US·ja-JP 음성
+- SW 프리픽스 분리(`amt-`/`aet-`)
+
+---
+
+## 2. 목표 아키텍처
+
+### 2.1 디렉터리
+
+```
+/
+├── index.html                  # ★ 허브(과목 선택 랜딩) — 설치 불가
+├── sw.js                       # ★ 구 수학 SW 정리용(한시적, Phase 1)
+├── robots.txt                  # (선택)
+│
+├── math/                       # ★ 수학 앱 (설치 가능 PWA)
+│   ├── index.html
+│   ├── manifest.json           # start_url/scope = ./math/
+│   ├── sw.js                   # scope = /math/
+│   ├── icon-192.png / icon-512.png / apple-touch-icon.png
+│   └── (Phase 2 이후) app.js → state.js … main.js
+│
+├── english/                    # 영어 앱 (설치 가능 PWA, 경로 유지)
+│   ├── index.html
+│   ├── manifest.json
+│   ├── sw.js
+│   ├── icon-*.png
+│   └── (Phase 2 이후) app.js → state.js … main.js
+│
+├── core/                       # ★ 순수 도메인 (DOM/window 금지)
+│   ├── prompts/math.js
+│   ├── prompts/english.js
+│   ├── schemas/math.js
+│   ├── schemas/english.js
+│   ├── grading/math.js
+│   ├── grading/english.js
+│   └── models.js
+│
+├── shared/                     # ★ 브라우저 공통 (앱 비의존)
+│   ├── api/client.js
+│   ├── api/parse.js
+│   ├── api/cache.js
+│   ├── platform/storage.js
+│   ├── platform/speech.js
+│   ├── platform/browser.js
+│   ├── ui/ui.js
+│   ├── ui/theme.js
+│   ├── ui/text.js
+│   ├── auth/pin.js
+│   └── ui/ui.css
+│
+├── tests/                      # Phase 0에서 생성
+│   ├── fixtures/*.json
+│   ├── stub-gemini.js
+│   └── e2e/*.spec.js
+│
+└── docs/
+```
+
+### 2.2 URL · PWA · SW 경계
+
+| URL | 앱 | manifest | installable | SW scope | 비고 |
+|---|---|---|---|---|---|
+| `/` | 허브 | 없음 | ✕ | `/` (정리용, 한시) | 웹 방문자용. 앱 아이콘은 여기로 오지 않음 |
+| `/math/` | 수학 | `./math/manifest.json` (`start_url:"./"`, `scope:"./"`) | ○ | `/math/` | 기존 아이콘은 리다이렉트로 동작, 새 아이콘 재설치 권장 |
+| `/english/` | 영어 | `./english/manifest.json` | ○ | `/english/` | **경로 변경 없음** |
+
+**핵심 원칙**
+
+1. **허브는 "웹 방문자용"이고, 앱 아이콘은 허브를 거치지 않는다.** 수학 PWA의 `start_url`을 `./math/`로 두면 홈 화면 아이콘은 바로 수학으로 진입한다. "한 번 더 탭" 문제는 발생하지 않는다.
+2. **영어는 이동하지 않는다.** 이미 `/english/`이므로 그대로 두고, 수학만 `/math/`로 옮겨 대칭을 맞춘다. 이동 범위를 줄이는 것이 안전하다.
+3. **허브는 설치 불가(no manifest).** 허브에 manifest를 주면 scope `/`가 수학 scope와 겹쳐 "어떤 앱이 설치되는지" 혼란이 생긴다. 랜딩은 웹으로만 제공한다.
+4. **`shared/`·`core/`는 루트 유지.** 두 앱이 `../shared/...`로 참조하고, 각 앱 SW가 자기 캐시에 저장한다.
+
+### 2.3 계층 규칙 (위반 금지)
+
+```
+core/    ← 아무것도 import 하지 않음 (순수 함수)
+shared/  ← core/ 만 import
+math/    ← core/, shared/ import
+english/ ← core/, shared/ import
+```
+
+- `math/` ↔ `english/` 상호 import 금지
+- `shared/`는 `math/`·`english/`를 알면 안 됨
+- `core/`는 `document`, `window`, `localStorage`, `fetch`를 직접 쓰지 않음(파라미터로 주입)
+- 순환 import 발생 시 → 공통 부분을 `core/`로 올린다
+
+### 2.4 설계 원칙
+
+1. **한 파일 300줄 이하**, 최대 500줄. 초과 시 분리.
+2. **인라인 핸들러 금지** — `onclick="fn('...')"` 대신 `data-action="fn" data-id="..."` + 위임 리스너 1개.
+   - `escapeJsString`이 불필요해지고(삭제 대상), XSS 계열 버그가 원천 차단된다.
+3. **전역 오염 금지** — 모듈 스코프 사용. 디버그용으로만 `window.__app` 노출.
+4. **상태는 `state.js` 단일 소유** — 기능 모듈은 상태를 직접 만들지 않고 접근자로 읽고 쓴다.
+5. **부수효과는 가장자리로** — `core/`는 계산만, DOM 조작은 `render.js`/`ui`.
+6. **프롬프트/스키마는 문자열 상수 + 빌더 함수** — DOM 값을 읽지 않고 인자로 받는다.
+7. **정적 배포 유지** — Phase 6까지 번들러 도입 금지(GitHub Pages 그대로).
+8. **캐시 무효화는 `?v=` + SW 캐시명 동시 갱신** — 한쪽만 바꾸면 구버전이 남는다.
+
+### 2.5 파일 책임 (수학 — `math/`)
+
+| 파일 | 책임 | 현재 위치(기준선) |
+|---|---|---|
+| `state.js` | 스토리지 래퍼, 전역 상태(`currentProblems`, `currentProblemIndex`, `currentQuizData`, `quizInputMode`, `selectedChoiceIndex`, `currentImageBase64`, `stepChats`, `overallChats`, `tutorHistory`, `stepQuotes`) | 691~780 |
+| `main.js` | DOMContentLoaded, 테마/다크/안전영역 초기화, PIN, 노트/음성 초기화, SW 등록 | 781~832, 1704~1771 |
+| `settings.js` | 설정 모달, PIN 저장, 모델 목록 조회/선택, API 키 경고 | 1772~1945 |
+| `upload.js` | 이미지 선택·리사이즈·진행률, 섹션 페이드 | 1946~2025 |
+| `solve.js` | 해설 프롬프트 조립, `solveProblem` | 2026~2632 |
+| `render.js` | `sanitizeMathString`, `renderMathIn`, `normalizeTutorResult`, 문제 탭, 단계 카드 | 2633~3010 |
+| `simplify.js` | 「もっとやさしく」 재생성 | 3011 부근 |
+| `voice.js` | 음성 선택/속도/재생/중지/분할 | 3108~3260 |
+| `visual.js` | SVG 그래프·수직선 | 3453~4050 |
+| `chat-step.js` | 단계 Q&A | 4051~4278 |
+| `chat-overall.js` | 문제 전체 Q&A | 4279~4500 |
+| `quiz.js` | 4択 UI/채점/폴백/기호 팔레트 | 1097~1241, 1242~1703 |
+| `similar.js` | 類題 생성(원샷) | 1011~1096 |
+| `history.js` | 노트 저장/목록/복원/삭제 | 833~1010 |
+
+> 주의: `setUploadProgress`·`showSectionWithFade`는 퀴즈 섹션에 있지만 `upload.js`/`ui` 소속이다. 이동 시 호출부를 함께 확인할 것.
+
+### 2.6 파일 책임 (영어 — `english/`)
+
+| 파일 | 책임 | 현재 위치 |
+|---|---|---|
+| `state.js` | 스토어 2종, 음성 엔진 2종, 앱 상태 | 570~610 |
+| `main.js` | 초기화, 모델 드롭다운, API 키 배너, SW | 729~858 |
+| `settings.js` | 설정 모달, PIN, 모델 | 729~858 중 설정부 |
+| `upload.js` | 이미지 업로드/리사이즈 | 924~990 부근 |
+| `reading.js` | 읽기 분석·결과 렌더 | 924~1185 |
+| `quiz.js` | 4択 생성/채점/폴백 | 1186~1419 |
+| `writing.js` | 작문 첨삭 | 1420~1611 |
+| `wordbook.js` | 단어장 | 1612~1700 부근 |
+| `history.js` | 노트(읽기/퀴즈/작문) 저장·복원 | 1700~1971 |
+| `voice.js` | en-US/ja-JP 낭독, 속도 | 1972~2016 |
+
+### 2.7 파일 책임 (core / shared)
+
+| 파일 | 내용 | 현재 위치 |
+|---|---|---|
+| `core/schemas/math.js` | `TUTOR_RESPONSE_SCHEMA`, `QUIZ_GEN_SCHEMA`, `SIMPLIFY_RESPONSE_SCHEMA`, `OVERALL_CHAT_SCHEMA` | 수학 2028~ |
+| `core/prompts/math.js` | `buildSystemPrompt`, 유사문제/퀴즈/간단화/채팅 프롬프트 빌더 | 수학 2026~, 1011~, 1360~, 2990~, 4140~ |
+| `core/grading/math.js` | `isValidQuizObject`, `shuffleChoices`, `formatChoiceMath`, 동치 판정 | 수학 1120~1230 |
+| `core/schemas/english.js` | 읽기/퀴즈/작문 스키마 | 영어 611~728 |
+| `core/grading/english.js` | `isValidQuizResponse`, `shuffleQuizChoices` | 영어 1186~ |
+| `shared/api/client.js` | `callGeminiModel`(단일 구현), `fetchWithTimeout`, `MAX_TOKENS` 감지 | `shared/core.js:52`, 수학 2350~ |
+| `shared/api/parse.js` | `parseTutorJson`/`parseJson` | `shared/core.js:17`, 수학 2380~ |
+| `shared/api/cache.js` | 요청 해시, TTL, `get/setCachedResponse` | `shared/core.js:190~249` |
+| `shared/platform/storage.js` | 현 `shared/storage.js` | 그대로 이동 |
+| `shared/platform/speech.js` | 현 `shared/speech.js` + 음성 목록/선택 헬퍼 | 그대로 + 추가 |
+| `shared/ui/theme.js` | `applyTheme`/`initTheme`/다크모드 | `shared/ui.js`, 수학 781~ |
+| `shared/auth/pin.js` | PIN 게이트(양 앱 동일 로직) | 수학 1704~, 영어 729~ |
+
+### 2.8 이 구조가 "서비스"에 어디까지 해당하는가
+
+> **결론: 클라이언트(프론트엔드) 구조로서는 실제 서비스 수준이다. 서비스 전체는 아니다.**
+> Phase 1~6이 끝나면 "유료 서비스를 얹을 수 있는 앱 구조"가 되고, Phase 7에서 서버가 붙는다.
+
+| 구분 | 이 구조가 보장하는가 | 담당 Phase |
+|---|---|---|
+| 과목별 독립 배포·독립 PWA scope | ○ | 1 |
+| 모듈 경계·순환 의존 차단 | ○ | 3~5 |
+| 도메인 로직의 서버 이식 가능성 (`core/` DOM 무의존) | ○ | 5 |
+| 회귀 안전망(단위·통합·수동) | ○ | 6 |
+| 랜딩(마케팅) 진입점 URL | ○ (자리만) | 1 |
+| API 프록시·서버 키 보관 | **✕** | 7 |
+| 계정/로그인·세션 | **✕** (현재 PIN은 기기 로컬) | 7 |
+| 사용량 계측·쿼터 | **✕** | 7 |
+| 결제·구독 상태(Stripe webhook) | **✕** | 7 |
+| 가격·약관·特定商取引法·プライバシーポリシー | **✕** (허브에 링크 자리만) | 7 |
+| 운영 관측(에러 수집·사용량 로그) | **✕** | 7 |
+| CI/CD (테스트 자동 실행·배포) | **✕** (현재 수동 push) | 6~7 |
+
+**Phase 7 이후의 최종 형태(예상)**
+
+```
+/
+├── index.html              # 허브: 가격 · 이용약관 · 로그인 진입
+├── math/  english/         # 앱 (정적, PWA)
+├── core/                   # 프롬프트·스키마·채점 — 클라이언트와 서버가 공유
+├── shared/                 # 브라우저 전용
+├── server/                 # ★ Phase 7 신규 (Cloudflare Workers)
+│   ├── src/index.js        #   /api/solve  (프록시 + 쿼터 + 캐시)
+│   ├── src/auth.js         #   세션 검증
+│   ├── src/billing.js      #   Stripe webhook
+│   ├── src/quota.js        #   사용량 카운트
+│   └── wrangler.toml
+├── tests/
+└── docs/
+```
+
+**배치 결정 (확정)**
+
+- **같은 저장소에 `server/`를 둔다.** `core/`를 상대경로로 그대로 import할 수 있어 복제가 없다.
+  (별도 저장소 + 패키지 배포는 1인 운영에서 이점보다 관리 비용이 크다.)
+- **시크릿은 저장소에 두지 않는다.** Gemini 키·Stripe 키는 `wrangler secret put`으로만 주입한다.
+- **GitHub Pages는 정적 파일만 서빙한다.** `server/`도 URL로 열리면 소스가 보이지만 실행되지는 않는다.
+  따라서 `server/`에는 **키·민감 로직을 넣지 않는다**(키는 항상 시크릿 저장소).
+- `server/`는 Phase 7 전까지 **만들지 않는다.** 지금 빈 폴더를 만들어도 얻는 것이 없다.
+
+> 즉 "지금 만드는 구조"는 **서버가 붙을 자리를 비워 둔 구조**다. 그 자리는 `core/`가 루트에 있다는 사실로 이미 확보되어 있다.
+
+---
+
+## 3. 단계별 실행 계획
+
+### Phase 0 — 동결 + 기준선 자산 (0.5일)
+
+**목표**: 이후 모든 단계에서 "동작이 같다"를 판정할 기준을 만든다.
+
+**작업**
+
+1. 기능 수정 동결 공지(이슈/커밋 규칙).
+2. `git tag v1.8-baseline` 생성.
+3. `tests/fixtures/`에 스텁 응답 고정:
+   - `math-solve-2problems.json`, `math-quiz.json`, `math-simplify.json`, `math-overall-chat.json`, `math-step-chat.json`
+   - `english-reading.json`, `english-quiz.json`, `english-writing.json`
+4. `tests/stub-gemini.js` — `fetch`/`callGeminiModel` 가로채기 + 호출 횟수 카운터.
+5. `docs/SMOKE.md` — 8개 스모크 시나리오 체크리스트.
+
+**DoD**
+
+- [ ] 태그 생성·푸시
+- [ ] 픽스처 8종 존재, 스텁으로 재현 가능
+- [ ] 스모크 체크리스트 문서화
+
+**롤백**: 태그 삭제만.
+
+---
+
+### Phase 1 — 루트 허브 + `math/` 이동 (0.5~1일) ★ PWA 마이그레이션 포함
+
+**목표**: URL을 최종 형태로 만든다. **로직·UI 변경 없음**, 경로와 PWA 메타데이터만.
+
+**1-A. 파일 이동**
+
+```
+git mv index.html            math/index.html
+git mv sw.js                 math/sw.js
+git mv manifest.json         math/manifest.json
+git mv icon-192.png          math/icon-192.png
+git mv icon-512.png          math/icon-512.png
+git mv apple-touch-icon.png  math/apple-touch-icon.png
+```
+
+**1-B. `math/index.html` 경로 수정**
+
+| 대상 | before | after |
+|---|---|---|
+| 공통 CSS (24행) | `shared/ui.css?v=…` | `../shared/ui.css?v=…` |
+| 공통 스크립트 4개 (685~688행) | `shared/*.js?v=…` | `../shared/*.js?v=…` |
+| 영어 링크 (224, 248행) | `english/` | `../english/` |
+| 상단 로고/홈 링크 | 없음(링크 아님) | **변경 없음** — Phase 1에서 허브 링크를 새로 만들지 않는다 |
+| SW 등록 (1751행) | `register('./sw.js')` | **변경 없음**(상대경로가 `/math/sw.js`로 해석됨) |
+| manifest (17행) | `manifest.json` | **변경 없음** |
+
+**1-C. `math/manifest.json`**
+
+- `start_url`: `"./index.html"` → `"./"`
+- `scope`: `"./"` 유지 (→ `/math/`)
+- `id`: `"./"` 유지 → `/math/`로 해석되며 **설치 identity가 바뀐다(의도)**
+- `name`/`short_name`/`theme_color`/아이콘 경로는 그대로
+
+**1-D. `math/sw.js`**
+
+- `CACHE_NAME`: `amt-cache-v2.6` → `amt-cache-v2.7`
+- `ASSETS`: `'./'`, `'./index.html'`, `'./manifest.json'`, 아이콘 3종, `'../shared/storage.js'`, `'../shared/core.js'`, `'../shared/speech.js'`, `'../shared/ui.js'`, `'../shared/ui.css'`
+- `/english/` 가드 **삭제** (스코프가 `/math/`라 불필요)
+
+**1-E. 루트 `index.html` (허브) 신규**
+
+최소 마크업. 디자인 투자 금지.
+
+- 제목: `AI家庭教師 | 数学・英語`
+- 두 개의 카드: `📐 数学I・A`(`./math/`), `🇬🇧 英語`(`./english/`)
+- `前回の続き` 표시: `tutor_last_subject`(localStorage) 값으로 강조
+- 사용 안내 1~2줄(APIキーは端末内に保存 / 保護者PIN)
+- 하단: `docs`·약관 자리(문구만)
+- **manifest 링크 없음(설치 불가)**
+- 기존 설치 아이콘 대응 스크립트:
+
+```html
+<script>
+  // 旧・数学アプリ(scope "/")としてインストール済みの場合、
+  // 起動時は直接 math/ へ送る(ハブを経由させない)
+  if (matchMedia('(display-mode: standalone)').matches && !location.search.includes('hub')) {
+    location.replace('./math/');
+  }
+</script>
+```
+
+**1-F. 루트 `sw.js` → 정리용(cleanup)으로 교체**
+
+기존 설치본이 루트 SW를 계속 제어하고 있으므로, **삭제하지 말고** 아래 내용으로 교체한다.
+
+```js
+// 旧ルートSWの後始末用。旧インストールが更新チェックに来た時だけ動作する。
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys.filter((k) => k.startsWith('amt-')).map((k) => caches.delete(k))
+    );
+    await self.registration.unregister();
+  })());
+});
+```
+
+- `aet-`는 건드리지 않는다(영어 앱 캐시 보존).
+- 이 파일은 **최소 2회 배포 주기 동안 유지**한다. 삭제하면 구 SW가 영구히 남는다(스크립트 404 시 업데이트 실패로 기존 SW 유지).
+
+**1-G. `english/index.html` 링크 정리**
+
+- `../`(수학으로) → `../math/`
+- 허브로 가는 링크 추가(선택)
+- `english/sw.js` `CACHE_NAME` `v1.6` → `v1.7` (index.html이 캐시되므로)
+
+**1-H. `localStorage` 확인**
+
+- origin 단위이므로 `amt_`/`aet_`/`tutor_` 키는 이동 후에도 유지된다. **마이그레이션 코드 불필요.**
+
+**DoD**
+
+- [ ] `/` → 허브, `/math/` → 수학, `/english/` → 영어
+- [ ] 수학: 해설·4択·노트 복원 정상, 콘솔 에러 0
+- [ ] 영어: 읽기·4択·단어장 정상, 콘솔 에러 0
+- [ ] 기존 노트/API 키/테마가 그대로 보임
+- [ ] 수학 SW가 `/math/` 스코프로 등록됨(`navigator.serviceWorker.getRegistrations()`)
+- [ ] 루트 SW가 정리 후 unregister됨
+- [ ] 오프라인에서 `/math/` 재방문 가능
+
+**롤백**: `git revert` + 루트 `sw.js`를 이전 내용으로 복원. (PWA 재설치는 사용자 측 1회 필요)
+
+---
+
+### Phase 2 — 셸 분리 (동작 무변경, 2~3시간)
+
+**목표**: 인라인 스크립트를 파일로 **그대로** 옮긴다. 코드는 한 줄도 수정하지 않는다.
+
+**작업 (수학)**
+
+1. `math/index.html`의 인라인 스크립트 내용(약 3,810줄)을 `math/app.js`로 슬라이스 추출(수동 복사 금지).
+2. 스크립트 태그 2줄을 `<script src="app.js?v=20261030"></script>`로 교체.
+3. `math/sw.js` `ASSETS`에 `'./app.js'` 추가, `CACHE_NAME` `v2.7` → `v2.8`.
+4. `node --check math/app.js`.
+
+**작업 (영어)**
+
+5. `english/index.html` 570~2015행을 `english/app.js`로 추출, 태그 교체.
+6. `english/sw.js` `ASSETS`에 `'./app.js'` 추가, `CACHE_NAME` `v1.7` → `v1.8`.
+7. `node --check english/app.js`.
+
+**DoD**
+
+- [ ] `node --check` 통과
+- [ ] 수학: 해설 1건 + 4択 + 노트 저장/복원
+- [ ] 영어: 읽기 1건 + 4択 + 단어장
+- [ ] 콘솔 에러 0
+- [ ] `math/index.html`, `english/index.html` 각 700줄 이하
+
+**롤백**: `git revert`.
+
+---
+
+### Phase 3 — 파일 분해 (classic script, 2~3일)
+
+**목표**: 2.5~2.7 표대로 파일을 나눈다. **여전히 로직 수정 금지**, 로드 순서만 관리.
+
+**작업 원칙**
+
+- 함수 단위로 이동하되, **섹션 배너 주석을 경계로** 사용한다(행 번호는 이동 중 변하므로 신뢰 금지).
+- 한 커밋 = 한 모듈. 커밋 메시지 `refactor(math): extract quiz.js`.
+- 각 파일은 즉시 실행 코드 없이 **선언만** 담는다(초기화는 `main.js`).
+- 클래식 스크립트 유지 → `<script>` 순서: `core/*` → `../shared/*` → `state.js` → 기능 모듈 → `main.js`.
+
+**순서 (수학)**: `state.js` → `render.js` → `history.js` → `quiz.js` → `similar.js` → `simplify.js` → `settings.js` → `upload.js` → `solve.js` → `chat-step.js` → `chat-overall.js` → `visual.js` → `voice.js` → `main.js`
+
+**순서 (영어)**: `state.js` → `reading.js` → `quiz.js` → `writing.js` → `wordbook.js` → `history.js` → `voice.js` → `settings.js` → `main.js`
+
+**DoD**
+
+- [ ] 각 파일 500줄 이하 (대부분 300줄 이하)
+- [ ] 함수 97개/60개 전부 어딘가에 존재(인벤토리 대조)
+- [ ] 스모크 8종 통과
+- [ ] `node --check` 전체 통과
+
+**롤백**: 커밋 단위 revert.
+
+---
+
+### Phase 4 — ES Module화 + 인라인 핸들러 제거 (3~4일)
+
+**목표**: 의존을 명시화하고, 문자열 이스케이프 의존을 없앤다.
+
+**작업**
+
+1. 각 파일을 ESM으로 전환: `export function`, `import { x } from './y.js'`.
+2. `index.html`은 `<script type="module" src="main.js"></script>` 1줄로.
+3. 인라인 `onclick` 125개를 **데이터 속성 + 위임**으로 교체:
+
+```html
+<!-- before -->
+<button onclick="restoreFromHistory('1729')">🔄 もう一度見る</button>
+<!-- after -->
+<button data-action="restore-history" data-id="1729">🔄 もう一度見る</button>
+```
+
+```js
+// main.js (위임 1곳)
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const { action, id, idx } = el.dataset;
+  ACTIONS[action]?.(el, { id, idx: idx === undefined ? undefined : Number(idx) });
+});
+```
+
+4. `escapeJsString` 함수 **삭제** (사용처 없음).
+5. `window.*` 전역 노출 제거. 디버그가 필요하면 `window.__app = { state }`만.
+6. CSP 메타 추가(Phase 5 CDN 로컬화 후 tighten):
+
+```html
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://generativelanguage.googleapis.com; font-src 'self' data:">
+```
+
+**DoD**
+
+- [ ] `grep -c 'onclick=' math/index.html english/index.html` → 0
+- [ ] `grep -rn 'escapeJsString'` → 0
+- [ ] 모든 기능 함수가 `export`됨
+- [ ] 스모크 8종 + **모든 `[data-action]` 버튼 클릭 점검**
+- [ ] 콘솔 CSP 위반 0
+
+**롤백**: Phase 3 태그.
+
+---
+
+### Phase 5 — `core/` 순수 도메인 추출 (2~3일)
+
+**목표**: 프롬프트·스키마·채점을 DOM과 분리해 테스트 가능 + 서버 재사용 가능하게 만든다.
+
+**작업**
+
+1. 스키마 상수 이동 (`core/schemas/*`).
+2. 프롬프트 빌더를 **인자 기반**으로 변경:
+
+```js
+// before (DOM 직접 읽음)
+function buildSimilarProblemPrompt() { const unitHint = document.getElementById('unitSelect').value; ... }
+// after (순수)
+export function buildSimilarProblemPrompt({ unitHint, recognizedProblem, keyPoint }) { ... }
+```
+
+3. `callGeminiModel` 단일 구현으로 통합 (수학 인라인 삭제, `shared/api/client.js`만 사용).
+4. 채점/셔플/정규화를 `core/grading/*`로 이동.
+5. 캐시에 `maxAgeMs` + `schemaVersion` 도입.
+
+**DoD**
+
+- [ ] `core/`에서 `document|window|localStorage|fetch` 검색 결과 0
+- [ ] 프롬프트 문자열이 **바이트 단위로 동일**(이동 전후 diff 0)
+- [ ] 단위 테스트(Phase 6 L1) 통과
+- [ ] 스모크 8종 통과
+
+> 프롬프트 문구가 1자라도 바뀌면 모델 출력이 달라진다. **문구 수정은 이 단계에서 금지**.
+
+---
+
+### Phase 6 — 전체 테스트 도입 (2~3일) ★ 요청된 "구조 확정 후 테스트" 단계
+
+**목표**: 구조가 확정된 상태에서 회귀 안전망을 만든다.
+
+#### 테스트 계층
+
+| 계층 | 도구 | 대상 | 실행 |
+|---|---|---|---|
+| L1 단위 | `node:test` | `core/*` (프롬프트 조립, 스키마 검증, 채점, 셔플, 캐시) | `node --test tests/unit` |
+| L2 통합 | Playwright + `page.route` 스텁 | 수학/영어 주요 흐름, 이벤트 위임, 상태 전이 | `npx playwright test` |
+| L3 수동 | 체크리스트 | PWA 설치, 오프라인, iOS 음성, 실기기 레이아웃 | `docs/SMOKE.md` |
+
+#### L2 필수 시나리오
+
+1. 해설 생성(2문제) → 탭 전환 → 각 문제 독립 표시
+2. twin_quiz 재사용 → **API 호출 0회**
+3. 4択 오답 → 정답 표시 + 로컬 채점(호출 0회)
+4. 잘못된 퀴즈 폴백 → 이후 정상 퀴즈에서 4択 복구
+5. 노트 저장 → 복원 (`overall_chat`, `followups` 포함)
+6. 문제 전체 Q&A → 즉시 탭 전환 → 응답이 원래 탭에 남음
+7. 단계 Q&A → 즉시 탭 전환 → 다른 문제 `followups` 비어 있음
+8. 동일 문제 2회 → API 1회 + 캐시 안내 문구
+9. 영어: 읽기 → 퀴즈 재사용(0회) → 저장 → 복원 → 퀴즈(0회)
+10. 영어: `"` 포함 지문 → 낭독 버튼 정상
+11. 모든 `[data-action]` 버튼 클릭 → 콘솔 에러 0
+12. `/` 허브 → `/math/`, `/english/` 이동 + 허브 복귀
+
+#### 완료 기준
+
+- [ ] L1 통과, `core/` 커버리지 80% 이상
+- [ ] L2 12개 시나리오 통과
+- [ ] L3 체크리스트 서명
+- [ ] `node --check` + L1 자동 실행 스크립트
+
+---
+
+### Phase 7 — 수익화 준비 (별도 저장소, 착수 시 재계획)
+
+| 항목 | 내용 |
+|---|---|
+| API 프록시 | Cloudflare Workers 등에서 Gemini 호출. **브라우저에 API 키 저장 금지** |
+| 인증/쿼터 | 사용자별 일일 호출 한도, 서버 측 카운트 |
+| 서버 캐시 | 요청 해시 기반 공용 캐시(기기 로컬 캐시 대체) |
+| 랜딩 확장 | `/` 허브에 가격·약관·로그인 진입점 추가 |
+| 의존성 로컬화 | Tailwind 빌드 산출물, KaTeX/폰트 벤더링 → CSP 강화 |
+| 앱 형태 결정 | 2개 PWA 유지 vs Next.js 통합 (7장) |
+
+**원칙**: `core/`는 그대로 이식, UI는 새로 작성.
+
+---
+
+## 4. 코드 작업 도구용 실행 지시
+
+> 이 장의 지시문은 **그대로 복사해 실행**할 수 있게 작성했다. 판단이 필요한 지점은 모두
+> "이렇게 한다"로 확정해 두었다. 실행 중 문서와 다른 사실을 발견하면 **작업을 중단하고
+> 보고**한다(임의 보정 금지).
+>
+> 공통 전제: 모든 Phase는 앞 Phase의 DoD를 통과한 뒤 시작한다. 실패 시 다음 Phase로 넘어가지 않는다.
+
+### 4.0 Phase 0 (동결 + 기준선 자산)
+
+**목적**: 이후 Phase에서 "동작이 같다"를 기계적으로 판정할 기준을 만든다. 코드는 **한 줄도 바꾸지 않는다**.
+
+```
+[Phase 0] 기준선 고정
+
+전제
+- HEAD = cc07dcb, working tree clean
+- 이 Phase에서 앱 코드(index.html, english/index.html, shared/*, sw.js) 수정 금지
+- 추가만 허용: tests/, docs/SMOKE.md, .gitignore 항목
+
+1) 기준선 태그
+   git tag -a v1.8-baseline -m "baseline before restructure (cc07dcb)"
+   git push origin v1.8-baseline
+   → 이 태그는 Phase 6까지 롤백 지점으로 사용한다
+
+2) 디렉터리 생성
+   mkdir -p tests/fixtures tests/unit tests/e2e backup
+
+3) 픽스처 8종 생성 (tests/fixtures/)
+   수학
+   - math-solve-2problems.json   : problems[2] + 각 steps[] + key_point + twin_quiz 포함
+   - math-quiz.json              : 4択 1문항 (choices[4], answer_index, explanation)
+   - math-simplify.json          : 단일 step 재설명
+   - math-overall-chat.json      : 문제 전체 Q&A 응답
+   - math-step-chat.json         : 단계 Q&A 응답
+   영어
+   - english-reading.json        : 長文読解 (本文/設問/解説)
+   - english-quiz.json           : 4択 1문항
+   - english-writing.json        : 英作文添削 (添削文/指摘リスト)
+
+   작성 규칙
+   - 스키마는 각 앱의 *_SCHEMA 상수를 그대로 따른다(필드명 임의 변경 금지)
+   - 문자열은 실제 출력과 같은 형태(日本語/英語)로 넣는다
+   - 각 파일은 최소 1건, 수학 solve만 2문제(탭 전환 검증용)
+
+4) 테스트 스텁 (tests/stub-gemini.js)
+   - globalThis.fetch 를 가로채 generativelanguage.googleapis.com 호출을 픽스처로 대체
+   - 요청 본문의 프롬프트를 보고 픽스처를 선택(키워드 매칭)
+   - 호출 횟수를 counters 객체에 기록 (시나리오별 0/1회 검증용)
+   - 미매칭 요청은 throw (조용한 통과 금지)
+   - CommonJS + ESM 양쪽에서 require/import 가능하게 export
+
+5) 스모크 체크리스트 (docs/SMOKE.md)
+   아래 8개 시나리오를 체크박스 + 기대 결과 + 실제 결과 기록란으로 문서화
+   M1 写真→解説(2問)→問題タブ切替→各問が独立表示
+   M2 twin_quiz 再利用 → API 呼び出し 0 回
+   M3 4択 誤答 → 正解表示・ローカル採点(0回)
+   M4 ノート保存 → 復元(overall_chat / followups 含む)
+   M5 問題全体Q&A → 即タブ切替 → 応答が元タブに残る
+   M6 同一問題2回 → API 1回 + キャッシュ案内
+   M7 英語: 読解→クイズ(0回)→保存→復元
+   M8 PWA: インストール→オフライン再訪→更新反映
+
+6) .gitignore
+   backup/ を追加(ローカル退避用。リポジトリに残さない)
+
+검증
+7) node --check tests/stub-gemini.js
+8) node -e "const s=require('./tests/stub-gemini.js'); console.log(s.fixtures.length)" → 8
+9) git status で 앱 코드 파일(index.html, english/index.html, shared/, sw.js)이
+   변경 목록에 없음을 확인
+
+보고
+- 생성 파일 목록, 픽스처 8종 이름, 태그 해시
+- 커밋: test: add baseline fixtures and smoke checklist (no app change)
+```
+
+**Phase 0 → Phase 1 핸드오프 계약**
+
+| 항목 | Phase 0이 보장해야 하는 것 | Phase 1이 그것을 쓰는 방식 |
+|---|---|---|
+| 롤백 지점 | `v1.8-baseline` 태그 | Phase 1 실패 시 `git reset --hard v1.8-baseline` |
+| 회귀 판정 | 픽스처 8종 + 스텁 | Phase 1 검증에서 콘솔 에러 + 스모크 4종 |
+| 수동 확인 | `docs/SMOKE.md` 8항목 | Phase 1에서 M1·M3·M4·M7만 우선 확인 |
+| 변경 격리 | 앱 코드 diff 0 | Phase 1 diff가 "경로·메타데이터"만인지 대조 |
+
+> Phase 0의 픽스처는 Phase 6에서 그대로 L2 테스트 입력이 된다. 지금 대충 만들면 나중에 두 번 만든다.
+
+#### 4.0-A 픽스처 정확한 형태 (필드명은 실제 스키마에서 추출)
+
+> 아래는 **앱이 실제로 쓰는 스키마의 필수 필드**다. 임의로 이름을 바꾸면 Phase 6에서 전부 다시 만든다.
+> 각 파일은 "API가 반환하는 JSON 객체"이며, 스텁이 Gemini 응답 봉투로 감싼다.
+
+**① `math-solve-2problems.json`** — `TUTOR_RESPONSE_SCHEMA`
+필수: `problems[].{problem_label, recognized_problem, key_point, steps[], final_answer, twin_quiz}` /
+`steps[].{step_number, title, display_math, speech_ja}`
+
+```json
+{
+  "problems": [
+    {
+      "problem_label": "問1",
+      "recognized_problem": "$x^2-5x+6=0$ を解け。",
+      "key_point": "積が6、和が-5になる2数を探す（因数分解）。",
+      "steps": [
+        {
+          "step_number": 1,
+          "title": "因数分解の形を予想する",
+          "focus": "$x^2+(a+b)x+ab$ の形",
+          "why": "積と和から2数を決めると因数分解できる。",
+          "display_math": "$x^2-5x+6=(x-2)(x-3)$",
+          "watch_out": "符号を逆にしない。",
+          "speech_ja": "積が6、和がマイナス5になる2数を探します。",
+          "visual": { "type": "none", "caption": "" }
+        },
+        {
+          "step_number": 2,
+          "title": "解を求める",
+          "focus": "AB=0 なら A=0 または B=0",
+          "why": "積が0になるのは、どちらかが0のときだけ。",
+          "display_math": "$x=2,\\ 3$",
+          "watch_out": "答えは2つ。",
+          "speech_ja": "xは2と3です。",
+          "visual": {
+            "type": "graph",
+            "caption": "$y=x^2-5x+6$ とx軸の交点",
+            "view": { "x_min": -1, "x_max": 6, "y_min": -2, "y_max": 6 },
+            "curves": [
+              { "kind": "quadratic", "a": 1, "b": -5, "c": 6, "label": "$y=x^2-5x+6$" }
+            ],
+            "points": [
+              { "x": 2, "y": 0, "label": "2", "open": false },
+              { "x": 3, "y": 0, "label": "3", "open": false }
+            ]
+          }
+        }
+      ],
+      "final_answer": "$x=2,\\ 3$",
+      "twin_quiz": {
+        "problem": "$x^2-7x+12=0$ を解け。",
+        "choices": ["$x=3,\\ 4$", "$x=-3,\\ -4$", "$x=2,\\ 6$", "$x=-2,\\ -6$"],
+        "correct_index": 0,
+        "answer": "$x=3,\\ 4$",
+        "accepted_answers": ["x=3,4", "3,4", "x=4,3"],
+        "hint": "積が12、和が-7になる2数は？",
+        "explanation": "積12・和-7より $-3$ と $-4$。よって $(x-3)(x-4)=0$。",
+        "wrong_hint": "和の符号を確認しよう。",
+        "choice_feedback": ["正解", "和の符号が逆", "積が12にならない", "和が-7にならない"],
+        "speech_ja_correct": "正解です。",
+        "speech_ja_wrong": "符号をもう一度確認しましょう。"
+      }
+    },
+    {
+      "problem_label": "問2",
+      "recognized_problem": "$|x-3| \\leqq 2$ を解け。",
+      "key_point": "絶対値の不等式は $-2 \\leqq x-3 \\leqq 2$ に分解する。",
+      "steps": [
+        {
+          "step_number": 1,
+          "title": "絶対値を外す",
+          "focus": "$|A| \\leqq c \\iff -c \\leqq A \\leqq c$",
+          "why": "原点からの距離がc以下という意味だから。",
+          "display_math": "$-2 \\leqq x-3 \\leqq 2$",
+          "watch_out": "向きはそのまま。",
+          "speech_ja": "絶対値を外すと、マイナス2以上2以下になります。",
+          "visual": { "type": "none", "caption": "" }
+        },
+        {
+          "step_number": 2,
+          "title": "3を足す",
+          "focus": "各辺に同じ数を足す",
+          "why": "不等式の性質。",
+          "display_math": "$1 \\leqq x \\leqq 5$",
+          "watch_out": "両端を含む（≦）。",
+          "speech_ja": "各辺に3を足して、1以上5以下です。",
+          "visual": {
+            "type": "numberline",
+            "caption": "$1 \\leqq x \\leqq 5$",
+            "numberline": {
+              "min": -1,
+              "max": 7,
+              "marks": [{ "value": 1, "label": "1", "closed": true }, { "value": 5, "label": "5", "closed": true }]
+            }
+          }
+        }
+      ],
+      "final_answer": "$1 \\leqq x \\leqq 5$",
+      "twin_quiz": {
+        "problem": "$|x-2| \\leqq 3$ を解け。",
+        "choices": ["$-1 \\leqq x \\leqq 5$", "$-5 \\leqq x \\leqq 1$", "$x \\leqq -1,\\ 5 \\leqq x$", "$-1 < x < 5$"],
+        "correct_index": 0,
+        "answer": "$-1 \\leqq x \\leqq 5$",
+        "accepted_answers": ["-1≦x≦5", "-1<=x<=5"],
+        "hint": "「以上・以下」は両端を含む。",
+        "explanation": "$-3 \\leqq x-2 \\leqq 3$ より各辺に2を足す。",
+        "wrong_hint": "等号の有無を確認しよう。",
+        "choice_feedback": ["正解", "中心の符号が逆", "不等式の向きが逆", "等号が抜けている"],
+        "speech_ja_correct": "正解です。",
+        "speech_ja_wrong": "等号を含むか確認しましょう。"
+      }
+    }
+  ]
+}
+```
+
+**② `math-quiz.json`** — `QUIZ_GEN_SCHEMA`
+필수: `problem, choices[4], correct_index, answer, hint, explanation` / 권장: `accepted_answers[], wrong_hint, choice_feedback[4], speech_ja_correct, speech_ja_wrong`
+
+```json
+{
+  "problem": "$x^2-9$ を因数分解せよ。",
+  "choices": ["$(x+3)(x-3)$", "$(x+9)(x-1)$", "$(x-3)^2$", "$(x+3)^2$"],
+  "correct_index": 0,
+  "answer": "$(x+3)(x-3)$",
+  "accepted_answers": ["(x+3)(x-3)", "(x-3)(x+3)"],
+  "hint": "$a^2-b^2$ の形を探す。",
+  "explanation": "$x^2-3^2$ なので $(x+3)(x-3)$。",
+  "wrong_hint": "和と積ではなく、2乗の差です。",
+  "choice_feedback": ["正解", "積が-9にならない", "中央の項が残る", "中央の項が残る"],
+  "speech_ja_correct": "正解です。",
+  "speech_ja_wrong": "二乗の差の公式を確認しましょう。"
+}
+```
+
+**③ `math-simplify.json`** — `SIMPLIFY_RESPONSE_SCHEMA`
+필수: `title, display_math, speech_ja`
+
+```json
+{
+  "title": "もっとやさしく：因数分解",
+  "focus": "かけ算の形に戻す",
+  "why": "展開の逆をすると、方程式が解ける。",
+  "display_math": "$x^2-5x+6=(x-2)(x-3)$",
+  "watch_out": "かっこの中の符号。",
+  "speech_ja": "まず、かけて6、たしてマイナス5になる2つを探します。",
+  "visual": { "type": "none", "caption": "" }
+}
+```
+
+**④ `math-step-chat.json`** — `FOLLOWUP_SCHEMA`
+필수: `answer, speech_ja`
+
+```json
+{
+  "answer": "このステップでは、積が6・和が-5になる2数を探しています。2と3は積が6ですが和が5なので、符号を両方マイナスにします。",
+  "speech_ja": "積が6で和がマイナス5なので、マイナス2とマイナス3です。"
+}
+```
+
+**⑤ `math-overall-chat.json`** — `OVERALL_CHAT_SCHEMA`
+필수: `method_name, answer, comparison_note, speech_ja`
+
+```json
+{
+  "method_name": "解の公式による解法",
+  "answer": "解の公式で $x=\\frac{5 \\pm \\sqrt{25-24}}{2}=\\frac{5 \\pm 1}{2}$ より $x=2,\\ 3$。",
+  "comparison_note": "因数分解より計算量は多いが、因数が見えない問題でも必ず解ける。",
+  "speech_ja": "解の公式でも同じ答えになります。"
+}
+```
+
+**⑥ `english-reading.json`** — `ENGLISH_READING_SCHEMA`
+필수: `passage_en, translation_ja, twin_quiz{question_en, translation_ja, choices[4], correct_index, choice_feedback[4], explanation}`
+
+```json
+{
+  "passage_en": "Ken studies math every evening. He says practice is the key to success.",
+  "translation_ja": "ケンは毎晩数学を勉強します。彼は練習が成功の鍵だと言います。",
+  "sentence_breakdown": [
+    { "en": "Ken studies math every evening.", "ja": "ケンは毎晩数学を勉強します。", "structure_note": "S+V+O+副詞句" }
+  ],
+  "vocabulary": [
+    { "word": "practice", "meaning": "練習", "example": "Practice makes perfect." }
+  ],
+  "grammar_points": [
+    { "title": "every + 単数名詞", "explanation": "every evening は「毎晩」を表す副詞句。" }
+  ],
+  "quick_check": { "question": "Who studies math?", "answer": "Ken" },
+  "twin_quiz": {
+    "target_point": "S+V+O の語順",
+    "question_en": "Choose the correct sentence.",
+    "translation_ja": "正しい文を選びなさい。",
+    "hint": "主語の次は動詞。",
+    "choices": ["She reads books.", "She books reads.", "Reads she books.", "Books she reads."],
+    "correct_index": 0,
+    "choice_feedback": ["正解", "語順が逆", "倒置になっている", "目的語が先頭"],
+    "explanation": "英語は S+V+O の語順。"
+  }
+}
+```
+
+**⑦ `english-quiz.json`** — `ENGLISH_QUIZ_SCHEMA`
+필수: `question_en, translation_ja, choices[4], correct_index, choice_feedback[4], explanation`
+
+```json
+{
+  "target_point": "現在完了",
+  "question_en": "I ( ) this book three times.",
+  "translation_ja": "私はこの本を3回読んだことがある。",
+  "hint": "経験を表す形。",
+  "choices": ["have read", "read", "am reading", "will read"],
+  "correct_index": 0,
+  "choice_feedback": ["正解", "過去形では経験の意味が出ない", "進行形は不可", "未来形は不可"],
+  "explanation": "経験は have + 過去分詞。"
+}
+```
+
+**⑧ `english-writing.json`** — `WRITING_CORRECTION_SCHEMA`
+필수: `score, corrected_text, grammar_fixes[], praise_and_advice`
+
+```json
+{
+  "score": 80,
+  "original_text": "I go to school yesterday.",
+  "corrected_text": "I went to school yesterday.",
+  "natural_alternative": "Yesterday, I went to school.",
+  "translation_ja": "私は昨日学校へ行きました。",
+  "grammar_fixes": [
+    { "before": "go", "after": "went", "reason_ja": "yesterday があるので過去形。" }
+  ],
+  "praise_and_advice": "内容は伝わっています。時制に注意しましょう。"
+}
+```
+
+**⑨ (선택) `math-judge.json`** — `JUDGE_SCHEMA` (類題 채점)
+`{ "is_correct": true, "judgement_title": "正解", "comment": "よくできました。", "correct_answer": "$x=3,\\ 4$", "speech_ja": "正解です。" }`
+
+> ⑨는 Phase 0의 "8종"에는 포함하지 않는다. 類題 채점까지 L2에서 검증하려면 Phase 6에서 추가한다.
+
+#### 4.0-B 스텁 동작 명세 (`tests/stub-gemini.js`)
+
+**응답 봉투** — 앱은 `data.candidates[0].content.parts[].text`를 JSON으로 파싱한다.
+
+```js
+function envelope(fixture) {
+  return {
+    candidates: [{
+      finishReason: 'STOP',
+      content: { parts: [{ text: JSON.stringify(fixture) }] }
+    }],
+    usageMetadata: { promptTokenCount: 1800, candidatesTokenCount: 900, totalTokenCount: 2700 }
+  };
+}
+```
+
+**픽스처 선택** — 프롬프트 문구 매칭이 아니라 **요청의 `responseSchema.properties` 키**로 판별한다(문구가 바뀌어도 안 깨진다). 위에서부터 먼저 맞는 것:
+
+| 순서 | 조건 (`props` = `generationConfig.responseSchema.properties` 키) | 픽스처 |
+|---:|---|---|
+| 0 | `GET` 요청 (`/v1beta/models`) | 모델 목록 `{models:[{name:'models/gemini-3.8-flash',displayName:'Gemini 3.8 Flash',supportedGenerationMethods:['generateContent']}]}` |
+| 1 | `problems` | `math-solve-2problems` |
+| 2 | `passage_en` | `english-reading` |
+| 3 | `score` | `english-writing` |
+| 4 | `method_name` | `math-overall-chat` |
+| 5 | `is_correct` | `math-judge` |
+| 6 | `question_en` + `wrong_hint` | `math-quiz` |
+| 7 | `question_en` | `english-quiz` |
+| 8 | `display_math` | `math-simplify` |
+| 9 | `answer` + `speech_ja` | `math-step-chat` |
+| — | 그 외 | `throw new Error('stub: unhandled schema [' + keys + ']')` |
+
+**모듈 형태** — 저장소에 `package.json`이 없으므로 **CommonJS**로 작성한다.
+
+```js
+// tests/stub-gemini.js
+module.exports = { FIXTURES, pickFixture, envelope, install, reset, counters };
+// install(): globalThis.fetch 패치 + 해제 함수 반환
+// counters: { total, byFixture: { 'math-solve-2problems': 2, ... } }
+```
+
+**필수 성질 2개**
+
+1. **조용히 통과하지 않는다**: 매칭 실패는 throw. 픽스처 누락이 테스트 통과로 위장되면 안 된다.
+2. **호출 횟수를 센다**: `counters.total`로 "twin_quiz 재사용 = 0회", "동일 문제 2회 = 1회"를 검증한다.
+
+#### 4.0-C Phase 0 검증 스크립트
+
+```js
+// tests/selftest.js  (node tests/selftest.js)
+// 1) 8개 픽스처 파일이 모두 읽히는가
+// 2) 각 픽스처가 그 스키마의 required 필드를 갖는가
+// 3) pickFixture()가 8종을 서로 다르게 판별하는가 (오분류 0)
+```
+
+- 3)이 중요하다. 판별 순서가 틀리면 `english-quiz`가 `math-step-chat`으로 잡히는 식의 오류가 난다.
+
+### 4.1 Phase 1 (폴더 이동 + 허브)
+
+```
+[Phase 1] 루트 허브 + math/ 이동
+
+전제
+- HEAD = cc07dcb, working tree clean
+- 백업: backup/pre-phase1/ 에 index.html, sw.js, manifest.json, english/index.html, english/sw.js, 아이콘 3종
+- 금지: 로직·문구·스타일 수정 (경로와 PWA 메타데이터만)
+
+이동
+1) mkdir -p math
+2) git mv index.html math/index.html
+   git mv sw.js math/sw.js
+   git mv manifest.json math/manifest.json
+   git mv icon-192.png math/icon-192.png
+   git mv icon-512.png math/icon-512.png
+   git mv apple-touch-icon.png math/apple-touch-icon.png
+
+math/index.html — 경로 치환 (이동 전 기준 행 번호로 확인됨)
+3) 24행   href="shared/ui.css?v=20261028"
+       →  href="../shared/ui.css?v=20261028"
+4) 224행  href="english/"   （ロック解除モーダル内の切替リンク）
+       →  href="../english/"
+5) 248행  href="english/"   （ヘッダーの切替ボタン）
+       →  href="../english/"
+6) 685행  src="shared/storage.js?v=20261028" → src="../shared/storage.js?v=20261028"
+   686행  src="shared/core.js?v=20261028"    → src="../shared/core.js?v=20261028"
+   687행  src="shared/speech.js?v=20261028"  → src="../shared/speech.js?v=20261028"
+   688행  src="shared/ui.js?v=20261028"      → src="../shared/ui.js?v=20261028"
+7) 변경하지 않는 것 (상대경로가 /math/ 기준으로 자동 해석됨)
+   - 17행 <link rel="manifest" href="manifest.json" />
+   - 18행 apple-touch-icon.png / 19행 icon-192.png
+   - 1751행 navigator.serviceWorker.register('./sw.js')
+   - Tailwind / KaTeX / Google Fonts 의 https:// 절대 URL
+   ※ 치환 후 확인: grep -n 'href="shared/\|src="shared/' math/index.html → 0건
+   ※ 상단 로고는 현재 링크가 아니다. 허브로 가는 링크를 Phase 1에서
+      새로 추가하지 않는다(이 Phase는 "이동"만 한다).
+
+math/manifest.json
+8)  "id": "./"                 → 유지 (→ /math/ 로 해석. identity 변경은 의도된 것)
+    "start_url": "./index.html" → "./"
+    "scope": "./"              → 유지
+    name / short_name / theme_color / icons.src 는 그대로
+
+math/sw.js
+9)  CACHE_NAME = 'amt-cache-v2.6'  →  'amt-cache-v2.7'
+10) ASSETS 를 아래로 교체
+    './', './index.html', './manifest.json',
+    './icon-192.png', './icon-512.png', './apple-touch-icon.png',
+    '../shared/storage.js', '../shared/core.js',
+    '../shared/speech.js', '../shared/ui.js', '../shared/ui.css'
+11) englishPrefix 가드(fetch 핸들러) 삭제
+    - 스코프가 /math/ 이므로 영어 예외 처리가 불필요
+    - 삭제 후 fetch 핸들러가 cache.match → fetch → put 순서로만 동작하는지 확인
+
+루트 index.html (신규 허브, 80~120행)
+12) <!doctype html>, lang="ja", <title>AI家庭教師 | 数学・英語</title>
+13) 카드 2개
+    📐 数学I・A → ./math/     （写真で質問・ステップ解説・音声）
+    🇬🇧 英語      → ./english/ （長文読解・4択・英作文添削）
+14) 前回の続き: localStorage.getItem('tutor_last_subject') 가 'math'|'english' 이면
+    해당 카드에 「前回の続き」バッジ。없으면 양쪽 중립
+15) 안내 2줄
+    - APIキーは端末内にのみ保存されます
+    - 初回PIN（初期値 1234）は設定画面から変更できます
+16) standalone 리다이렉트 (1-E 의 코드를 그대로)
+17) manifest 링크 없음 / sw.js 등록 없음 / Tailwind CDN 없음
+    (허브는 외부 의존 0의 정적 1파일)
+18) 카드 이동은 <a href> 만 사용. JS 없이도 이동해야 한다
+19) 표기 언어: 日本語. 영어 앱 지칭은 「英語」로 통일
+
+루트 sw.js (교체 — 1-F 의 cleanup SW)
+20) amt- 프리픽스 캐시만 삭제, aet- 는 보존
+21) activate 에서 self.registration.unregister()
+22) install 에서 self.skipWaiting()
+23) 상단 주석: 「旧ルートSWの後始末用 / 2リリース後に削除可」
+
+english
+24) english/index.html 90행  href="../" → href="../math/"  （ロック解除モーダル内）
+25) english/index.html 116행 href="../" → href="../math/"  （ヘッダー切替ボタン）
+    ※ 45행 / 563~566행의 ../shared/* 는 그대로 (english/ 기준 ../ = 루트)
+26) english/sw.js CACHE_NAME 'aet-cache-v1.6' → 'aet-cache-v1.7'
+    ※ ASSETS 변경 없음 (index.html 은 './index.html' 로 이미 포함)
+
+검증 (순서대로)
+27) node --check math/sw.js && node --check sw.js
+28) python3 -m http.server 8765 --bind 127.0.0.1
+29) 시크릿 창에서 http://127.0.0.1:8765/
+    - / → 허브 표시, 카드 2개, 콘솔 에러 0
+    - 카드 클릭 → /math/ , /english/ 이동
+30) http://127.0.0.1:8765/math/
+    - Network 탭에서 ../shared/* 전부 200 (404 없음)
+    - 기존 노트 / APIキー / 테마가 그대로 보임 (localStorage 유지)
+    - 解説 1件 / 4択 1問 / ノート復元
+31) http://127.0.0.1:8765/english/
+    - 読解 1件 / 4択 1問 / 単語帳 1件 / 수학 전환 링크가 /math/ 로 이동
+32) SW 스코프
+    navigator.serviceWorker.getRegistrations() → /math/ , /english/ 스코프 존재
+    /math/ 페이지가 루트 SW 에 제어되지 않음
+33) 루트 SW 정리 확인
+    / 재방문 → caches.keys() 에 amt- 없음, aet- 유지
+    registration.unregister() 후 재등록되지 않음
+34) 오프라인: /math/ 방문 후 DevTools Offline → 再読込で表示される
+35) git diff --stat 로 앱 코드 변경이 「경로 치환 + PWA 메타데이터」에 한정됨을 확인
+
+보고
+- 변경 파일 목록 + diff 요약
+- 29~34 각 항목 결과
+- 커밋 3개로 분리
+  refactor: move math app to /math and add hub landing
+  chore(sw): replace root SW with cleanup worker and bump caches
+  test: add baseline fixtures and smoke checklist (Phase 0 산출물 미커밋 시)
+```
+
+### 4.2 Phase 2 (셸 분리)
+
+```
+[Phase 2] 인라인 스크립트 분리 (동작 무변경)
+
+수학
+1) math/index.html 의 <script> ... </script> 내용을 math/app.js 로 추출
+   - 경계: 여는 태그 다음 줄 ~ 닫는 태그 이전 줄 (양 끝 포함)
+   - 선행 공백 4칸 유지, 수동 복사 금지
+2) 태그 2줄을 <script src="app.js?v=20261030"></script> 로 교체
+3) math/sw.js: ASSETS 에 './app.js' 추가, CACHE_NAME 'amt-cache-v2.7' → 'v2.8'
+4) node --check math/app.js
+
+영어
+5) english/index.html 570~2015행 → english/app.js, 태그 교체
+6) english/sw.js: ASSETS 에 './app.js' 추가, CACHE_NAME 'aet-cache-v1.7' → 'v1.8'
+7) node --check english/app.js
+
+검증
+8) 스모크 4종 + 콘솔 에러 0 + 각 index.html 700줄 이하
+9) 커밋: refactor: extract inline scripts to app.js (no logic change)
+```
+
+---
+
+## 5. 리스크와 대응
+
+| 리스크 | 영향 | 대응 |
+|---|---|---|
+| **기존 수학 PWA가 허브를 열게 됨** | 혼란 | standalone 감지 시 `./math/`로 리다이렉트(1-E), 재설치 안내 문구 |
+| **루트 SW가 남아 `/math/`를 제어** | 캐시 혼선 | 루트 `sw.js`를 cleanup SW로 교체 후 unregister. 파일 삭제 금지 |
+| **PWA 설치 identity 변경** | 아이콘 중복 | 구 아이콘은 그대로 동작(리다이렉트). **재설치 허용으로 확정** — 구 아이콘 삭제는 사용자 판단 |
+| 이동 중 함수 누락 | 기능 정지 | Phase 0 인벤토리(97/60)와 대조 |
+| 로드 순서 의존 | `undefined` 참조 | Phase 3 명시적 순서, Phase 4 import로 해소 |
+| 이벤트 위임 누락 | 버튼 무반응 | `[data-action]` 전수 클릭 자동화 |
+| 프롬프트 문구 변형 | 모델 출력 변화 | Phase 5에서 전후 문자열 diff 0 검증 |
+| iOS Safari 모듈/캐시 특성 | 흰 화면 | Phase 4 직후 실기기 1회 확인 |
+| 작업 중 새 버그 발견 | 범위 확장 | 고치지 않고 `docs/AUDIT_v1.8.md` 백로그 기록 |
+
+---
+
+## 6. 일정 (1인 + 코드 도구 기준)
+
+| Phase | 내용 | 공수 | 누적 |
+|---|---|---|---|
+| 0 | 동결·기준선 | 0.5일 | 0.5 |
+| 1 | 허브 + `math/` 이동 + PWA 마이그레이션 | 0.5~1일 | 1.5 |
+| 2 | 셸 분리 | 0.5일 | 2.0 |
+| 3 | 파일 분해 | 2~3일 | 4.5 |
+| 4 | ESM + 위임 | 3~4일 | 8.0 |
+| 5 | core 추출 | 2~3일 | 10.5 |
+| 6 | 테스트 | 2~3일 | 13.0 |
+| 7 | 수익화 | 별도 | — |
+
+> Phase 3 완료 시점에 "편집 가능한 상태"가 확보된다. 일정이 빠듯하면 **Phase 3에서 멈추고 Phase 6(테스트)를 먼저** 해도 된다.
+
+---
+
+## 7. 확정 사항 (구 "결정 필요 사항")
+
+> v2.2에서 **전부 확정**. 아래는 "무엇을, 왜 그렇게 정했는지"의 기록이다.
+> 실행 중 이 표와 다른 판단이 필요해지면 작업을 멈추고 문서를 갱신한다.
+
+| # | 항목 | 확정 | 근거 |
+|---|---|---|---|
+| 1 | 루트 구조 | **허브 + 과목 폴더** | 과목 추가 시 URL·배포가 대칭으로 확장된다 |
+| 2 | 허브를 PWA로? | **아니오** | scope `/`가 수학 scope와 겹쳐 설치 identity가 충돌한다 |
+| 3 | 루트 cleanup SW | **2회 배포 주기(≈2~3개월) 유지 후 삭제** | 파일 삭제 시 404 → 구 SW가 영구 잔존한다 |
+| 4 | 폴더 명명 | `math/`, `english/` | 소문자·단수·확장 용이 |
+| 5 | ESM + 이벤트 위임(Phase 4) | **실행한다** | `escapeJsString` 클래스 제거 + CSP + 서버 이식의 전제 |
+| 6 | 번들러 | **Phase 7까지 미도입** | GitHub Pages 정적 배포 유지, 디버깅 가능성 우선 |
+| 7 | Tailwind CDN | **Phase 5에서 빌드 산출 CSS로 교체** | 오프라인 완전성 + CSP `unsafe-inline` 제거 |
+| 8 | PWA 개수 | **2개 유지(단기)** | 수익화 착수 시 통합 여부만 재검토 |
+| 9 | 테스트 도구 | **`node:test` + Playwright** | 추가 의존 최소, 브라우저는 이미 검증에 사용 중 |
+| 10 | 수익화 모델 | **BYOK 무료 + 구독 병행** | 기존 사용자 무료 유지, 원가 발생분만 과금 |
+| 11 | API 키 위치 | **서버(프록시) 보관** (Phase 7) | 클라이언트 키는 노출·쿼터 우회 불가피 |
+| 12 | 결제 | **Stripe Checkout + webhook** | 앱스토어 수수료 회피, 일본 소비세 대응 |
+
+**확정에 따른 파생 규칙**
+
+- Phase 1에서 `manifest.json`의 `"id"` 값이 `./` → `/math/`로 바뀐다. 이는 **의도된 identity 변경**이며, 기존 설치본은 허브 리다이렉트(1-E)로 계속 동작한다.
+- Phase 4에서 `escapeJsString`을 삭제하므로, **Phase 3까지는 이 함수를 절대 건드리지 않는다**(그 사이 인라인 핸들러가 여전히 의존).
+- Phase 7의 프록시는 `core/`를 **그대로 import**한다. `core/`에 DOM 의존이 남아 있으면 Phase 7에서 재작업이 발생하므로 Phase 5의 `core/` 검사(`document|window|localStorage|fetch` = 0)는 **필수 게이트**다.
+
+---
+
+## 8. 전체 체크리스트
+
+**Phase 0**
+- [ ] `v1.8-baseline` 태그 생성·푸시
+- [ ] 픽스처 8종 + `tests/stub-gemini.js`
+- [ ] `docs/SMOKE.md` 8항목
+- [ ] 앱 코드 diff 0 확인
+
+**Phase 1**
+- [ ] `math/` 이동 + 경로 치환(24·224·248·685~688행)
+- [ ] `manifest.json` `start_url: "./"`, `id`/`scope` 유지
+- [ ] 루트 허브 + cleanup SW
+- [ ] `english/index.html` 90·116행 → `../math/`
+- [ ] 수학·영어 스모크, localStorage 유지
+- [ ] SW 스코프(`/math/`, `/english/`) 확인
+
+**Phase 2**
+- [ ] `math/app.js`, `english/app.js` 추출
+- [ ] SW 자산/캐시명 갱신
+- [ ] `node --check` + 스모크
+
+**Phase 3**
+- [ ] 2.5~2.7 표대로 파일 분해
+- [ ] 함수 인벤토리 일치(97/60)
+- [ ] 파일 500줄 이하
+
+**Phase 4**
+- [ ] `onclick=` 0
+- [ ] `escapeJsString` 0
+- [ ] ESM + 위임 + CSP
+
+**Phase 5**
+- [ ] `core/` DOM 의존 0
+- [ ] 프롬프트 문자열 diff 0
+- [ ] API 클라이언트 단일화
+
+**Phase 6**
+- [ ] L1/L2/L3 통과
+- [ ] 회귀 12 시나리오
+
+**Phase 7**
+- [ ] 서버 프록시 설계
+- [ ] 키 노출 제거
+- [ ] 쿼터/캐시
+
+---
+
+## 9. 참고 문서
+
+- `docs/AUDIT_v1.8.md` — v1.8 감사 결과 및 수정 이력
+- `docs/ARCHITECTURE.md` — 기존 구조 설명(v1.6 기준, Phase 3 완료 후 갱신)
+- `PROJECT_SPEC.md` — 제품 개요(수익화 방향)

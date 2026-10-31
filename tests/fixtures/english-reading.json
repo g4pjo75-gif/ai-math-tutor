@@ -1,0 +1,24 @@
+{
+  "passage_en": "Ken studies math every evening. He says practice is the key to success.",
+  "translation_ja": "ケンは毎晩数学を勉強します。彼は練習が成功の鍵だと言います。",
+  "sentence_breakdown": [
+    { "en": "Ken studies math every evening.", "ja": "ケンは毎晩数学を勉強します。", "structure_note": "S+V+O+副詞句" }
+  ],
+  "vocabulary": [
+    { "word": "practice", "meaning": "練習", "example": "Practice makes perfect." }
+  ],
+  "grammar_points": [
+    { "title": "every + 単数名詞", "explanation": "every evening は「毎晩」を表す副詞句。" }
+  ],
+  "quick_check": { "question": "Who studies math?", "answer": "Ken" },
+  "twin_quiz": {
+    "target_point": "S+V+O の語順",
+    "question_en": "Choose the correct sentence.",
+    "translation_ja": "正しい文を選びなさい。",
+    "hint": "主語の次は動詞。",
+    "choices": ["She reads books.", "She books reads.", "Reads she books.", "Books she reads."],
+    "correct_index": 0,
+    "choice_feedback": ["正解", "語順が逆", "倒置になっている", "目的語が先頭"],
+    "explanation": "英語は S+V+O の語順。"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "target_point": "現在完了",
+  "question_en": "I ( ) this book three times.",
+  "translation_ja": "私はこの本を3回読んだことがある。",
+  "hint": "経験を表す形。",
+  "choices": ["have read", "read", "am reading", "will read"],
+  "correct_index": 0,
+  "choice_feedback": ["正解", "過去形では経験の意味が出ない", "進行形は不可", "未来形は不可"],
+  "explanation": "経験は have + 過去分詞。"
+}

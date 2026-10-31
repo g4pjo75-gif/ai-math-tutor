@@ -1,0 +1,105 @@
+{
+  "problems": [
+    {
+      "problem_label": "問1",
+      "recognized_problem": "$x^2-5x+6=0$ を解け。",
+      "key_point": "積が6、和が-5になる2数を探す（因数分解）。",
+      "steps": [
+        {
+          "step_number": 1,
+          "title": "因数分解の形を予想する",
+          "focus": "$x^2+(a+b)x+ab$ の形",
+          "why": "積と和から2数を決めると因数分解できる。",
+          "display_math": "$x^2-5x+6=(x-2)(x-3)$",
+          "watch_out": "符号を逆にしない。",
+          "speech_ja": "積が6、和がマイナス5になる2数を探します。",
+          "visual": { "type": "none", "caption": "" }
+        },
+        {
+          "step_number": 2,
+          "title": "解を求める",
+          "focus": "AB=0 なら A=0 または B=0",
+          "why": "積が0になるのは、どちらかが0のときだけ。",
+          "display_math": "$x=2,\\ 3$",
+          "watch_out": "答えは2つ。",
+          "speech_ja": "xは2と3です。",
+          "visual": {
+            "type": "graph",
+            "caption": "$y=x^2-5x+6$ とx軸の交点",
+            "view": { "x_min": -1, "x_max": 6, "y_min": -2, "y_max": 6 },
+            "curves": [
+              { "kind": "quadratic", "a": 1, "b": -5, "c": 6, "label": "$y=x^2-5x+6$" }
+            ],
+            "points": [
+              { "x": 2, "y": 0, "label": "2", "open": false },
+              { "x": 3, "y": 0, "label": "3", "open": false }
+            ]
+          }
+        }
+      ],
+      "final_answer": "$x=2,\\ 3$",
+      "twin_quiz": {
+        "problem": "$x^2-7x+12=0$ を解け。",
+        "choices": ["$x=3,\\ 4$", "$x=-3,\\ -4$", "$x=2,\\ 6$", "$x=-2,\\ -6$"],
+        "correct_index": 0,
+        "answer": "$x=3,\\ 4$",
+        "accepted_answers": ["x=3,4", "3,4", "x=4,3"],
+        "hint": "積が12、和が-7になる2数は？",
+        "explanation": "積12・和-7より $-3$ と $-4$。よって $(x-3)(x-4)=0$。",
+        "wrong_hint": "和の符号を確認しよう。",
+        "choice_feedback": ["正解", "和の符号が逆", "積が12にならない", "和が-7にならない"],
+        "speech_ja_correct": "正解です。",
+        "speech_ja_wrong": "符号をもう一度確認しましょう。"
+      }
+    },
+    {
+      "problem_label": "問2",
+      "recognized_problem": "$|x-3| \\leqq 2$ を解け。",
+      "key_point": "絶対値の不等式は $-2 \\leqq x-3 \\leqq 2$ に分解する。",
+      "steps": [
+        {
+          "step_number": 1,
+          "title": "絶対値を外す",
+          "focus": "$|A| \\leqq c \\iff -c \\leqq A \\leqq c$",
+          "why": "原点からの距離がc以下という意味だから。",
+          "display_math": "$-2 \\leqq x-3 \\leqq 2$",
+          "watch_out": "向きはそのまま。",
+          "speech_ja": "絶対値を外すと、マイナス2以上2以下になります。",
+          "visual": { "type": "none", "caption": "" }
+        },
+        {
+          "step_number": 2,
+          "title": "3を足す",
+          "focus": "各辺に同じ数を足す",
+          "why": "不等式の性質。",
+          "display_math": "$1 \\leqq x \\leqq 5$",
+          "watch_out": "両端を含む（≦）。",
+          "speech_ja": "各辺に3を足して、1以上5以下です。",
+          "visual": {
+            "type": "numberline",
+            "caption": "$1 \\leqq x \\leqq 5$",
+            "numberline": {
+              "min": -1,
+              "max": 7,
+              "marks": [{ "value": 1, "label": "1", "closed": true }, { "value": 5, "label": "5", "closed": true }]
+            }
+          }
+        }
+      ],
+      "final_answer": "$1 \\leqq x \\leqq 5$",
+      "twin_quiz": {
+        "problem": "$|x-2| \\leqq 3$ を解け。",
+        "choices": ["$-1 \\leqq x \\leqq 5$", "$-5 \\leqq x \\leqq 1$", "$x \\leqq -1,\\ 5 \\leqq x$", "$-1 < x < 5$"],
+        "correct_index": 0,
+        "answer": "$-1 \\leqq x \\leqq 5$",
+        "accepted_answers": ["-1≦x≦5", "-1<=x<=5"],
+        "hint": "「以上・以下」は両端を含む。",
+        "explanation": "$-3 \\leqq x-2 \\leqq 3$ より各辺に2を足す。",
+        "wrong_hint": "等号の有無を確認しよう。",
+        "choice_feedback": ["正解", "中心の符号が逆", "不等式の向きが逆", "等号が抜けている"],
+        "speech_ja_correct": "正解です。",
+        "speech_ja_wrong": "等号を含むか確認しましょう。"
+      }
+    }
+  ]
+}

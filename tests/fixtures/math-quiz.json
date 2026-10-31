@@ -1,0 +1,13 @@
+{
+  "problem": "$x^2-9$ を因数分解せよ。",
+  "choices": ["$(x+3)(x-3)$", "$(x+9)(x-1)$", "$(x-3)^2$", "$(x+3)^2$"],
+  "correct_index": 0,
+  "answer": "$(x+3)(x-3)$",
+  "accepted_answers": ["(x+3)(x-3)", "(x-3)(x+3)"],
+  "hint": "$a^2-b^2$ の形を探す。",
+  "explanation": "$x^2-3^2$ なので $(x+3)(x-3)$。",
+  "wrong_hint": "和と積ではなく、2乗の差です。",
+  "choice_feedback": ["正解", "積が-9にならない", "中央の項が残る", "中央の項が残る"],
+  "speech_ja_correct": "正解です。",
+  "speech_ja_wrong": "二乗の差の公式を確認しましょう。"
+}

@@ -1,0 +1,11 @@
+{
+  "score": 80,
+  "original_text": "I go to school yesterday.",
+  "corrected_text": "I went to school yesterday.",
+  "natural_alternative": "Yesterday, I went to school.",
+  "translation_ja": "私は昨日学校へ行きました。",
+  "grammar_fixes": [
+    { "before": "go", "after": "went", "reason_ja": "yesterday があるので過去形。" }
+  ],
+  "praise_and_advice": "内容は伝わっています。時制に注意しましょう。"
+}
