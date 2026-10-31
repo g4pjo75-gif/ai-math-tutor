@@ -16,9 +16,8 @@ export function toggleStepChat(stepIdx) {
       const isHidden = panel.classList.toggle('hidden');
       if (!isHidden) {
         stopSpeech();
-        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        const inputEl = document.getElementById(`step-chat-input-${stepIdx}`);
-        if (inputEl) inputEl.focus();
+        // iOS: 自動フォーカスはキーボードを即座に出して入力欄を隠すため、スクロールのみ行う
+        panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
 
@@ -44,11 +43,10 @@ export function openStepChatWithQuote(stepIdx, partKey) {
         quoteEl.classList.remove('hidden');
       }
 
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
       const inputEl = document.getElementById(`step-chat-input-${stepIdx}`);
       if (inputEl) {
         inputEl.value = `この部分について教えてください: `;
-        inputEl.focus();
       }
     }
 

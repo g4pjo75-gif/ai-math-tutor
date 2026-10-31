@@ -270,3 +270,24 @@ html.dark[data-theme="mobile"] .step-card::before,
 html.dark[data-theme="mobile"] .breakdown-item::before {
   border-color: #0F172A;
 }
+
+/* ===== iOS Safari: 16px 未満の入力欄はフォーカス時に自動ズームする ===== */
+@media (max-width: 820px) {
+  input[type="text"],
+  input[type="password"],
+  input[type="search"],
+  input[type="email"],
+  input[type="url"],
+  input[type="tel"],
+  input[type="number"],
+  input:not([type]),
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* sticky ヘッダーに隠れないようにスクロール余白を確保 */
+.step-chat-box {
+  scroll-margin-top: 88px;
+}
+
