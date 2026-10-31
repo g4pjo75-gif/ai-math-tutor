@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aet-cache-v2.4';
+const CACHE_NAME = 'aet-cache-v2.5';
 const ASSETS = [
   './',
   './index.html',
@@ -18,6 +18,13 @@ const ASSETS = [
   './actions-map.js',
   './main.js',
   './tailwind.config.js',
+  '../core/index.js',
+  '../core/json.js',
+  '../core/errors.js',
+  '../core/http.js',
+  '../core/cache.js',
+  '../core/math-expr.js',
+  '../core/gemini.js',
   '../shared/actions.js',
   '../shared/storage.js',
   '../shared/core.js',
