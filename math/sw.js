@@ -1,4 +1,4 @@
-const CACHE_NAME = 'amt-cache-v3.2';
+const CACHE_NAME = 'amt-cache-v3.3';
 const ASSETS = [
   './',
   './index.html',
@@ -28,6 +28,7 @@ const ASSETS = [
   './chat-overall.js',
   './actions-map.js',
   './main.js',
+  './tailwind.config.js',
   '../shared/actions.js',
   '../shared/storage.js',
   '../shared/core.js',

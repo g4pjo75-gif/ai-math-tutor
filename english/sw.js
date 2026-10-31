@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aet-cache-v2.2';
+const CACHE_NAME = 'aet-cache-v2.3';
 const ASSETS = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   './voice.js',
   './actions-map.js',
   './main.js',
+  './tailwind.config.js',
   '../shared/actions.js',
   '../shared/storage.js',
   '../shared/core.js',
