@@ -1,0 +1,14 @@
+{
+  "name": "ai-math-tutor",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "npm run test:l1 && npm run test:l2",
+    "test:l1": "node --test tests/core.test.js",
+    "test:l2": "playwright test",
+    "serve": "python3 -m http.server 8765 --bind 127.0.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}
