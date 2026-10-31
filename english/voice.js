@@ -33,12 +33,3 @@
         .replace(/'/g, '&#39;');
     }
 
-    function escapeJsString(str) {
-      return String(str || '')
-        .replace(/\\/g, '\\\\')
-        .replace(/'/g, "\\'")
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\r?\n/g, ' ');
-    }

@@ -98,9 +98,6 @@
       }).join('');
     }
 
-    function escapeJsString(str) {
-      return String(str).replace(/\\/g, '\\\\').replace(/'/g, '\\\'').replace(/"/g, '&quot;').replace(/\n/g, '\\n').replace(/\r/g, '');
-    }
 
     async function restoreFromHistory(id) {
       const item = tutorHistory.find(it => it.id === id);
