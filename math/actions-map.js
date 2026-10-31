@@ -12,6 +12,7 @@ import { simplifyStep } from './simplify.js';
 import { onSpeechRateChange, onVoiceChange, playAllSteps, playSingleStep, speakJapanese, stopSpeech, testVoice } from './voice.js';
 import { openStepChatWithQuote, sendQuickQuestion, sendStepQuestion, toggleStepChat } from './chat-step.js';
 import { sendOverallQuestion, sendOverallQuickQuestion } from './chat-overall.js';
+import { toggleStepDetail } from './render.js';
 
 // math/actions-map.js — Phase 4-A: 수학 액션 등록표
 register({
@@ -56,5 +57,6 @@ register({
   'step-quote': (el) => openStepChatWithQuote(Number(el.dataset.idx), el.dataset.part),
   'quick-question': (el) => sendQuickQuestion(Number(el.dataset.idx), el.dataset.text),
   'step-question-send': (el) => sendStepQuestion(Number(el.dataset.idx)),
+  'step-detail': (el) => toggleStepDetail(el),
   'speak-ja': (el) => speakJapanese(el.dataset.text)
 });

@@ -25,7 +25,7 @@ test.describe('PWA: オフライン再訪', () => {
     await expect(page.locator('#questionInput')).toBeVisible();
     const audit = await page.evaluate(async () => (await import('/shared/actions.js')).audit());
     expect(audit.missing).toEqual([]);
-    expect(audit.actions).toBe(42);
+    expect(audit.actions).toBe(43);
     // 노트 UI도 오프라인에서 열린다
     await page.click('[data-action="show-tutor-history"]');
     await expect(page.locator('#tutorHistoryModal')).toBeVisible();

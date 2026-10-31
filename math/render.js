@@ -235,76 +235,64 @@ export function renderTutorResult(data) {
       return true;
     }
 
-    // 1ステップカードの HTML（focus / why / watch_out を視覚的に分離 + ダークモード完全対応）
+    // 1ステップカードの HTML（本文を先に、補足は「説明ポイント」チップで開閉）
 export function stepCardHtml(step, idx) {
       const focus = String(step.focus || '').trim();
       const why = String(step.why || '').trim();
       const watch = String(step.watch_out || '').trim();
 
+      const chips = [
+        focus ? { part: 'focus', icon: '👀', label: '着眼点', title: '着眼点（どこを見る？）' } : null,
+        why ? { part: 'why', icon: '🧭', label: 'なぜ？', title: 'なぜこのやり方？' } : null,
+        watch ? { part: 'watch', icon: '⚠️', label: 'つまずき', title: 'ここでつまずきやすい' } : null
+      ].filter(Boolean);
+
       return `
-        <div class="flex items-start justify-between gap-2">
-          <div class="flex items-start gap-2 min-w-0">
-            <span class="shrink-0 bg-emerald-700 dark:bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded-full mt-0.5">Step ${step.step_number || idx + 1}</span>
-            <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 leading-snug pt-0.5">${escapeHtml(step.title || '')}</h4>
-          </div>
-          <div class="shrink-0 flex flex-col items-stretch gap-1">
-            <button data-action="play-step" data-idx="${idx}"
-              class="bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 transition">
-              🔊 もう一度聞く
-            </button>
-            <button data-action="simplify-step" data-idx="${idx}" id="simplify-btn-${idx}"
-              class="bg-fuchsia-50 hover:bg-fuchsia-100 dark:bg-fuchsia-950/60 dark:hover:bg-fuchsia-900/80 text-fuchsia-700 dark:text-fuchsia-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-fuchsia-200 dark:border-fuchsia-800 transition">
-              🪄 もっとやさしく
-            </button>
-            <button data-action="toggle-step-chat" data-idx="${idx}" id="chat-toggle-btn-${idx}"
-              class="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 transition flex items-center justify-center gap-1">
-              <span>❓ この部分を質問</span>
-            </button>
-          </div>
+        <div class="flex items-start gap-2 min-w-0">
+          <span class="shrink-0 bg-emerald-700 dark:bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded-full mt-0.5">Step ${step.step_number || idx + 1}</span>
+          <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 leading-snug pt-0.5">${escapeHtml(step.title || '')}</h4>
+        </div>
+        <div class="flex items-stretch gap-1.5">
+          <button data-action="play-step" data-idx="${idx}"
+            class="flex-1 min-w-0 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 transition flex items-center justify-center gap-1">
+            <span>🔊</span><span class="truncate">もう一度聞く</span>
+          </button>
+          <button data-action="simplify-step" data-idx="${idx}" id="simplify-btn-${idx}"
+            class="flex-1 min-w-0 bg-fuchsia-50 hover:bg-fuchsia-100 dark:bg-fuchsia-950/60 dark:hover:bg-fuchsia-900/80 text-fuchsia-700 dark:text-fuchsia-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-fuchsia-200 dark:border-fuchsia-800 transition flex items-center justify-center gap-1">
+            <span>🪄</span><span class="truncate">もっとやさしく</span>
+          </button>
+          <button data-action="toggle-step-chat" data-idx="${idx}" id="chat-toggle-btn-${idx}"
+            class="flex-1 min-w-0 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 transition flex items-center justify-center gap-1">
+            <span>❓</span><span class="truncate">質問</span>
+          </button>
         </div>
 
-        ${focus ? `
-        <div class="flex gap-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-xl p-2.5">
-          <span class="text-base leading-none mt-0.5">💡</span>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center justify-between mb-0.5">
-              <span class="text-[11px] font-bold text-amber-800 dark:text-amber-300">着眼点（どこを見る？）</span>
-              <button type="button" data-action="step-quote" data-idx="${idx}" data-part="focus" class="text-[10px] text-amber-700 dark:text-amber-400 hover:underline">❓ ここを聞く</button>
-            </div>
-            <div id="step-focus-${idx}" class="text-xs text-amber-900 dark:text-amber-100 leading-relaxed"></div>
-          </div>
-        </div>` : ''}
-
-        ${why ? `
-        <div class="flex gap-2 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 rounded-xl p-2.5">
-          <span class="text-base leading-none mt-0.5">🧭</span>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center justify-between mb-0.5">
-              <span class="text-[11px] font-bold text-indigo-800 dark:text-indigo-300">なぜこのやり方？</span>
-              <button type="button" data-action="step-quote" data-idx="${idx}" data-part="why" class="text-[10px] text-indigo-700 dark:text-indigo-400 hover:underline">❓ ここを聞く</button>
-            </div>
-            <div id="step-why-${idx}" class="text-xs text-indigo-900 dark:text-indigo-100 leading-relaxed"></div>
-          </div>
-        </div>` : ''}
-
+        <!-- ① まず「解き方の本体」を最初に見せる -->
         <div class="relative">
-          <div id="step-math-${idx}" class="text-sm text-slate-800 dark:text-slate-100 leading-relaxed bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700 rounded-xl p-3 whitespace-pre-wrap"></div>
+          <div id="step-math-${idx}" class="text-[15px] text-slate-800 dark:text-slate-100 leading-relaxed bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 pr-11 whitespace-pre-wrap"></div>
           <button type="button" data-action="step-quote" data-idx="${idx}" data-part="math" class="absolute top-2 right-2 text-[10px] text-slate-500 dark:text-slate-400 hover:underline bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">❓ この式を聞く</button>
         </div>
 
         <!-- グラフ・図形描画コンテナ (SVG) -->
         <div id="step-visual-${idx}" class="viz-container hidden"></div>
 
-        ${watch ? `
-        <div class="flex gap-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 rounded-xl p-2.5">
-          <span class="text-base leading-none mt-0.5">⚠️</span>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center justify-between mb-0.5">
-              <span class="text-[11px] font-bold text-rose-800 dark:text-rose-300">ここでつまずきやすい</span>
-              <button type="button" data-action="step-quote" data-idx="${idx}" data-part="watch" class="text-[10px] text-rose-700 dark:text-rose-400 hover:underline">❓ ここを聞く</button>
-            </div>
-            <div id="step-watch-${idx}" class="text-xs text-rose-900 dark:text-rose-100 leading-relaxed"></div>
+        <!-- ② 補足はチップで開閉（既定は閉じる） -->
+        ${chips.length ? `
+        <div class="flex flex-wrap items-center gap-1.5">
+          ${chips.map(c => `
+          <button type="button" data-action="step-detail" data-idx="${idx}" data-part="${c.part}" data-title="${c.title}" aria-expanded="false" data-active="0"
+            class="text-[11px] font-bold px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-emerald-400 dark:hover:border-emerald-500 transition data-[active=1]:bg-emerald-600 data-[active=1]:text-white data-[active=1]:border-emerald-600">
+            <span>${c.icon}</span> ${c.label}
+          </button>`).join('')}
+        </div>
+        <div id="step-detail-${idx}" class="hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3" data-part="">
+          <div class="flex items-center justify-between gap-2 mb-1.5">
+            <span data-detail-title class="text-[11px] font-bold text-slate-700 dark:text-slate-200"></span>
+            <button type="button" data-action="step-quote" data-idx="${idx}" data-part="focus" class="shrink-0 text-[10px] text-slate-500 dark:text-slate-400 hover:underline">❓ ここを聞く</button>
           </div>
+          ${focus ? `<div data-detail-part="focus"><div id="step-focus-${idx}" class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed"></div></div>` : ''}
+          ${why ? `<div data-detail-part="why" class="hidden"><div id="step-why-${idx}" class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed"></div></div>` : ''}
+          ${watch ? `<div data-detail-part="watch" class="hidden"><div id="step-watch-${idx}" class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed"></div></div>` : ''}
         </div>` : ''}
 
         <details id="step-speech-details-${idx}" class="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5">
@@ -351,6 +339,38 @@ export function stepCardHtml(step, idx) {
           </div>
         </div>
       `;
+    }
+
+    // 説明ポイントのチップ開閉（同じカード内で1つだけ開く）
+export function toggleStepDetail(btn) {
+      const idx = btn.dataset.idx;
+      const part = btn.dataset.part;
+      const box = document.getElementById(`step-detail-${idx}`);
+      if (!box) return;
+
+      const isOpen = box.dataset.part === part && !box.classList.contains('hidden');
+      const chips = document.querySelectorAll(`[data-action="step-detail"][data-idx="${idx}"]`);
+      chips.forEach((c) => {
+        const on = !isOpen && c.dataset.part === part;
+        c.dataset.active = on ? '1' : '0';
+        c.setAttribute('aria-expanded', String(on));
+      });
+
+      if (isOpen) {
+        box.classList.add('hidden');
+        box.dataset.part = '';
+        return;
+      }
+
+      box.dataset.part = part;
+      box.classList.remove('hidden');
+      box.querySelectorAll('[data-detail-part]').forEach((p) => {
+        p.classList.toggle('hidden', p.dataset.detailPart !== part);
+      });
+      const title = box.querySelector('[data-detail-title]');
+      if (title) title.textContent = btn.dataset.title || '';
+      const quote = box.querySelector('[data-action="step-quote"]');
+      if (quote) quote.dataset.part = part;
     }
 
 export function renderStepCards() {

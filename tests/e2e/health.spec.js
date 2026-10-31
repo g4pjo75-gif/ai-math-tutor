@@ -12,7 +12,7 @@ test.describe('health: 콘솔 / 액션 레지스트리 / CSP', () => {
       return m.audit();
     });
     expect(audit.missing).toEqual([]);
-    expect(audit.actions).toBe(42);
+    expect(audit.actions).toBe(43);
     expect(audit.nodes).toBeGreaterThanOrEqual(51);
 
     const csp = await page.evaluate(() => !!document.querySelector('meta[http-equiv="Content-Security-Policy"]'));
