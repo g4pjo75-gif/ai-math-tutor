@@ -3005,9 +3005,1060 @@ fix(sw): bypass HTTP cache for same-origin module requests
 - [ ] 오프라인 재방문(M8): 캐시에서 정상 로드
 - [ ] 캐시 이름 `v3.4` / `v2.4`
 
+#### 4.7.6 (선택) 5xx 응답도 캐시로 폴백
+
+현재 폴백은 `fetch`가 **reject**될 때만 동작한다. 사내 프록시·CDN 장애처럼 네트워크가
+**502/503 응답을 반환**하면 그 오류 페이지가 앱에 그대로 전달된다(오프라인 판정이 아님).
+원한다면 아래처럼 5xx일 때도 캐시를 우선한다.
+
+```js
+.then((response) => {
+  if (!response || response.status >= 500) {
+    return caches.match(event.request).then((cached) => cached || response);
+  }
+  if (response.status === 200 && response.type === 'basic') {
+    const copy = response.clone();
+    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+  }
+  return response;
+})
+```
+
+필수는 아니다(실제 오프라인은 reject → 기존 catch로 처리됨). 넣을 경우 4xx는 건드리지 않는다.
+
 **전환 주의**: 이 수정을 배포한 직후, 구 SW를 가진 사용자는 **첫 로드에서 한 번 깨질 수 있다**
 (구 SW가 구버전을 서빙). 새 SW가 `skipWaiting`+`claim`으로 활성화되므로 **새로고침 1회면 복구**된다.
 완전 무중단이 필요하면 Phase 6에서 "모듈 로드 실패 감지 → 1회 자동 새로고침" 부트스트랩을 추가한다.
+
+### 4.8 Phase 5 (core 추출 + L1 테스트)
+
+**전제**: 4.7 완료(`ef5a684`), 태그 `v1.9-phase4c` 생성.
+**목표**: 전송 계층과 순수 함수를 `core/`로 모으고, **같은 커밋에서 L1 테스트로 고정**한다.
+**비목표**: 프롬프트·응답 스키마 통합(제품 콘텐츠), 렌더링 이동, 서버 코드 작성.
+
+**원칙**
+
+1. `core/`는 **DOM·`window`·`localStorage`를 참조하지 않는다.** storage는 인자로 받는다.
+2. `core/`는 **앱의 스키마를 모른다.** `schema`는 항상 호출자가 넘긴다.
+3. `callGeminiModel`은 **두 가지 호출 형식**(위치 인자 / 객체 1개)을 계속 지원한다.
+   - 수학: `callGeminiModel(model, key, prompt, image, opts)`
+   - 영어: `callGeminiModel({ modelId, apiKey, promptText, schema, ... })`
+4. **수학 구현을 기준(base)** 으로 삼는다. 단, 기본 스키마(`TUTOR_RESPONSE_SCHEMA`)는 core에서 제거하고
+   수학 호출부가 명시적으로 넘긴다.
+5. `maxOutputTokens` 기본값 **32768 유지**, `timeoutMs` 기본값 **30000 유지**.
+
+#### 4.8.1 구조
+
+| 파일 | 역할 | 출처 |
+|---|---|---|
+| `core/package.json` | `{"type":"module"}` — Node가 `.js`를 ESM으로 인식 | 신규 |
+| `core/json.js` | `parseJson` | `shared/core.js`에서 이동 |
+| `core/errors.js` | `isQuotaError` | 이동 |
+| `core/http.js` | `fetchWithTimeout` | 이동 |
+| `core/cache.js` | `computeRequestHash`, `getCachedResponse`, `setCachedResponse`, 상수 | 이동 |
+| `core/math-expr.js` | `normalizeMathExpr`, `isLocalMathMatch` | 이동 |
+| `core/gemini.js` | `callGeminiModel`, `fetchAvailableModels` | **통합본** (수학+shared 병합) |
+| `core/index.js` | 배럴 | 신규 |
+| `tests/core.test.js` | L1 16 케이스 | 신규 |
+
+**삭제/축소**
+
+| 대상 | 처리 | 감소 |
+|---|---|---|
+| `shared/core.js` | 삭제 | 385줄 |
+| `math/api-solve.js`의 `fetchWithTimeout`·`parseTutorJson`·`callGeminiModel` | 삭제(import로 대체) | 약 110줄 |
+| `math/settings.js`의 fetch/filter/sort | `core.fetchAvailableModels` 호출로 대체 (UI 래퍼는 유지) | 약 45줄 |
+| `math/ui-status.js`의 `isQuotaError` | 삭제(7개 파일이 core에서 직접 import) | 5줄 |
+
+#### 4.8.2 `core/` 파일
+
+`core/package.json`:
+
+```json
+{"type": "module"}
+```
+
+**`core/json.js`**
+
+```js
+// core/json.js — AI 응답에서 JSON 추출 (DOM 비의존)
+
+export function parseJson(rawText) {
+  const cleaned = String(rawText || '')
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
+  const firstBrace = cleaned.indexOf('{');
+  const firstBracket = cleaned.indexOf('[');
+
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIdx = firstBrace;
+    endIdx = cleaned.lastIndexOf('}');
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = cleaned.lastIndexOf(']');
+  }
+
+  if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
+    throw new Error('AIの応答からJSONデータを抽出できませんでした。');
+  }
+  return JSON.parse(cleaned.slice(startIdx, endIdx + 1));
+}
+```
+
+**`core/errors.js`**
+
+```js
+// core/errors.js — API 오류 분류 (DOM 비의존)
+
+export function isQuotaError(err) {
+  const msg = (err?.message || '').toLowerCase();
+  return msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('billing') ||
+    msg.includes('limit: 0');
+}
+```
+
+**`core/http.js`**
+
+```js
+// core/http.js — 타임아웃 fetch (DOM 비의존)
+
+export async function fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+```
+
+**`core/cache.js`**
+
+```js
+// core/cache.js — 요청 지문 + 로컬 캐시 (DOM 비의존, storage는 인자로 받는다)
+
+export const CACHE_SCHEMA_VERSION = 2;
+export const DEFAULT_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30일
+
+export function computeRequestHash({ mode = 'default', unit = '', text = '', imageBase64 = '' } = {}) {
+  const img = String(imageBase64 || '');
+  const imgLen = img.length;
+  const imgSample = imgLen > 0
+    ? `${imgLen}:${img.slice(0, 256)}:${img.slice(Math.floor(imgLen / 2), Math.floor(imgLen / 2) + 256)}:${img.slice(Math.max(0, imgLen - 256))}`
+    : 'no-img';
+  const raw = `${mode}|${String(unit).trim()}|${String(text).trim()}|${imgSample}`;
+
+  let h1 = 0x811c9dc5;
+  let h2 = 5381;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw.charCodeAt(i);
+    h1 ^= ch;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 = Math.imul(h2, 33) ^ ch;
+  }
+  return `fp_${(h1 >>> 0).toString(16)}_${(h2 >>> 0).toString(16)}_${raw.length}`;
+}
+
+export function getCachedResponse(storage, cacheKey, fingerprint, maxAgeMs = DEFAULT_CACHE_MAX_AGE_MS) {
+  if (!storage || !cacheKey || !fingerprint) return null;
+  try {
+    const raw = storage.getItem(cacheKey);
+    if (!raw) return null;
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return null;
+    const now = Date.now();
+    const hit = list.find(item => {
+      if (!item || item.fp !== fingerprint) return false;
+      if (item.v !== CACHE_SCHEMA_VERSION) return false;
+      if (item.savedAt && (now - item.savedAt) > maxAgeMs) return false;
+      return true;
+    });
+    return hit ? hit.data : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function setCachedResponse(storage, cacheKey, fingerprint, data, maxEntries = 15) {
+  if (!storage || !cacheKey || !fingerprint || !data) return;
+  try {
+    const raw = storage.getItem(cacheKey);
+    let list = [];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch (e) {}
+    }
+    list = list.filter(item => item && item.fp !== fingerprint && item.v === CACHE_SCHEMA_VERSION);
+    list.unshift({ v: CACHE_SCHEMA_VERSION, fp: fingerprint, savedAt: Date.now(), data });
+    if (list.length > maxEntries) {
+      list = list.slice(0, maxEntries);
+    }
+    let ok = storage.setItem(cacheKey, JSON.stringify(list));
+    if (!ok && list.length > 3) {
+      list = list.slice(0, 3);
+      storage.setItem(cacheKey, JSON.stringify(list));
+    }
+  } catch (e) {}
+}
+```
+
+**`core/math-expr.js`**
+
+```js
+// core/math-expr.js — 수식 정규화 · 동치 판정 (DOM 비의존, API 0회)
+
+export function normalizeMathExpr(input) {
+  if (input === null || input === undefined) return '';
+  let s = String(input);
+
+  // 1. 전각 영숫자·기호를 반각으로
+  s = s.replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  s = s
+    .replace(/　/g, ' ')
+    .replace(/[−ー―‐–—]/g, '-')
+    .replace(/[＋]/g, '+')
+    .replace(/[×⋅・]/g, '*')
+    .replace(/[÷／]/g, '/')
+    .replace(/[＝]/g, '=')
+    .replace(/[（]/g, '(')
+    .replace(/[）]/g, ')')
+    .replace(/[，、]/g, ',')
+    .replace(/[．。]/g, '');
+
+  // 2. LaTeX 구분자·장식 명령 제거
+  s = s
+    .replace(/\$\$/g, '')
+    .replace(/\$/g, '')
+    .replace(/\\\(|\\\)|\\\[|\\\]/g, '')
+    .replace(/\\left|\\right|\\displaystyle|\\,/g, '')
+    .replace(/\\text\{([^}]*)\}/g, '$1')
+    .replace(/\\mathrm\{([^}]*)\}/g, '$1')
+    .replace(/\\\\/g, '\\');
+
+  // 3. 부등호·복호·분수·근호 정규화
+  s = s
+    .replace(/\\leqq|\\leq|\\le|≦|≤|=<|<=/g, '<=')
+    .replace(/\\geqq|\\geq|\\ge|≧|≥|=>|>=/g, '>=')
+    .replace(/\\pm|±/g, '+-')
+    .replace(/\\times|\\cdot/g, '*')
+    .replace(/\\div/g, '/')
+    .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '($1)/($2)')
+    .replace(/\\sqrt\s*\{([^{}]+)\}/g, 'sqrt($1)');
+
+  // 4. 공백 제거
+  s = s.replace(/\s+/g, '');
+
+  // 5. 선두의 「답:」「答え:」 등 제거
+  s = s.replace(/^(答え?|解答|ans|answer)[:：=]/i, '');
+
+  // 6. 단일 분수의 불필요한 바깥 괄호 제거
+  s = s.replace(/\(([0-9a-zA-Z]+)\)\/\(([0-9a-zA-Z]+)\)/g, '$1/$2');
+
+  // 7. 인수분해 곱의 순서 정규화
+  const factorMatch = s.match(/^([+-]?[0-9a-zA-Z]*)((?:\([^()]+\)){2,})$/);
+  if (factorMatch) {
+    const prefix = factorMatch[1] === '+' ? '' : factorMatch[1];
+    const factors = [...factorMatch[2].matchAll(/\([^()]+\)/g)].map(m => m[0]);
+    if (factors.length >= 2) {
+      factors.sort();
+      s = prefix + factors.join('');
+    }
+  }
+
+  return s;
+}
+
+export function isLocalMathMatch(studentRaw, referenceList = []) {
+  const stuNorm = normalizeMathExpr(studentRaw);
+  if (!stuNorm) return false;
+
+  const normalizeSolutionSet = (normStr) => {
+    const withoutVar = normStr.replace(/^[a-zA-Z]=/, '');
+    if (withoutVar.includes(',') && !withoutVar.includes('(')) {
+      return withoutVar.split(',').map(p => p.trim()).filter(Boolean).sort().join(',');
+    }
+    return withoutVar;
+  };
+
+  const flipDoubleInequality = (normStr) => {
+    const m = normStr.match(/^([^<>]+)(>=|>)([^<>]+)(>=|>)(.+)$/);
+    if (m) {
+      const op1 = m[4] === '>=' ? '<=' : '<';
+      const op2 = m[2] === '>=' ? '<=' : '<';
+      return `${m[5]}${op1}${m[3]}${op2}${m[1]}`;
+    }
+    return normStr;
+  };
+
+  const stuFlipped = flipDoubleInequality(stuNorm);
+  const stuSet = normalizeSolutionSet(stuNorm);
+
+  const refs = (Array.isArray(referenceList) ? referenceList : [referenceList]).filter(Boolean);
+  for (const ref of refs) {
+    const refNorm = normalizeMathExpr(ref);
+    if (!refNorm) continue;
+
+    if (stuNorm === refNorm || stuFlipped === refNorm) {
+      return true;
+    }
+    const refSet = normalizeSolutionSet(refNorm);
+    if (stuSet && refSet && stuSet === refSet) {
+      return true;
+    }
+  }
+  return false;
+}
+```
+
+**`core/gemini.js`**
+
+```js
+// core/gemini.js — Gemini 전송 계층 (DOM 비의존)
+import { fetchWithTimeout } from './http.js';
+import { parseJson } from './json.js';
+
+const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+/**
+ * 호출 형식 두 가지를 모두 받는다.
+ *   1) callGeminiModel(modelId, apiKey, promptText, imageBase64, options)
+ *   2) callGeminiModel({ modelId, apiKey, promptText, imageBase64, schema, ... })
+ * schema는 **반드시 호출자가 넘긴다**(core는 앱의 스키마를 모른다).
+ */
+export async function callGeminiModel(arg1, apiKey, promptText, imageBase64, options = {}) {
+  let modelId, effectiveApiKey, effectivePrompt, effectiveImage, effectiveOpts;
+  if (typeof arg1 === 'object' && arg1 !== null && !apiKey) {
+    modelId = arg1.modelId;
+    effectiveApiKey = arg1.apiKey;
+    effectivePrompt = arg1.promptText || arg1.prompt;
+    effectiveImage = arg1.imageBase64 || null;
+    effectiveOpts = arg1;
+  } else {
+    modelId = arg1;
+    effectiveApiKey = apiKey;
+    effectivePrompt = promptText;
+    effectiveImage = imageBase64;
+    effectiveOpts = options || {};
+  }
+
+  if (!effectiveApiKey) {
+    throw new Error('Gemini APIキーが設定されていません。');
+  }
+
+  const cleanModelId = String(modelId || 'gemini-3.8-flash').replace(/^models\//, '').trim();
+  const url = `${ENDPOINT}/${encodeURIComponent(cleanModelId)}:generateContent`;
+
+  const parts = [{ text: effectivePrompt || '' }];
+  if (effectiveImage) {
+    parts.push({
+      inline_data: { mime_type: 'image/jpeg', data: effectiveImage }
+    });
+  }
+
+  const temperature = effectiveOpts.temperature ?? 0.35;
+  const maxOutputTokens = effectiveOpts.maxOutputTokens ?? 32768;
+  const schema = effectiveOpts.schema || null;
+  const useJson = !effectiveOpts.rawText && Boolean(schema);
+  const timeoutMs = effectiveOpts.timeoutMs || 30000;
+
+  const buildPayload = (useStructured) => ({
+    contents: [{ role: 'user', parts }],
+    generationConfig: useStructured && useJson
+      ? { temperature, maxOutputTokens, responseMimeType: 'application/json', responseSchema: schema }
+      : { temperature: useStructured ? temperature : 0.3, maxOutputTokens }
+  });
+
+  const send = async (useStructured) => {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': effectiveApiKey
+      },
+      body: JSON.stringify(buildPayload(useStructured))
+    }, timeoutMs);
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error?.message || `HTTP Error ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  };
+
+  let data;
+  try {
+    data = await send(true);
+  } catch (err) {
+    // 구조화 출력(responseSchema) 미지원 모델 폴백
+    if (err.status === 400 && /response|schema|mime/i.test(err.message)) {
+      data = await send(false);
+    } else {
+      throw err;
+    }
+  }
+
+  const candidate = data.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const text = candidate?.content?.parts?.map(p => p.text || '').join('\n') || '';
+  if (!text) {
+    if (finishReason === 'MAX_TOKENS') {
+      throw new Error('AIの回答が途中で切れました（思考・出力トークン上限）。もう一度試すか、入力内容を絞ってください。');
+    }
+    const blockReason = data.promptFeedback?.blockReason || finishReason;
+    throw new Error(blockReason
+      ? `モデルが応答を中断しました（理由: ${blockReason}）`
+      : 'モデルから空の応答が返されました。');
+  }
+
+  if (effectiveOpts.rawText) {
+    return text.trim();
+  }
+
+  try {
+    return parseJson(text);
+  } catch (parseErr) {
+    if (finishReason === 'MAX_TOKENS') {
+      throw new Error('問題数が多いためAIの回答が途中で切れました（思考・出力トークン上限）。入力内容を小さく分割して試してください。');
+    }
+    throw parseErr;
+  }
+}
+
+export async function fetchAvailableModels(arg = {}) {
+  const apiKey = typeof arg === 'string' ? arg : arg.apiKey;
+  const timeoutMs = typeof arg === 'object' && arg.timeoutMs ? arg.timeoutMs : 15000;
+  if (!apiKey) {
+    throw new Error('Gemini APIキーが必要です。');
+  }
+
+  const res = await fetchWithTimeout(`${ENDPOINT}`, {
+    method: 'GET',
+    headers: { 'x-goog-api-key': apiKey }
+  }, timeoutMs);
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error?.message || `HTTP ${res.status}`);
+  }
+
+  const validModels = (data.models || [])
+    .filter(m =>
+      Array.isArray(m.supportedGenerationMethods) &&
+      m.supportedGenerationMethods.includes('generateContent') &&
+      m.name.includes('gemini') &&
+      !m.name.includes('embedding') &&
+      !m.name.includes('imagen') &&
+      !m.name.includes('tts')
+    )
+    .map(m => ({
+      id: m.name.replace(/^models\//, ''),
+      displayName: m.displayName || m.name.replace(/^models\//, '')
+    }));
+
+  if (validModels.length === 0) {
+    throw new Error('generateContentに対応したGeminiモデルが見つかりませんでした。');
+  }
+
+  validModels.sort((a, b) => {
+    const score = id => (id.includes('flash') ? 2 : id.includes('pro') ? 1 : 0);
+    return score(b.id) - score(a.id) || b.id.localeCompare(a.id);
+  });
+
+  return validModels;
+}
+```
+
+**`core/index.js`**
+
+```js
+// core/index.js — 배럴 (앱은 이 파일 하나만 import 한다)
+
+export { fetchWithTimeout } from './http.js';
+export { parseJson } from './json.js';
+export { isQuotaError } from './errors.js';
+export { callGeminiModel, fetchAvailableModels } from './gemini.js';
+export {
+  CACHE_SCHEMA_VERSION,
+  DEFAULT_CACHE_MAX_AGE_MS,
+  computeRequestHash,
+  getCachedResponse,
+  setCachedResponse
+} from './cache.js';
+export { normalizeMathExpr, isLocalMathMatch } from './math-expr.js';
+```
+
+#### 4.8.3 마이그레이션 스크립트
+
+`tools/migrate5.py`로 저장한다. **단계 인자**로 수학/영어를 나눠 실행한다(각 1회, 멱등 아님).
+
+```python
+import re
+import os
+import sys
+
+ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '.')
+STAGE = sys.argv[2] if len(sys.argv) > 2 else 'all'   # math | english | all
+
+
+def read(p):
+    return open(os.path.join(ROOT, p), encoding='utf-8').read()
+
+
+def write(p, s):
+    open(os.path.join(ROOT, p), 'w', encoding='utf-8').write(s)
+
+
+# ============================================================== MATH
+if STAGE in ('math', 'all'):
+    # ---------------------------------------------------------------- api-solve.js
+    p = 'math/api-solve.js'
+    s = read(p)
+    s = s.replace("import { TutorCore } from '../shared/core.js';",
+                  "import { callGeminiModel, computeRequestHash, getCachedResponse, setCachedResponse, normalizeMathExpr } from '../core/index.js';")
+
+    start = s.index('export async function fetchWithTimeout')
+    end = s.index('export async function solveProblem')
+    s = s[:start] + s[end:]
+
+    s = s.replace("""      const reqFp = TutorCore
+        ? TutorCore.computeRequestHash({""", """      const reqFp = computeRequestHash({""")
+    s = s.replace("""            imageBase64: state.currentImageBase64
+          })
+        : null;""", """            imageBase64: state.currentImageBase64
+          });""")
+    s = s.replace("""        let cachedData = reqFp && TutorCore
+          ? TutorCore.getCachedResponse(safeStorage, 'api_response_cache', reqFp)
+          : null;""", """        let cachedData = reqFp
+          ? getCachedResponse(safeStorage, 'api_response_cache', reqFp)
+          : null;""")
+    s = s.replace("if (!cachedData && !state.currentImageBase64 && userText && TutorCore && Array.isArray(state.tutorHistory)) {",
+                  "if (!cachedData && !state.currentImageBase64 && userText && Array.isArray(state.tutorHistory)) {")
+    s = s.replace("item => item && TutorCore.normalizeMathExpr(item.recognized_problem) === normInput",
+                  "item => item && normalizeMathExpr(item.recognized_problem) === normInput")
+    s = s.replace("const normInput = TutorCore.normalizeMathExpr(userText);",
+                  "const normInput = normalizeMathExpr(userText);")
+    s = s.replace("""          if (reqFp && TutorCore) {
+            TutorCore.setCachedResponse(safeStorage, 'api_response_cache', reqFp, resultData, 15);
+          }""", """          if (reqFp) {
+            setCachedResponse(safeStorage, 'api_response_cache', reqFp, resultData, 15);
+          }""")
+    s = s.replace("callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64);",
+                  "callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { schema: TUTOR_RESPONSE_SCHEMA });")
+    s = s.replace("callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { timeoutMs: 40000 });",
+                  "callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { schema: TUTOR_RESPONSE_SCHEMA, timeoutMs: 40000 });")
+    assert 'TutorCore' not in s, 'api-solve still has TutorCore'
+    write(p, s)
+
+    # ---------------------------------------------------------------- settings.js
+    p = 'math/settings.js'
+    s = read(p)
+    s = s.replace("import { fetchWithTimeout } from './api-solve.js';",
+                  "import { fetchAvailableModels as fetchModelsFromApi } from '../core/index.js';")
+    start = s.index("        const res = await fetchWithTimeout(")
+    end = s.index("        safeStorage.setItem('gemini_api_key', key);")
+    s = s[:start] + "        const validModels = await fetchModelsFromApi({ apiKey: key, timeoutMs: 15000 });\n\n" + s[end:]
+    write(p, s)
+
+    # ---------------------------------------------------------------- ui-status.js
+    p = 'math/ui-status.js'
+    s = read(p)
+    old = """    // クォータ超過エラーの判定
+export function isQuotaError(err) {
+      const msg = (err?.message || '').toLowerCase();
+      return msg.includes('quota') || msg.includes('rate limit') || msg.includes('resource_exhausted') ||
+        msg.includes('billing') || msg.includes('limit: 0');
+    }"""
+    assert old in s, 'ui-status anchor'
+    s = s.replace(old, '')
+    assert 'isQuotaError' not in s
+    write(p, s)
+
+    # ---------------------------------------------------------------- math callGeminiModel imports
+    for f in ['math/chat-overall.js', 'math/chat-step.js', 'math/quiz.js', 'math/similar.js', 'math/simplify.js']:
+        s = read(f)
+        s = s.replace("import { callGeminiModel } from './api-solve.js';",
+                      "import { callGeminiModel } from '../core/index.js';")
+        write(f, s)
+
+    # ---------------------------------------------------------------- quiz-result.js
+    p = 'math/quiz-result.js'
+    s = read(p)
+    s = s.replace("import { TutorCore } from '../shared/core.js';",
+                  "import { callGeminiModel, isLocalMathMatch } from '../core/index.js';")
+    s = s.replace("import { callGeminiModel, solveProblem } from './api-solve.js';",
+                  "import { solveProblem } from './api-solve.js';")
+    s = s.replace("if (TutorCore && TutorCore.isLocalMathMatch(", "if (isLocalMathMatch(")
+    assert 'TutorCore' not in s, 'quiz-result still has TutorCore'
+    write(p, s)
+
+    # ---------------------------------------------------------------- isQuotaError: ui-status -> core
+    for f in ['math/api-solve.js', 'math/chat-overall.js', 'math/chat-step.js', 'math/quiz-result.js',
+              'math/quiz.js', 'math/similar.js', 'math/simplify.js']:
+        s = read(f)
+
+        def strip_ui(m):
+            names = [x.strip() for x in m.group(1).split(',') if x.strip() and x.strip() != 'isQuotaError']
+            return "import { %s } from './ui-status.js';" % ', '.join(names)
+
+        s2 = re.sub(r"import\s*\{([^}]*)\}\s*from\s*'\./ui-status\.js';", strip_ui, s)
+        assert s2 != s, f + ' ui-status import not changed'
+
+        def add_core(m):
+            names = [x.strip() for x in m.group(1).split(',') if x.strip()]
+            if 'isQuotaError' not in names:
+                names.append('isQuotaError')
+            return "import { %s } from '../core/index.js';" % ', '.join(names)
+
+        s3 = re.sub(r"import\s*\{([^}]*)\}\s*from\s*'\.\./core/index\.js';", add_core, s2)
+        assert s3 != s2, f + ' core import not found'
+        write(f, s3)
+
+    print('math migrated')
+
+
+# ============================================================== ENGLISH
+if STAGE in ('english', 'all'):
+    for f, names in [
+        ('english/quiz.js', ['callGeminiModel']),
+        ('english/reading.js', ['callGeminiModel', 'computeRequestHash', 'getCachedResponse', 'setCachedResponse']),
+        ('english/writing.js', ['callGeminiModel', 'computeRequestHash', 'getCachedResponse', 'setCachedResponse']),
+    ]:
+        s = read(f)
+        s = s.replace("import { TutorCore } from '../shared/core.js';",
+                      "import { %s } from '../core/index.js';" % ', '.join(names))
+        s = s.replace("""      const reqFp = TutorCore
+        ? TutorCore.computeRequestHash({""", """      const reqFp = computeRequestHash({""")
+        s = s.replace("""          })
+        : null;""", """          });""")
+        s = s.replace("if (reqFp && TutorCore && engStore) {", "if (reqFp && engStore) {")
+        for n in names:
+            s = s.replace('TutorCore.' + n, n)
+        assert 'TutorCore' not in s, f + ' still has TutorCore'
+        write(f, s)
+
+    os.remove(os.path.join(ROOT, 'shared/core.js'))
+
+    for app in ['math', 'english']:
+        p = f'{app}/sw.js'
+        s = read(p)
+        s = s.replace("  '../shared/core.js',\n", "")
+        write(p, s)
+
+    print('english migrated; shared/core.js removed')
+```
+
+```bash
+python3 tools/migrate5.py . math      # 커밋 2
+python3 tools/migrate5.py . english   # 커밋 3 (shared/core.js 삭제 포함)
+```
+
+`math` 단계가 끝난 시점에는 **영어가 아직 `shared/core.js`를 쓰는 중**이며, 그것도 정상 동작한다
+(프로토타입에서 확인). `english` 단계에서 그 파일을 삭제한다.
+
+**`math` 단계가 하는 일**
+
+1. `math/api-solve.js`에서 세 함수를 잘라내고 `../core/index.js` import로 교체.
+   - `TutorCore.computeRequestHash` 등 5곳을 직접 호출로 변경.
+   - `solveProblem`의 두 호출부에 `{ schema: TUTOR_RESPONSE_SCHEMA }` 추가
+     (기존에는 core가 아닌 **로컬 기본값**에 의존했다).
+2. `math/settings.js`: fetch/filter/sort 블록을 `fetchModelsFromApi({apiKey, timeoutMs})` 한 줄로 교체.
+   **UI 래퍼 함수(`fetchAvailableModels`)와 그 이후 UI 처리는 그대로 둔다.**
+3. `math/ui-status.js`: `isQuotaError` 삭제.
+4. `math/{api-solve,chat-overall,chat-step,quiz-result,quiz,similar,simplify}.js`:
+   `isQuotaError`를 `./ui-status.js`에서 빼고 `../core/index.js`에 추가.
+5. `math/{chat-overall,chat-step,quiz,similar,simplify}.js`: `callGeminiModel` import를 core로 변경.
+6. `math/quiz-result.js`: `TutorCore` import 제거, `solveProblem`만 api-solve에서 유지.
+**`english` 단계가 하는 일**
+
+7. `english/{quiz,reading,writing}.js`: `TutorCore.*` → named import, `TutorCore &&` 가드 정리.
+8. `shared/core.js` 삭제.
+9. `sw.js` 2개에서 `'../shared/core.js'` 제거.
+
+> `core/*.js` 자산 등록과 캐시 이름(`v3.5` / `v2.5`)은 **커밋 1**에서 이미 끝낸다.
+
+**수동 확인 포인트 (스크립트가 건드리지 않는 것)**
+
+- `math/settings.js`의 `fetchAvailableModels()`는 **UI 래퍼로 남는다.** 시그니처·동작·문구 유지.
+- `math/actions-map.js`의 `'fetch-models': () => fetchAvailableModels()`도 그대로.
+- `math/quiz.js`, `chat-*`의 **재시도 로직은 `solveProblem`/호출부에 그대로** 둔다(전송 계층으로 옮기지 않는다).
+
+#### 4.8.4 L1 테스트 `tests/core.test.js`
+
+`node:test` + 기존 `tests/stub-gemini.js`를 사용한다. **실제 Gemini 호출 없음.**
+
+```js
+// tests/core.test.js — Phase 5 L1: core 순수 모듈 단위 테스트
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const stub = require('./stub-gemini.js');
+
+const load = () => import('../core/index.js');
+
+function fakeStorage() {
+  const m = new Map();
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => { m.set(k, String(v)); return true; },
+    raw: m
+  };
+}
+
+function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+// ------------------------------------------------------------------ parseJson
+test('parseJson: plain / fenced / prefixed / array', async () => {
+  const { parseJson } = await load();
+  assert.deepEqual(parseJson('{"a":1}'), { a: 1 });
+  assert.deepEqual(parseJson('```json\n{"a":2}\n```'), { a: 2 });
+  assert.deepEqual(parseJson('前置き\n{"a":3}\n後置き'), { a: 3 });
+  assert.deepEqual(parseJson('[1,2,3]'), [1, 2, 3]);
+  assert.deepEqual(parseJson('```\n[{"b":1}]\n```'), [{ b: 1 }]);
+});
+
+test('parseJson: garbage throws', async () => {
+  const { parseJson } = await load();
+  assert.throws(() => parseJson('no json here'), /JSONデータを抽出できません/);
+  assert.throws(() => parseJson(''), /JSONデータを抽出できません/);
+});
+
+// --------------------------------------------------------- computeRequestHash
+test('computeRequestHash: deterministic and sensitive', async () => {
+  const { computeRequestHash } = await load();
+  const base = { mode: 'math_solve', unit: 'math1', text: 'x^2-1', imageBase64: '' };
+  const a = computeRequestHash(base);
+  const b = computeRequestHash({ ...base });
+  assert.equal(a, b);
+  assert.match(a, /^fp_[0-9a-f]+_[0-9a-f]+_\d+$/);
+  assert.notEqual(a, computeRequestHash({ ...base, text: 'x^2-2' }));
+  assert.notEqual(a, computeRequestHash({ ...base, unit: 'mathA' }));
+  assert.notEqual(a, computeRequestHash({ ...base, mode: 'eng_reading' }));
+  assert.notEqual(a, computeRequestHash({ ...base, imageBase64: 'AAAA' }));
+});
+
+// ------------------------------------------------------------------- cache
+test('cache: set/get roundtrip', async () => {
+  const { setCachedResponse, getCachedResponse } = await load();
+  const storage = fakeStorage();
+  setCachedResponse(storage, 'c', 'fp1', { ok: 1 });
+  assert.deepEqual(getCachedResponse(storage, 'c', 'fp1'), { ok: 1 });
+  assert.equal(getCachedResponse(storage, 'c', 'fp2'), null);
+  assert.equal(getCachedResponse(null, 'c', 'fp1'), null);
+});
+
+test('cache: TTL / schema version / corrupt data', async () => {
+  const { setCachedResponse, getCachedResponse, CACHE_SCHEMA_VERSION } = await load();
+  const storage = fakeStorage();
+  setCachedResponse(storage, 'c', 'fp1', { ok: 1 });
+  assert.equal(getCachedResponse(storage, 'c', 'fp1', -1), null, 'TTL 만료');
+
+  storage.raw.set('old', JSON.stringify([{ v: CACHE_SCHEMA_VERSION - 1, fp: 'x', savedAt: Date.now(), data: 1 }]));
+  assert.equal(getCachedResponse(storage, 'old', 'x'), null, '구버전 스키마 무시');
+
+  storage.raw.set('broken', '{not json');
+  assert.equal(getCachedResponse(storage, 'broken', 'x'), null);
+});
+
+test('cache: maxEntries trim and dedupe', async () => {
+  const { setCachedResponse, getCachedResponse } = await load();
+  const storage = fakeStorage();
+  for (let i = 0; i < 5; i++) setCachedResponse(storage, 'c', 'fp' + i, { i }, 3);
+  const list = JSON.parse(storage.raw.get('c'));
+  assert.equal(list.length, 3);
+  assert.equal(list[0].fp, 'fp4');
+  setCachedResponse(storage, 'c', 'fp4', { i: 99 }, 3);
+  assert.deepEqual(getCachedResponse(storage, 'c', 'fp4'), { i: 99 });
+  assert.equal(JSON.parse(storage.raw.get('c')).filter(x => x.fp === 'fp4').length, 1);
+});
+
+// -------------------------------------------------------------- isQuotaError
+test('isQuotaError: detects quota-family messages', async () => {
+  const { isQuotaError } = await load();
+  for (const m of ['Quota exceeded', 'RATE LIMIT', 'RESOURCE_EXHAUSTED', 'billing issue', 'limit: 0']) {
+    assert.equal(isQuotaError(new Error(m)), true, m);
+  }
+  assert.equal(isQuotaError(new Error('network down')), false);
+  assert.equal(isQuotaError(null), false);
+});
+
+// ----------------------------------------------------------- normalizeMathExpr
+test('normalizeMathExpr: width / latex / inequality / prefix', async () => {
+  const { normalizeMathExpr } = await load();
+  assert.equal(normalizeMathExpr('１２＋３'), '12+3');
+  assert.equal(normalizeMathExpr('\\frac{1}{2}'), '1/2');
+  assert.equal(normalizeMathExpr('\\sqrt{3}'), 'sqrt(3)');
+  assert.equal(normalizeMathExpr('x≦3'), 'x<=3');
+  assert.equal(normalizeMathExpr('x＝２'), 'x=2');
+  assert.equal(normalizeMathExpr('答え: x = 2'), 'x=2');
+  assert.equal(normalizeMathExpr('  $x^2$  '), 'x^2');
+  assert.equal(normalizeMathExpr(null), '');
+  assert.equal(normalizeMathExpr('(x+2)(2x-1)'), normalizeMathExpr('(2x-1)(x+2)'));
+});
+
+// ----------------------------------------------------------- isLocalMathMatch
+test('isLocalMathMatch: solution sets and inequalities', async () => {
+  const { isLocalMathMatch } = await load();
+  assert.equal(isLocalMathMatch('x=2,3', ['x=3,2']), true);
+  assert.equal(isLocalMathMatch('2,3', ['x=2,3']), true);
+  assert.equal(isLocalMathMatch('3>=y>=-3', ['-3<=y<=3']), true);
+  assert.equal(isLocalMathMatch('x=5', ['x=2,3']), false);
+  assert.equal(isLocalMathMatch('', ['x=2']), false);
+});
+
+// ------------------------------------------------------------- transport (stub)
+test('callGeminiModel: structured request returns parsed fixture', async () => {
+  const { callGeminiModel } = await load();
+  stub.reset();
+  const uninstall = stub.install();
+  try {
+    const schema = { type: 'object', properties: { problems: { type: 'array' } } };
+    const data = await callGeminiModel('gemini-3.8-flash', 'KEY', 'prompt', null, { schema });
+    assert.ok(data && typeof data === 'object');
+    assert.ok(Array.isArray(data.problems), 'fixture math-solve-2problems');
+    assert.equal(stub.counters.total, 1);
+  } finally {
+    uninstall();
+  }
+});
+
+test('callGeminiModel: sends responseSchema and omits it when rawText', async () => {
+  const { callGeminiModel } = await load();
+  const seen = [];
+  const prev = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    seen.push(JSON.parse(init.body));
+    const text = seen.length === 1 ? '{"a":1}' : 'plain text';
+    return jsonResponse({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }] });
+  };
+  try {
+    const schema = { type: 'object', properties: { a: { type: 'string' } } };
+    await callGeminiModel('m', 'K', 'p', null, { schema });
+    assert.equal(seen[0].generationConfig.responseMimeType, 'application/json');
+    assert.deepEqual(seen[0].generationConfig.responseSchema, schema);
+    assert.equal(seen[0].generationConfig.maxOutputTokens, 32768);
+
+    const text = await callGeminiModel('m', 'K', 'p', null, { rawText: true });
+    assert.equal(text, 'plain text');
+    assert.equal(seen[1].generationConfig.responseSchema, undefined);
+    assert.equal(seen[1].generationConfig.responseMimeType, undefined);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callGeminiModel: object form and image part', async () => {
+  const { callGeminiModel } = await load();
+  let body = null;
+  const prev = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    body = JSON.parse(init.body);
+    return jsonResponse({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"ok":true}' }] } }] });
+  };
+  try {
+    const out = await callGeminiModel({ modelId: 'models/gemini-3.8-flash', apiKey: 'K', promptText: 'p', imageBase64: 'IMG' });
+    assert.deepEqual(out, { ok: true });
+    assert.equal(body.contents[0].parts.length, 2);
+    assert.equal(body.contents[0].parts[1].inline_data.data, 'IMG');
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callGeminiModel: missing key / http error / schema fallback / empty', async () => {
+  const { callGeminiModel } = await load();
+  await assert.rejects(() => callGeminiModel('m', '', 'p', null, {}), /APIキー/);
+
+  const prev = globalThis.fetch;
+  let calls = 0;
+  try {
+    // 429
+    globalThis.fetch = async () => { calls++; return jsonResponse({ error: { message: 'quota exceeded' } }, 429); };
+    await assert.rejects(async () => {
+      try { await callGeminiModel('m', 'K', 'p', null, {}); } catch (e) { assert.equal(e.status, 429); throw e; }
+    }, /quota exceeded/);
+
+    // 400 schema 미지원 → 1회 재시도(스키마 없이)
+    calls = 0;
+    const bodies = [];
+    globalThis.fetch = async (url, init) => {
+      calls++;
+      bodies.push(JSON.parse(init.body));
+      if (calls === 1) return jsonResponse({ error: { message: 'responseSchema is not supported' } }, 400);
+      return jsonResponse({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"ok":1}' }] } }] });
+    };
+    const out = await callGeminiModel('m', 'K', 'p', null, { schema: { type: 'object' } });
+    assert.deepEqual(out, { ok: 1 });
+    assert.equal(calls, 2);
+    assert.equal(bodies[1].generationConfig.responseSchema, undefined);
+
+    // 빈 응답 (blockReason / finishReason)
+    globalThis.fetch = async () => jsonResponse({ candidates: [{ finishReason: 'STOP', content: { parts: [] } }] });
+    await assert.rejects(() => callGeminiModel('m', 'K', 'p', null, {}), /中断しました/);
+
+    // 후보 자체가 없음
+    globalThis.fetch = async () => jsonResponse({});
+    await assert.rejects(() => callGeminiModel('m', 'K', 'p', null, {}), /空の応答/);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callGeminiModel: timeout aborts', async () => {
+  const { callGeminiModel } = await load();
+  const prev = globalThis.fetch;
+  globalThis.fetch = (url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener('abort', () => {
+      const e = new Error('aborted');
+      e.name = 'AbortError';
+      reject(e);
+    });
+  });
+  try {
+    await assert.rejects(() => callGeminiModel('m', 'K', 'p', null, { timeoutMs: 20 }), (e) => e.name === 'AbortError');
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+// ------------------------------------------------------- fetchAvailableModels
+test('fetchAvailableModels: filters and sorts', async () => {
+  const { fetchAvailableModels } = await load();
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({
+    models: [
+      { name: 'models/gemini-3.8-pro', displayName: 'Pro', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-3.8-flash', displayName: 'Flash', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+      { name: 'models/gemini-tts', supportedGenerationMethods: ['generateContent'] }
+    ]
+  });
+  try {
+    const models = await fetchAvailableModels('KEY');
+    assert.deepEqual(models, [
+      { id: 'gemini-3.8-flash', displayName: 'Flash' },
+      { id: 'gemini-3.8-pro', displayName: 'Pro' }
+    ]);
+    await assert.rejects(() => fetchAvailableModels(''), /APIキー/);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('fetchAvailableModels: works through the offline stub', async () => {
+  stub.reset();
+  const uninstall = stub.install();
+  try {
+    const { fetchAvailableModels } = await load();
+    const models = await fetchAvailableModels({ apiKey: 'KEY' });
+    assert.equal(models.length, 1);
+    assert.equal(models[0].id, 'gemini-3.8-flash');
+    assert.equal(stub.counters.byFixture.models, 1);
+  } finally {
+    uninstall();
+  }
+});
+```
+
+**커버리지 (16 케이스)**
+
+| 영역 | 케이스 |
+|---|---|
+| `parseJson` | plain / fenced / 앞뒤 텍스트 / 배열 / 실패 |
+| `computeRequestHash` | 결정성, text·unit·mode·image 민감도 |
+| `cache` | 왕복, TTL, 스키마 버전, 손상 JSON, maxEntries, 중복 제거 |
+| `isQuotaError` | 5개 패턴 + 오탐 |
+| `normalizeMathExpr` | 전각, LaTeX, 부등호, 접두어, 인수 순서 |
+| `isLocalMathMatch` | 해 집합 순서, 연립부등호 방향, 불일치 |
+| `callGeminiModel` | 스키마 포함 요청, `rawText`, 객체 형식, 이미지 파트, 키 없음, 429, 400 폴백, 빈 응답, 타임아웃 |
+| `fetchAvailableModels` | 필터·정렬, 스텁 경유 |
+
+실행:
+
+```bash
+node --test tests/core.test.js
+```
+
+기대 출력: `pass 16 / fail 0`.
+
+> `core/package.json`이 없으면 Node가 `.js`를 CommonJS로 파싱해 `import()`가 실패한다.
+> 브라우저 동작에는 영향이 없다.
+
+#### 4.8.5 게이트
+
+```bash
+node --test tests/core.test.js          # 16 pass
+node tests/check-imports.js             # 커밋1: math 181 / 영어 83, 커밋2 이후: math 167 / 영어 83, missing 0
+node tests/check-actions.js             # ALL PASSED (inline=0)
+node tests/selftest.js                  # 4/4
+for f in core/*.js math/*.js english/*.js shared/*.js; do
+  cp "$f" /tmp/_c.mjs; node --check /tmp/_c.mjs || echo "FAIL $f"
+done
+grep -rn "shared/core.js" math english shared core   # → 0 (커밋 3 이후)
+```
+
+**브라우저 게이트** (localhost, 새 오리진 권장)
+
+- 두 앱 로드: 콘솔 에러 **0**, CSP 위반 0
+- `audit()` 51/42 · 42/44, `missing: []`
+- 수학: 해설 1건 실행 → 결과 렌더 + KaTeX, **같은 문제 재실행 시 API 0회**(캐시 히트)
+- 영어: 장문독해 1건 → 결과 렌더
+- 설정 모달 / 기록 복원 / 단어장 / 4択 채점
+
+**프로토타입 실측값** (이 명세 그대로 수행한 결과)
+
+| 항목 | 결과 |
+|---|---|
+| L1 | **16 pass / 0 fail** |
+| check-imports | `[math] 167`, `[english] 83`, missing 0 |
+| 수학 해설 | API 1회 → 렌더 O, KaTeX 5개 |
+| 같은 문제 재실행 | **API 0회**, 렌더 O |
+| 영어 독해 | API 1회 → 렌더 O |
+| audit | 77/42, 42/44, missing `[]` |
+| 콘솔 | 두 앱 에러 0 |
+
+#### 4.8.6 커밋 3개
+
+| # | 커밋 | 내용 | 게이트 |
+|---|---|---|---|
+| 1 | `refactor(core): add pure core modules with L1 tests` | `core/*` 8파일 + `tests/core.test.js` + SW에 `core/*.js` 7개 등록·캐시 `v3.5`/`v2.5` (**앱 코드 무변경**) | `node --test` 16 pass, 두 앱 로드 |
+| 2 | `refactor(math): use core transport` | `migrate5.py . math` → `math` 9파일 | 수학 스모크 + 캐시 히트, 영어 정상 |
+| 3 | `refactor(english): use core transport` | `migrate5.py . english` → `english` 3파일 + `shared/core.js` 삭제 + SW 정리 | `grep shared/core.js` → 0, 두 앱 스모크 |
+
+> 커밋 1은 **순수 추가**라 앱이 깨질 수 없다. 커밋 2는 수학만 바꾸고 영어는 기존 경로를 유지하므로
+> 중간 상태에서도 두 앱이 모두 동작한다(프로토타입 확인).
+
+#### 4.8.7 DoD
+
+- [ ] `node --test tests/core.test.js` → 16 pass
+- [ ] `check-imports` math **167**(커밋 2 이후) / english 83, missing 0
+- [ ] `check-actions` / `selftest` 통과
+- [ ] `shared/core.js` 삭제, 참조 0
+- [ ] 수학: 해설 1회 + **재실행 API 0회**, 영어: 독해 1회
+- [ ] 두 앱 콘솔 에러 0, `audit()` missing `[]`
+- [ ] SW 캐시 `v3.5` / `v2.5`, ASSETS에 `core/*.js` 7개
+
+**롤백**: 커밋 3 → 2 → 1 순서. 전체는 `git reset --hard v1.9-phase4c`.
+
+**알려진 문구 변경 1건**: `MAX_TOKENS`로 JSON 파싱이 실패할 때의 메시지가 수학 전용
+("写真を1〜2問ずつ…")에서 중립 문구("入力内容を小さく分割して…")로 바뀐다. 오류 경로 한정.
 
 ---
 
