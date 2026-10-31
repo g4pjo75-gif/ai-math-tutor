@@ -215,9 +215,9 @@
       <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">4桁のPINコードを入力してください（初期値: 1234）</p>
       <input id="pinInput" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
         class="w-full text-center text-2xl tracking-widest font-bold border-2 border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-xl py-3 mb-3 focus:outline-none focus:border-emerald-600"
-        onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) unlockApp()" />
+        data-enter="unlock" />
       <p id="pinError" class="text-xs text-red-600 dark:text-red-400 mb-3 hidden">PINコードが正しくありません。</p>
-      <button onclick="unlockApp()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 rounded-xl transition">
+      <button data-action="unlock" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 rounded-xl transition">
         ロック解除して始める
       </button>
       <div class="pt-3">
@@ -248,14 +248,14 @@
           <a href="../english/" target="_blank" rel="noopener" class="bg-blue-600/80 hover:bg-blue-600 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs whitespace-nowrap shrink-0 flex items-center gap-1 border border-blue-400/30 transition text-white" title="英語チューターへ移動">
             <span>🇬🇧</span><span class="hidden xs:inline">英語</span>
           </a>
-          <button onclick="openSettings()" class="bg-white/10 hover:bg-white/20 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs whitespace-nowrap shrink-0 flex items-center gap-1" title="API設定・モデル検索">
+          <button data-action="open-settings" class="bg-white/10 hover:bg-white/20 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs whitespace-nowrap shrink-0 flex items-center gap-1" title="API設定・モデル検索">
             <span>⚙️</span><span class="hidden xs:inline">設定</span>
           </button>
-          <button onclick="toggleDarkMode()" id="darkModeToggle"
+          <button data-action="toggle-dark-mode" id="darkModeToggle"
             class="bg-white/10 hover:bg-white/20 p-1 sm:p-1.5 rounded-lg text-xs shrink-0" title="ダークモード切り替え">
             🌙
           </button>
-          <button onclick="showTutorHistory()" id="noteBtn"
+          <button data-action="show-tutor-history" id="noteBtn"
             class="bg-white/10 hover:bg-white/20 p-1 sm:p-1.5 rounded-lg text-xs shrink-0" title="マイノート（過去の解説記録）">
             📁
           </button>
@@ -265,12 +265,12 @@
       <!-- 2行目: 3種UIテーマ切替 & AIモデル選択 -->
       <div class="flex items-center justify-between gap-2 pt-1 border-t border-emerald-500/20">
         <div class="theme-pill-group shrink-0" role="group" aria-label="UIテーマ選択">
-          <button type="button" class="theme-btn active" onclick="changeTheme('minimal')" id="btn-minimal">① ミニマル</button>
-          <button type="button" class="theme-btn" onclick="changeTheme('edutech')" id="btn-edutech">② パステル</button>
-          <button type="button" class="theme-btn" onclick="changeTheme('mobile')" id="btn-mobile">③ タイムライン</button>
+          <button type="button" class="theme-btn active" data-action="change-theme" data-theme="minimal" id="btn-minimal">① ミニマル</button>
+          <button type="button" class="theme-btn" data-action="change-theme" data-theme="edutech" id="btn-edutech">② パステル</button>
+          <button type="button" class="theme-btn" data-action="change-theme" data-theme="mobile" id="btn-mobile">③ タイムライン</button>
         </div>
 
-        <select id="modelSelect" onchange="onModelDropdownChange()"
+        <select id="modelSelect" data-change="model-change"
           class="bg-slate-800/90 text-white text-[10px] sm:text-xs rounded-lg px-2 py-1 border border-emerald-500/40 focus:outline-none max-w-[130px] sm:max-w-[180px] truncate">
           <option value="gemini-3.8-flash" selected>gemini-3.8-flash (標準・高速)</option>
         </select>
@@ -295,7 +295,7 @@
       <div class="text-xs text-amber-900 dark:text-amber-200">
         <strong>🔑 APIキーが未設定です：</strong> 右上の「⚙️ 設定」からGemini APIキーを登録し、「利用可能なモデルを自動取得」を押してください。
       </div>
-      <button onclick="openSettings()" class="shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">設定を開く</button>
+      <button data-action="open-settings" class="shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">設定を開く</button>
     </div>
 
     <!-- 問題入力 & 画像アップロードカード -->
@@ -317,7 +317,7 @@
       <!-- 写真選択 / カメラ撮影（統合ボタン） -->
       <label id="photoUploadLabel"
         class="block cursor-pointer border-2 border-dashed border-emerald-400 dark:border-emerald-500/40 hover:border-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-slate-800/50 dark:hover:bg-slate-800 rounded-2xl p-5 text-center transition">
-        <input id="photoUploadInput" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
+        <input id="photoUploadInput" type="file" accept="image/*" class="hidden" data-change="image-upload" />
         <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full mx-auto flex items-center justify-center text-2xl mb-2">
           📷
         </div>
@@ -339,7 +339,7 @@
       <!-- 画像プレビュー -->
       <div id="imagePreviewContainer" class="hidden relative bg-slate-900 rounded-xl overflow-hidden max-h-64 flex items-center justify-center section-fade dark:bg-slate-800">
         <img id="imagePreview" src="" alt="問題プレビュー" class="max-h-60 object-contain" />
-        <button onclick="clearImage()" class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2.5 py-1 rounded-full shadow dark:bg-red-500">✕ 削除</button>
+        <button data-action="clear-image" class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2.5 py-1 rounded-full shadow dark:bg-red-500">✕ 削除</button>
       </div>
 
       <!-- テキスト直接質問入力 -->
@@ -350,7 +350,7 @@
       </div>
 
       <!-- 解説実行ボタン -->
-      <button id="solveBtn" onclick="solveProblem()"
+      <button id="solveBtn" data-action="solve"
         class="w-full bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white font-bold py-3.5 rounded-xl shadow-md transition flex items-center justify-center gap-2 dark:bg-emerald-600 dark:hover:bg-emerald-500">
         <span id="solveBtnText">✨ AI先生に解説してもらう</span>
         <span id="solveBtnSpinner" class="hidden animate-spin mr-2">⟳</span>
@@ -365,24 +365,24 @@
       <!-- オーディオコントロールバー -->
       <div id="audioControlBar" class="bg-slate-800 text-white rounded-2xl p-3.5 shadow flex flex-wrap items-center justify-between gap-2 dark:bg-slate-900">
         <div class="flex items-center gap-2">
-          <button onclick="playAllSteps()" class="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 dark:bg-emerald-500 dark:hover:bg-emerald-400">
+          <button data-action="play-all-steps" class="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 dark:bg-emerald-500 dark:hover:bg-emerald-400">
             ▶️ 最初から連続再生
           </button>
-          <button onclick="stopSpeech()" class="bg-rose-600 hover:bg-rose-500 text-xs font-bold px-3 py-2 rounded-xl dark:bg-rose-500 dark:hover:bg-rose-400">
+          <button data-action="stop-speech" class="bg-rose-600 hover:bg-rose-500 text-xs font-bold px-3 py-2 rounded-xl dark:bg-rose-500 dark:hover:bg-rose-400">
             ⏹️ 停止
           </button>
         </div>
         <div class="flex flex-wrap items-center gap-2 text-xs">
           <span>🗣️ 声:</span>
-          <select id="voiceSelect" onchange="onVoiceChange()" title="日本語の音声を選択"
+          <select id="voiceSelect" data-change="voice-change" title="日本語の音声を選択"
             class="bg-slate-700 text-white rounded-lg px-2 py-1 border border-slate-600 max-w-[11rem] dark:bg-slate-800 dark:border-slate-600">
             <option value="">自動（おすすめ）</option>
           </select>
-          <button onclick="testVoice()" class="bg-slate-700 hover:bg-slate-600 text-white text-[11px] px-2 py-1 rounded-lg border border-slate-600 dark:bg-slate-800 dark:border-slate-600">
+          <button data-action="test-voice" class="bg-slate-700 hover:bg-slate-600 text-white text-[11px] px-2 py-1 rounded-lg border border-slate-600 dark:bg-slate-800 dark:border-slate-600">
             ▶ 声を聞く
           </button>
           <span class="ml-1">🔊 速度:</span>
-          <select id="speechRate" onchange="onSpeechRateChange()" class="bg-slate-700 text-white rounded-lg px-2 py-1 border border-slate-600 dark:bg-slate-800 dark:border-slate-600">
+          <select id="speechRate" data-change="speech-rate-change" class="bg-slate-700 text-white rounded-lg px-2 py-1 border border-slate-600 dark:bg-slate-800 dark:border-slate-600">
             <option value="0.8">0.8x (とてもゆっくり)</option>
             <option value="0.9">0.9x (ゆっくり)</option>
             <option value="0.95" selected>0.95x (おすすめ)</option>
@@ -433,19 +433,19 @@
 
         <!-- クイック質問チップ -->
         <div class="flex flex-wrap gap-1.5 pt-0.5">
-          <button type="button" onclick="sendOverallQuickQuestion('この問題の「別の解き方（別解）」があれば詳しく教えてください。')"
+          <button type="button" data-action="overall-quick" data-text="この問題の「別の解き方（別解）」があれば詳しく教えてください。"
             class="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition">
             💡 別の解法（別解）を教えて
           </button>
-          <button type="button" onclick="sendOverallQuickQuestion('もっと計算が早く・簡単になる工夫や裏ワザ的な別解はありますか？')"
+          <button type="button" data-action="overall-quick" data-text="もっと計算が早く・簡単になる工夫や裏ワザ的な別解はありますか？"
             class="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition">
             ⚡ もっと早く解く工夫・別解は？
           </button>
-          <button type="button" onclick="sendOverallQuickQuestion('グラフや図形的なアプローチで解く別解はありますか？')"
+          <button type="button" data-action="overall-quick" data-text="グラフや図形的なアプローチで解く別解はありますか？"
             class="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition">
             📐 グラフ・図形的な解き方は？
           </button>
-          <button type="button" onclick="sendOverallQuickQuestion('AI先生が使った解法と、よくある別の解法のメリット・デメリットの違いは何ですか？')"
+          <button type="button" data-action="overall-quick" data-text="AI先生が使った解法と、よくある別の解法のメリット・デメリットの違いは何ですか？"
             class="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition">
             ⚖️ 解法のメリット比較
           </button>
@@ -461,8 +461,8 @@
           <input type="text" id="overallChatInput"
             placeholder="例: 解法Aではなく解法B（因数分解/解の公式/判別式など）で解いて"
             class="flex-1 text-xs sm:text-sm border border-slate-300 dark:border-slate-600 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-emerald-600 dark:bg-slate-800 dark:text-white"
-            onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) sendOverallQuestion()" />
-          <button onclick="sendOverallQuestion()" id="overallChatBtn"
+            data-enter="overall-send" />
+          <button data-action="overall-send" id="overallChatBtn"
             class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow flex items-center gap-1.5 shrink-0 transition">
             <span id="overallChatBtnText">質問する 🚀</span>
             <span id="overallChatBtnSpinner" class="hidden animate-spin">⟳</span>
@@ -473,7 +473,7 @@
       <!-- 類題＆ノート アクションボタン群 -->
       <div class="space-y-2.5 pt-2">
         <!-- メイン：自分で挑戦して採点（おすすめ） -->
-        <button onclick="startQuizChallenge()"
+        <button data-action="start-quiz"
           id="quizChallengeBtn"
           class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 px-4 rounded-2xl shadow-md transition flex items-center justify-center gap-2 text-sm sm:text-base">
           <span id="quizChallengeBtnText">🎯 この問題の「類題」に自分で挑戦する！</span>
@@ -482,7 +482,7 @@
 
         <div class="grid grid-cols-2 gap-2">
           <!-- サブ：解説をすぐ見る -->
-          <button onclick="generateSimilarProblem()"
+          <button data-action="generate-similar"
             id="similarProblemBtn"
             class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2.5 px-3 rounded-xl transition border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-center gap-1.5 truncate">
             <span id="similarProblemBtnText">📖 類題の解説を見る</span>
@@ -490,7 +490,7 @@
           </button>
 
           <!-- オ答ノート保存ボタン -->
-          <button onclick="saveCurrentToTutorHistory()"
+          <button data-action="save-current-history"
             id="saveToNoteBtn"
             class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2.5 px-3 rounded-xl transition border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-center gap-1.5 truncate">
             📁 ノートに保存
@@ -508,7 +508,7 @@
               <p class="text-[11px] text-emerald-600 dark:text-emerald-400">数字が変わった双子問題です。ノートに解いて答えを入力してください。</p>
             </div>
           </div>
-          <button onclick="closeQuizSection()" class="text-slate-400 hover:text-slate-600 text-sm font-bold p-1">✕</button>
+          <button data-action="close-quiz" class="text-slate-400 hover:text-slate-600 text-sm font-bold p-1">✕</button>
         </div>
 
         <!-- 類題 問題文 -->
@@ -519,7 +519,7 @@
 
         <!-- ヒント開閉アコーディオン -->
         <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl p-3">
-          <button onclick="toggleQuizHint()" class="flex items-center justify-between w-full text-xs font-bold text-amber-800 dark:text-amber-300">
+          <button data-action="toggle-quiz-hint" class="flex items-center justify-between w-full text-xs font-bold text-amber-800 dark:text-amber-300">
             <span>💡 解き方のヒント（着眼点）を見る</span>
             <span id="quizHintIcon">▼</span>
           </button>
@@ -529,11 +529,11 @@
         <!-- 4択モード vs 自分で入力モード 切替タブ -->
         <div class="flex items-center justify-between border-b dark:border-slate-800 pb-2.5">
           <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
-            <button onclick="setQuizInputMode('choice')" id="quizModeChoiceBtn"
+            <button data-action="quiz-mode" data-mode="choice" id="quizModeChoiceBtn"
               class="px-3 py-1.5 rounded-lg transition bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-sm">
               🔘 選択肢から選ぶ
             </button>
-            <button onclick="setQuizInputMode('text')" id="quizModeTextBtn"
+            <button data-action="quiz-mode" data-mode="text" id="quizModeTextBtn"
               class="px-3 py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400">
               ✍️ 自分で入力
             </button>
@@ -546,7 +546,7 @@
           <div id="quizChoiceGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="radiogroup" aria-label="問題の選択肢">
             <!-- JSで動的生成 -->
           </div>
-          <button onclick="submitChoiceAnswer()" id="submitChoiceBtn"
+          <button data-action="submit-choice" id="submitChoiceBtn"
             class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl text-sm shadow transition flex items-center justify-center gap-1.5">
             <span>この選択肢で決定する 🚀</span>
           </button>
@@ -561,25 +561,25 @@
             <!-- 数学記号ワンクリックパレット -->
             <div class="flex flex-wrap items-center gap-1 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
               <span class="text-[10px] text-slate-500 font-bold px-1">記号:</span>
-              <button type="button" onclick="insertMathSymbol('≦')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">≦</button>
-              <button type="button" onclick="insertMathSymbol('≧')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">≧</button>
-              <button type="button" onclick="insertMathSymbol('<')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">&lt;</button>
-              <button type="button" onclick="insertMathSymbol('>')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">&gt;</button>
-              <button type="button" onclick="insertMathSymbol('√')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">√</button>
-              <button type="button" onclick="insertMathSymbol('^2')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">²</button>
-              <button type="button" onclick="insertMathSymbol('±')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">±</button>
-              <button type="button" onclick="insertMathSymbol('π')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">π</button>
-              <button type="button" onclick="insertMathSymbol('(')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">(</button>
-              <button type="button" onclick="insertMathSymbol(')')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">)</button>
-              <button type="button" onclick="insertMathSymbol('/')" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">/</button>
+              <button type="button" data-action="insert-symbol" data-symbol="≦" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">≦</button>
+              <button type="button" data-action="insert-symbol" data-symbol="≧" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">≧</button>
+              <button type="button" data-action="insert-symbol" data-symbol="<" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">&lt;</button>
+              <button type="button" data-action="insert-symbol" data-symbol=">" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">&gt;</button>
+              <button type="button" data-action="insert-symbol" data-symbol="√" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">√</button>
+              <button type="button" data-action="insert-symbol" data-symbol="^2" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">²</button>
+              <button type="button" data-action="insert-symbol" data-symbol="±" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">±</button>
+              <button type="button" data-action="insert-symbol" data-symbol="π" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">π</button>
+              <button type="button" data-action="insert-symbol" data-symbol="(" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">(</button>
+              <button type="button" data-action="insert-symbol" data-symbol=")" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">)</button>
+              <button type="button" data-action="insert-symbol" data-symbol="/" class="math-palette-btn bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-mono shadow-sm hover:bg-emerald-50">/</button>
             </div>
           </div>
           <div class="flex gap-2">
             <input type="text" id="studentAnswerInput"
               placeholder="例: -3 <= y <= 3 または (x+2)(2x-1)"
               class="flex-1 text-sm border-2 border-emerald-500/50 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-emerald-600 bg-white dark:bg-slate-800 dark:text-white"
-              onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) submitStudentAnswer()" />
-            <button onclick="submitStudentAnswer()" id="submitAnswerBtn"
+              data-enter="submit-student" />
+            <button data-action="submit-student" id="submitAnswerBtn"
               class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow flex items-center gap-1.5 shrink-0">
               <span id="submitAnswerBtnText">採点する 🚀</span>
               <span id="submitAnswerBtnSpinner" class="hidden animate-spin">⟳</span>
@@ -612,7 +612,7 @@
           <h3 class="font-bold text-base text-slate-800 dark:text-slate-100">⚙️ API設定 ＆ モデル選択</h3>
           <span class="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">Beta v1.6</span>
         </div>
-        <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg font-bold">✕</button>
+        <button data-action="close-settings" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg font-bold">✕</button>
       </div>
 
       <!-- Gemini APIキー入力 -->
@@ -626,7 +626,7 @@
       <div class="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 space-y-2">
         <div class="flex items-center justify-between gap-2">
           <span class="text-xs font-bold text-emerald-900 dark:text-emerald-200">🔍 APIキーで利用可能なモデルを自動検索</span>
-          <button onclick="fetchAvailableModels()"
+          <button data-action="fetch-models"
             class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
             モデル一覧を自動取得
           </button>
@@ -658,8 +658,8 @@
       </details>
 
       <div class="flex justify-end gap-2 pt-2 border-t dark:border-slate-700">
-        <button onclick="closeSettings()" class="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl">閉じる</button>
-        <button onclick="saveSettings()" class="px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl">💾 保存する</button>
+        <button data-action="close-settings" class="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-xl">閉じる</button>
+        <button data-action="save-settings" class="px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl">💾 保存する</button>
       </div>
     </div>
   </div>
@@ -670,18 +670,19 @@
       <div class="flex items-center justify-between border-b pb-4">
         <h3 class="font-bold text-base text-slate-800 dark:text-slate-100">📁 マイノート</h3>
         <p class="text-xs text-slate-500 dark:text-slate-400">過去の解説記録</p>
-        <button onclick="closeTutorHistoryModal()" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg font-bold">✕</button>
+        <button data-action="close-tutor-history" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg font-bold">✕</button>
       </div>
       <div class="p-4 space-y-2" id="tutorHistoryList">
         <!-- カードは JS で動的生成 -->
       </div>
       <div class="pt-4 border-t">
-        <button onclick="closeTutorHistoryModal()" class="w-full px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-xl">閉じる</button>
+        <button data-action="close-tutor-history" class="w-full px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-xl">閉じる</button>
       </div>
     </div>
   </div>
 
   <!-- Shared Modules -->
+  <script src="../shared/actions.js?v=20261031"></script>
   <script src="../shared/storage.js?v=20261028"></script>
   <script src="../shared/core.js?v=20261028"></script>
   <script src="../shared/speech.js?v=20261028"></script>
@@ -707,5 +708,6 @@
   <script src="visual-numberline.js?v=20261031"></script>
   <script src="chat-step.js?v=20261031"></script>
   <script src="chat-overall.js?v=20261031"></script>
+  <script src="actions-map.js?v=20261031"></script>
 </body>
 </html>

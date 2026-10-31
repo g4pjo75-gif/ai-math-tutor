@@ -80,10 +80,10 @@
       <div class="space-y-2">
         <input id="pinInput" type="password" maxlength="8" inputmode="numeric" placeholder="••••"
           class="w-full text-center text-2xl tracking-widest font-mono font-bold py-3 border-2 border-blue-200 dark:border-blue-900/60 rounded-2xl focus:border-blue-600 focus:outline-none dark:bg-slate-800 dark:text-white"
-          onkeydown="if(event.key==='Enter' && !event.isComposing && event.keyCode!==229) unlockApp()" />
+          data-enter="unlock" />
         <p id="pinError" class="text-xs text-rose-500 font-bold hidden">⚠️ PINコードが違います</p>
       </div>
-      <button onclick="unlockApp()" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-3 rounded-2xl transition shadow-lg shadow-blue-600/30">
+      <button data-action="unlock" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-3 rounded-2xl transition shadow-lg shadow-blue-600/30">
         ロック解除して始める
       </button>
       <div class="pt-2">
@@ -118,15 +118,15 @@
             <span>📐</span>
             <span class="hidden xs:inline">数学</span>
           </a>
-          <button onclick="openSettings()" title="設定"
+          <button data-action="open-settings" title="設定"
             class="bg-white/10 hover:bg-white/20 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs whitespace-nowrap shrink-0 flex items-center gap-1 border border-white/15">
             <span>⚙️</span><span class="hidden xs:inline">設定</span>
           </button>
-          <button id="darkModeToggle" onclick="toggleDarkMode()" title="ダークモード切替"
+          <button id="darkModeToggle" data-action="toggle-dark-mode" title="ダークモード切替"
             class="bg-white/10 hover:bg-white/20 p-1 sm:p-1.5 rounded-lg text-xs shrink-0 border border-white/15">
             🌙
           </button>
-          <button id="noteBtn" onclick="openHistoryModal('wordbook')" title="マイ単語帳・復習ノート"
+          <button id="noteBtn" data-action="open-history" data-tab="wordbook" title="マイ単語帳・復習ノート"
             class="bg-white/10 hover:bg-white/20 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs shrink-0 flex items-center gap-1 border border-white/15 font-bold">
             <span>📁</span>
             <span id="wordbookBadge" class="text-[10px] bg-blue-500 text-white px-1.5 py-0.2 rounded-full">0</span>
@@ -137,12 +137,12 @@
       <!-- 2行目: 3種UIテーマ切替 & AIモデル選択 -->
       <div class="flex items-center justify-between gap-2 pt-1 border-t border-blue-400/20">
         <div class="theme-pill-group shrink-0" role="group" aria-label="UIテーマ選択">
-          <button type="button" class="theme-btn active" onclick="changeTheme('minimal')" id="btn-minimal">① ミニマル</button>
-          <button type="button" class="theme-btn" onclick="changeTheme('edutech')" id="btn-edutech">② パステル</button>
-          <button type="button" class="theme-btn" onclick="changeTheme('mobile')" id="btn-mobile">③ タイムライン</button>
+          <button type="button" class="theme-btn active" data-action="change-theme" data-theme="minimal" id="btn-minimal">① ミニマル</button>
+          <button type="button" class="theme-btn" data-action="change-theme" data-theme="edutech" id="btn-edutech">② パステル</button>
+          <button type="button" class="theme-btn" data-action="change-theme" data-theme="mobile" id="btn-mobile">③ タイムライン</button>
         </div>
 
-        <select id="modelSelect" onchange="onModelChange()"
+        <select id="modelSelect" data-change="model-change"
           class="bg-slate-800/90 text-white text-[10px] sm:text-xs rounded-lg px-2 py-1 border border-blue-400/40 focus:outline-none max-w-[130px] sm:max-w-[180px] truncate">
           <option value="gemini-3.8-flash" selected>gemini-3.8-flash (標準・高速)</option>
         </select>
@@ -158,12 +158,12 @@
       <div class="text-xs text-amber-900 dark:text-amber-200">
         <strong>🔑 APIキーが未設定です：</strong> 右上の「⚙️ 設定」からGemini APIキーを登録してください（数学アプリで登録済みの場合は自動共有されます）。
       </div>
-      <button onclick="openSettings()" class="shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">設定を開く</button>
+      <button data-action="open-settings" class="shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">設定を開く</button>
     </div>
 
     <!-- Mode Selector Cards (4 Modes) -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3" role="tablist" aria-label="学習モード選択">
-      <button type="button" id="modeBtn-reading" onclick="switchMode('reading')"
+      <button type="button" id="modeBtn-reading" data-action="switch-mode" data-mode="reading"
         class="mode-btn bg-blue-600 text-white p-3 rounded-2xl text-left shadow-sm transition border-2 border-blue-600">
         <div class="flex items-center justify-between">
           <span class="text-lg">📖</span>
@@ -173,7 +173,7 @@
         <div class="text-[10px] opacity-85">全訳・単語・文法分析</div>
       </button>
 
-      <button type="button" id="modeBtn-quiz" onclick="switchMode('quiz')"
+      <button type="button" id="modeBtn-quiz" data-action="switch-mode" data-mode="quiz"
         class="mode-btn bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800 p-3 rounded-2xl text-left shadow-sm transition border-2 border-slate-200 dark:border-slate-800">
         <div class="flex items-center justify-between">
           <span class="text-lg">🎯</span>
@@ -183,7 +183,7 @@
         <div class="text-[10px] text-slate-400">単元別4択チャレンジ</div>
       </button>
 
-      <button type="button" id="modeBtn-writing" onclick="switchMode('writing')"
+      <button type="button" id="modeBtn-writing" data-action="switch-mode" data-mode="writing"
         class="mode-btn bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800 p-3 rounded-2xl text-left shadow-sm transition border-2 border-slate-200 dark:border-slate-800">
         <div class="flex items-center justify-between">
           <span class="text-lg">✍️</span>
@@ -193,7 +193,7 @@
         <div class="text-[10px] text-slate-400">自然な英語表現に矯正</div>
       </button>
 
-      <button type="button" id="modeBtn-wordbook" onclick="openHistoryModal('wordbook')"
+      <button type="button" id="modeBtn-wordbook" data-action="open-history" data-tab="wordbook"
         class="mode-btn bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800 p-3 rounded-2xl text-left shadow-sm transition border-2 border-slate-200 dark:border-slate-800">
         <div class="flex items-center justify-between">
           <span class="text-lg">🔤</span>
@@ -233,13 +233,13 @@
       <div class="bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-sm border border-slate-200/80 dark:border-slate-800 space-y-4">
         <div class="flex items-center justify-between">
           <span class="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200">📷 英語の教科書・問題集の写真を撮る</span>
-          <button id="clearImageBtn" onclick="clearImage()" class="hidden text-xs text-rose-600 dark:text-rose-400 font-bold hover:underline">✕ 写真を消す</button>
+          <button id="clearImageBtn" data-action="clear-image" class="hidden text-xs text-rose-600 dark:text-rose-400 font-bold hover:underline">✕ 写真を消す</button>
         </div>
 
         <!-- Upload Dropzone -->
         <div class="relative border-2 border-dashed border-blue-300 dark:border-slate-700 hover:border-blue-500 rounded-2xl p-5 text-center cursor-pointer transition bg-blue-50/30 dark:bg-slate-800/40"
-          onclick="document.getElementById('fileInput').click()">
-          <input id="fileInput" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
+          data-action="pick-image">
+          <input id="fileInput" type="file" accept="image/*" class="hidden" data-change="image-upload" />
           <div id="uploadPrompt" class="space-y-2">
             <div class="w-12 h-12 bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-full mx-auto flex items-center justify-center text-2xl">
               📷
@@ -259,12 +259,12 @@
 
         <!-- Action Buttons -->
         <div class="flex flex-col sm:flex-row gap-2.5">
-          <button id="solveBtn" onclick="analyzeEnglishProblem()"
+          <button id="solveBtn" data-action="analyze"
             class="flex-1 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold py-3.5 px-4 rounded-2xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-xs sm:text-sm">
             <span>✨</span>
             <span id="solveBtnText">AI先生に英語を解説してもらう</span>
           </button>
-          <button type="button" onclick="switchMode('quiz'); generateEnglishQuiz();"
+          <button type="button" data-action="quiz-generate" data-force="0"
             class="sm:w-auto bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold py-3.5 px-4 rounded-2xl transition border border-indigo-200 dark:border-indigo-800 flex items-center justify-center gap-1.5 text-xs sm:text-sm">
             <span>🎯</span>
             <span>4択クイズに挑戦</span>
@@ -282,14 +282,14 @@
               <h2 class="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">AI英語先生のステップ解説</h2>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <button onclick="playEnglishSpeech()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-xl shadow-sm transition flex items-center gap-1.5">
+              <button data-action="play-speech" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-xl shadow-sm transition flex items-center gap-1.5">
                 <span>🔊</span>
                 <span>英文を聞く (en-US)</span>
               </button>
-              <button onclick="stopAllSpeech()" class="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold px-2.5 py-1.5 rounded-xl transition">
+              <button data-action="stop-speech" class="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold px-2.5 py-1.5 rounded-xl transition">
                 ⏹ 停止
               </button>
-              <button id="saveLessonBtn" onclick="saveCurrentLessonToHistory()" class="text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800 transition flex items-center gap-1">
+              <button id="saveLessonBtn" data-action="save-lesson-history" class="text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800 transition flex items-center gap-1">
                 <span>📁</span>
                 <span>マイノートに保存</span>
               </button>
@@ -304,7 +304,7 @@
           <!-- Follow-up Action Footer -->
           <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
             <span class="text-xs text-slate-500 dark:text-slate-400">💡 解説を読んだら、理解度チェック問題に挑戦しましょう！</span>
-            <button onclick="switchMode('quiz'); generateEnglishQuiz(true);"
+            <button data-action="quiz-generate" data-force="1"
               class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition flex items-center gap-1.5">
               <span>🎯</span>
               <span>この内容から4択クイズを出題する</span>
@@ -328,7 +328,7 @@
             <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">選んだ単元や直前の長文から、高校英語の重要4択問題を出題します</p>
           </div>
           <div class="flex items-center gap-2">
-            <button id="generateQuizBtn" onclick="generateEnglishQuiz(false)"
+            <button id="generateQuizBtn" data-action="generate-quiz" data-force="0"
               class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition flex items-center gap-1.5">
               <span>🎲</span>
               <span id="generateQuizBtnText">新しい問題を出題</span>
@@ -351,7 +351,7 @@
           <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-2">
             <div class="flex items-center justify-between">
               <span id="quizTargetBadge" class="text-[11px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 px-2.5 py-0.5 rounded-full">文法・語彙</span>
-              <button onclick="speakQuizQuestion()" class="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1">
+              <button data-action="speak-question" class="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1">
                 <span>🔊</span>
                 <span>問題文を発音</span>
               </button>
@@ -362,7 +362,7 @@
 
           <!-- Hint Accordion -->
           <div class="border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl overflow-hidden">
-            <button type="button" onclick="toggleQuizHint()" class="w-full px-3.5 py-2 text-left text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center justify-between">
+            <button type="button" data-action="toggle-quiz-hint" class="w-full px-3.5 py-2 text-left text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center justify-between">
               <span>💡 ヒントを見る（着眼点）</span>
               <span id="quizHintIcon">▼</span>
             </button>
@@ -375,7 +375,7 @@
           </div>
 
           <!-- Submit Button -->
-          <button id="submitQuizBtn" onclick="submitEnglishQuizAnswer()"
+          <button id="submitQuizBtn" data-action="submit-quiz"
             class="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold py-3 rounded-2xl shadow-md transition text-xs sm:text-sm">
             ✅ この選択肢で回答する（即時採点）
           </button>
@@ -399,7 +399,7 @@
             </h2>
             <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">自分で書いた英文の文法ミスを直し、より自然なネイティブ表現を学べます</p>
           </div>
-          <button id="genPromptBtn" onclick="generateWritingPrompt()"
+          <button id="genPromptBtn" data-action="writing-prompt"
             class="bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3.5 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1.5">
             <span>🎲</span>
             <span>練習用の和文課題を出してもらう</span>
@@ -420,12 +420,12 @@
             <label for="writingStudentInput" class="text-xs font-bold text-slate-700 dark:text-slate-300">🇬🇧 あなたの英作文を入力してください</label>
             <span id="writingWordCount" class="text-[11px] text-slate-400 font-mono">0 words</span>
           </div>
-          <textarea id="writingStudentInput" rows="4" oninput="updateWordCount()"
+          <textarea id="writingStudentInput" rows="4" data-input="word-count"
             placeholder="Write your English sentence(s) here... (例: If I am a bird, I can fly to you.)"
             class="w-full text-sm sm:text-base font-serif p-3.5 border-2 border-blue-200 dark:border-slate-700 rounded-2xl dark:bg-slate-800 dark:text-white focus:outline-none focus:border-blue-600"></textarea>
         </div>
 
-        <button id="checkWritingBtn" onclick="submitWritingForCorrection()"
+        <button id="checkWritingBtn" data-action="submit-writing"
           class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-blue-600/25 transition flex items-center justify-center gap-2 text-xs sm:text-sm">
           <span>✨</span>
           <span>AI先生に英作文を添削してもらう</span>
@@ -449,16 +449,16 @@
           <span class="text-xl">📁</span>
           <h3 class="text-base font-black text-slate-900 dark:text-white">マイ単語帳 & 復習ノート</h3>
         </div>
-        <button onclick="closeHistoryModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold px-2">✕</button>
+        <button data-action="close-history" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold px-2">✕</button>
       </div>
 
       <!-- Modal Tabs -->
       <div class="flex items-center gap-2 border-b pb-2.5 dark:border-slate-800">
-        <button id="tabBtnWordbook" onclick="switchHistoryTab('wordbook')"
+        <button id="tabBtnWordbook" data-action="history-tab" data-tab="wordbook"
           class="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition bg-blue-600 text-white">
           🔤 マイ単語帳 (<span id="wordbookCountLabel">0</span>)
         </button>
-        <button id="tabBtnNotes" onclick="switchHistoryTab('notes')"
+        <button id="tabBtnNotes" data-action="history-tab" data-tab="notes"
           class="flex-1 py-2 px-3 rounded-xl text-xs font-bold transition bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
           📓 復習ノート履歴 (<span id="notesCountLabel">0</span>)
         </button>
@@ -467,11 +467,11 @@
       <!-- Wordbook Controls (Blind Mode for self-testing) -->
       <div id="wordbookControls" class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2 rounded-xl border border-slate-200/70 dark:border-slate-700">
         <label class="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-          <input id="hideMeaningToggle" type="checkbox" onchange="renderWordbookList()" class="rounded text-blue-600 focus:ring-0" />
+          <input id="hideMeaningToggle" type="checkbox" data-change="render-wordbook" class="rounded text-blue-600 focus:ring-0" />
           <span>🙈 日本語の意味を隠して暗記テストする</span>
         </label>
         <div class="flex items-center gap-2">
-          <button onclick="openAddCustomWord()" class="text-[11px] bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg transition">
+          <button data-action="open-custom-word" class="text-[11px] bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg transition">
             ＋ 単語を手動追加
           </button>
         </div>
@@ -485,8 +485,8 @@
         </div>
         <input id="customExampleInput" type="text" placeholder="例文（任意: You should take advantage of this chance.）" class="w-full text-xs p-2 rounded-lg border dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
         <div class="flex justify-end gap-2">
-          <button onclick="document.getElementById('customWordForm').classList.add('hidden')" class="text-xs px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-600">キャンセル</button>
-          <button onclick="saveCustomWord()" class="text-xs px-3 py-1 rounded-lg bg-blue-600 text-white font-bold">保存する</button>
+          <button data-action="close-custom-word" class="text-xs px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-600">キャンセル</button>
+          <button data-action="save-custom-word" class="text-xs px-3 py-1 rounded-lg bg-blue-600 text-white font-bold">保存する</button>
         </div>
       </div>
 
@@ -497,8 +497,8 @@
 
       <!-- Modal Footer -->
       <div class="pt-3 border-t dark:border-slate-800 flex items-center justify-between">
-        <button onclick="clearCurrentHistoryTab()" class="text-xs text-rose-500 hover:underline font-bold">🗑️ 表示中の履歴を一括整理</button>
-        <button onclick="closeHistoryModal()" class="px-5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl">閉じる</button>
+        <button data-action="clear-history-tab" class="text-xs text-rose-500 hover:underline font-bold">🗑️ 表示中の履歴を一括整理</button>
+        <button data-action="close-history" class="px-5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl">閉じる</button>
       </div>
     </div>
   </div>
@@ -511,7 +511,7 @@
           <span>⚙️</span>
           <span>保護者設定・APIキー</span>
         </h3>
-        <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+        <button data-action="close-settings" class="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
       </div>
 
       <div class="space-y-3.5 text-xs">
@@ -546,10 +546,10 @@
       </div>
 
       <div class="pt-3 border-t dark:border-slate-800 flex gap-2">
-        <button onclick="closeSettings()" class="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300">
+        <button data-action="close-settings" class="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300">
           キャンセル
         </button>
-        <button onclick="saveSettings()" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/30">
+        <button data-action="save-settings" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/30">
           保存する
         </button>
       </div>
@@ -560,6 +560,7 @@
   <div id="toastNotification" role="status" aria-live="polite" class="hidden"></div>
 
   <!-- Shared Modules -->
+  <script src="../shared/actions.js?v=20261031"></script>
   <script src="../shared/storage.js?v=20261028"></script>
   <script src="../shared/core.js?v=20261028"></script>
   <script src="../shared/speech.js?v=20261028"></script>
@@ -575,5 +576,6 @@
   <script src="writing.js?v=20261031"></script>
   <script src="wordbook.js?v=20261031"></script>
   <script src="voice.js?v=20261031"></script>
+  <script src="actions-map.js?v=20261031"></script>
 </body>
 </html>
