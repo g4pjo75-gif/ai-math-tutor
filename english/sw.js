@@ -1,12 +1,20 @@
-const CACHE_NAME = 'aet-cache-v1.8';
+const CACHE_NAME = 'aet-cache-v1.9';
 const ASSETS = [
   './',
   './index.html',
-  './app.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',
+  './state.js',
+  './schema.js',
+  './init.js',
+  './mode.js',
+  './reading.js',
+  './quiz.js',
+  './writing.js',
+  './wordbook.js',
+  './voice.js',
   '../shared/storage.js',
   '../shared/core.js',
   '../shared/speech.js',
