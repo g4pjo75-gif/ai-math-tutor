@@ -1,4 +1,4 @@
-import { TutorCore } from '../shared/core.js';
+import { callGeminiModel, computeRequestHash, getCachedResponse, setCachedResponse } from '../core/index.js';
 import { TutorUI } from '../shared/ui.js';
 import { escapeAttr } from '../shared/actions.js';
 import { engStore, state } from './state.js';
@@ -31,7 +31,7 @@ export async function generateWritingPrompt() {
       if (btn) btn.disabled = true;
 
       try {
-        const res = await TutorCore.callGeminiModel({
+        const res = await callGeminiModel({
           modelId,
           apiKey,
           promptText: `日本の高校1年生が英作文の練習をするための和文課題を1つ作成してください。
@@ -68,16 +68,14 @@ export async function submitWritingForCorrection() {
       const unitHint = document.getElementById('unitSelect').value;
 
       // ④ 同一英作文の重複API呼び出し防止キャッシュ
-      const reqFp = TutorCore
-        ? TutorCore.computeRequestHash({
+      const reqFp = computeRequestHash({
             mode: 'eng_writing',
             unit: `${unitHint}|${taskJa}`,
             text: studentText
-          })
-        : null;
+          });
 
-      if (reqFp && TutorCore && engStore) {
-        const cachedData = TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
+      if (reqFp && engStore) {
+        const cachedData = getCachedResponse(engStore, 'api_cache', reqFp);
         if (cachedData) {
           state.lastWritingData = cachedData;
           hideStatus();
@@ -107,7 +105,7 @@ export async function submitWritingForCorrection() {
 【生徒の英作文】: ${studentText}`;
 
       try {
-        const data = await TutorCore.callGeminiModel({
+        const data = await callGeminiModel({
           modelId,
           apiKey,
           promptText: prompt,
@@ -117,8 +115,8 @@ export async function submitWritingForCorrection() {
         });
 
         state.lastWritingData = { ...data, task_ja: taskJa, original_text: data.original_text || studentText };
-        if (reqFp && TutorCore && engStore) {
-          TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, state.lastWritingData, 15);
+        if (reqFp && engStore) {
+          setCachedResponse(engStore, 'api_cache', reqFp, state.lastWritingData, 15);
         }
         hideStatus();
         renderWritingCorrection(state.lastWritingData);

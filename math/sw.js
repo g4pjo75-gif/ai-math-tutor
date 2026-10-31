@@ -38,7 +38,6 @@ const ASSETS = [
   '../core/gemini.js',
   '../shared/actions.js',
   '../shared/storage.js',
-  '../shared/core.js',
   '../shared/speech.js',
   '../shared/ui.js',
   '../shared/ui.css'

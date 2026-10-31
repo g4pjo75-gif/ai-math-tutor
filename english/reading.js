@@ -1,4 +1,4 @@
-import { TutorCore } from '../shared/core.js';
+import { callGeminiModel, computeRequestHash, getCachedResponse, setCachedResponse } from '../core/index.js';
 import { TutorUI } from '../shared/ui.js';
 import { escapeAttr } from '../shared/actions.js';
 import { engStore, state } from './state.js';
@@ -75,17 +75,15 @@ export async function analyzeEnglishProblem() {
       const unitHint = document.getElementById('unitSelect').value;
 
       // ④ 画像・テキストハッシュ（Fingerprint）による重複API呼び出し防止キャッシュ
-      const reqFp = TutorCore
-        ? TutorCore.computeRequestHash({
+      const reqFp = computeRequestHash({
             mode: 'eng_reading',
             unit: unitHint,
             text: userText,
             imageBase64: state.currentImageBase64
-          })
-        : null;
+          });
 
-      if (reqFp && TutorCore && engStore) {
-        const cachedData = TutorCore.getCachedResponse(engStore, 'api_cache', reqFp);
+      if (reqFp && engStore) {
+        const cachedData = getCachedResponse(engStore, 'api_cache', reqFp);
         if (cachedData) {
           state.lastLessonData = { ...cachedData, _twinQuizConsumed: false };
           state.lastPassageEn = cachedData.passage_en || '';
@@ -124,7 +122,7 @@ export async function analyzeEnglishProblem() {
 - twin_quiz には本文の重要表現または文法事項を使った4択の類題（choicesは必ず4個すべて異なる英語の選択肢、correct_indexは0〜3）を1問作成してください。`;
 
       try {
-        const data = await TutorCore.callGeminiModel({
+        const data = await callGeminiModel({
           modelId,
           apiKey,
           promptText: `${prompt}\n\n【生徒の入力・質問】: ${userText || '画像の問題・英文を解説してください'}`,
@@ -136,8 +134,8 @@ export async function analyzeEnglishProblem() {
 
         state.lastLessonData = { ...data, _twinQuizConsumed: false };
         state.lastPassageEn = data.passage_en || '';
-        if (reqFp && TutorCore && engStore) {
-          TutorCore.setCachedResponse(engStore, 'api_cache', reqFp, data, 15);
+        if (reqFp && engStore) {
+          setCachedResponse(engStore, 'api_cache', reqFp, data, 15);
         }
         hideStatus();
 

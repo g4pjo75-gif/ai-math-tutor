@@ -1,4 +1,4 @@
-import { TutorCore } from '../shared/core.js';
+import { callGeminiModel } from '../core/index.js';
 import { TutorUI } from '../shared/ui.js';
 import { escapeAttr } from '../shared/actions.js';
 import { state } from './state.js';
@@ -104,7 +104,7 @@ ${contextText}
 - choice_feedback は choices と同じ順番で4個作成し、それぞれの選択肢がなぜ正解・不正解なのかを日本語で分かりやすく説明してください。`;
 
       try {
-        let res = await TutorCore.callGeminiModel({
+        let res = await callGeminiModel({
           modelId,
           apiKey,
           promptText: prompt,
@@ -115,7 +115,7 @@ ${contextText}
 
         if (!isValidQuizResponse(res)) {
           // 1回自動再生成
-          res = await TutorCore.callGeminiModel({
+          res = await callGeminiModel({
             modelId,
             apiKey,
             promptText: prompt,
