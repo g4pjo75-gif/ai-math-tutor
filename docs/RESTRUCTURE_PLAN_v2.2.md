@@ -2462,6 +2462,74 @@ refactor(english): convert modules to ES modules
 > 브리지를 지우려면 `escapeAttr`을 쓰는 13개 파일에 import를 추가하고,
 > `actions-map.js`가 `register`를 import하도록 바꾸면 된다.
 
+#### 4.5.8 실행 중 발견된 회귀 — `stepQuotes` (필수 수정)
+
+4-B 적용 후 **실제 버그 1건**이 확인됐다. 4-B 완료 조건에 포함해 반드시 고친다.
+
+**증상**
+
+```
+ReferenceError: stepQuotes is not defined
+    at renderTutorResult (math/render.js:216)
+    at restoreFromHistory (math/history.js:119)
+```
+
+**원인**
+
+`stepQuotes`는 **어디에도 선언된 적이 없는 암묵적 전역**이었다. classic script(sloppy mode)에서는
+`stepQuotes = {};`가 `window.stepQuotes`를 즉석에서 만들었기 때문에 동작했다. ESM은 항상 strict mode라
+선언 없는 대입이 `ReferenceError`가 된다.
+
+사용처는 3개 파일 6곳이다.
+
+| 파일 | 원래 코드 |
+|---|---|
+| `math/render.js:216` | `stepQuotes = {};` |
+| `math/chat-step.js:39` | `stepQuotes[chatKey] = quoteText;` |
+| `math/chat-step.js:152` | `stepQuotes[chatKey] ? ...` |
+| `math/chat-step.js:206` | `delete stepQuotes[chatKey];` |
+| `math/simplify.js:93` | `delete stepQuotes[chatKey];` |
+
+**수정** — `state` 객체에 편입한다(다른 stepChats/stepChatBusy와 동일한 성격).
+
+```python
+import re
+p = 'math/state.js'
+s = open(p, encoding='utf-8').read()
+s = re.sub(r'(      stepChatBusy: \{\},[^\n]*\n)',
+           r'\1      stepQuotes: {}, // ステップチャットの引用文 (chatKey -> quote)\n',
+           s, count=1)
+open(p, 'w', encoding='utf-8').write(s)
+
+for f in ['math/render.js', 'math/chat-step.js', 'math/simplify.js']:
+    s = open(f, encoding='utf-8').read()
+    s = re.sub(r'(?<![\w$.])stepQuotes(?![\w$])', 'state.stepQuotes', s)
+    open(f, 'w', encoding='utf-8').write(s)
+```
+
+수정 후:
+
+- `state` 키 18개 (기존 17 + `stepQuotes`)
+- `grep -rn 'stepQuotes' math/*.js` → 전부 `state.stepQuotes`
+- `state`는 세 파일 모두 이미 import하고 있으므로 추가 import 불필요
+
+**검증 (이 수정으로 실제 확인한 것)**
+
+| 항목 | 결과 |
+|---|---|
+| 히스토리 시드 → 노트 복원 | 결과 렌더 O, 콘솔 에러 0 |
+| 단계 카드 / 인용 버튼 | 2단계, `step-quote` 8개, KaTeX 1개 |
+| 단계 채팅 열기 + 인용 클릭 | 정상 (`state.stepQuotes` 경로) |
+| `TutorActions.audit()` | nodes 79, missing `[]` |
+
+> **교훈**: classic → ESM에서 가장 위험한 것은 함수가 아니라 **암묵적 전역**이다.
+> Phase 6에서 `no-undef` 계열 정적 검사(또는 ESLint)를 반드시 추가한다.
+> 이번에는 "선언 없는 대입"을 전수 스캔해 `stepQuotes` 1건만 발견했다(영어 0건).
+
+**커밋**: `fix(math): declare stepQuotes in shared state (implicit global)`
+
+---
+
 ---
 
 ## 5. 리스크와 대응
