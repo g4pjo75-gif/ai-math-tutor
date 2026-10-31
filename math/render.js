@@ -213,7 +213,7 @@ export function renderTutorResult(data) {
       state.currentQuizData = null;
       state.stepChats = {};
       state.stepChatBusy = {};
-      stepQuotes = {};
+      state.stepQuotes = {};
       state.overallChats = {};
       state.overallChatBusy = false;
       state.currentProblems = normalized;

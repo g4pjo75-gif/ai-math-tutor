@@ -36,7 +36,7 @@ export function openStepChatWithQuote(stepIdx, partKey) {
       else if (partKey === 'watch') quoteText = `【注意点】${step.watch_out || ''}`;
 
       const chatKey = `${state.currentProblemIndex}:${stepIdx}`;
-      stepQuotes[chatKey] = quoteText;
+      state.stepQuotes[chatKey] = quoteText;
 
       if (quoteEl && quoteText) {
         quoteEl.textContent = `引用: ${quoteText.slice(0, 80)}${quoteText.length > 80 ? '…' : ''}`;
@@ -149,7 +149,7 @@ export async function sendStepQuestion(stepIdx) {
 
       // 過去2ターンの会話コンテキスト
       const pastMessages = state.stepChats[chatKey].slice(-4).map(m => `${m.role === 'user' ? '生徒' : '先生'}: ${m.text}`).join('\n');
-      const activeQuote = stepQuotes[chatKey] ? `【生徒が疑問に思ってハイライトした部分】\n${stepQuotes[chatKey]}\n\n` : '';
+      const activeQuote = state.stepQuotes[chatKey] ? `【生徒が疑問に思ってハイライトした部分】\n${state.stepQuotes[chatKey]}\n\n` : '';
 
       const prompt = `あなたは日本の高校1年生に数学を教える優しい先生です。生徒が以下の【該当ステップ】の一部について質問しています。問題全体を最初から解き直すのではなく、このステップの疑問点に対してピンポイントで、中学生でも分かるように優しく答えてください。
 
@@ -203,7 +203,7 @@ ${question}
           state.currentProblems[reqProblemIndex].steps[reqStepIdx].followups = step.followups;
         }
 
-        delete stepQuotes[chatKey];
+        delete state.stepQuotes[chatKey];
 
         if (reqProblemIndex === state.currentProblemIndex) {
           const quoteEl = document.getElementById(`step-chat-quote-${reqStepIdx}`);

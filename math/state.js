@@ -81,6 +81,7 @@ export const state = {
       selectedChoiceIndex: -1, // 選択中の4択インデックス (0~3)
       stepChats: {}, // ステップ別フォローアップ会話 { `${problemIndex}:${stepIndex}`: [ {role, text, speech_ja} ] }
       stepChatBusy: {}, // ステップ別質問送信中フラグ
+      stepQuotes: {}, // ステップチャットの引用文 (chatKey -> quote)
       overallChats: {}, // 問題全体の解法・別解フォローアップ会話 { [problemIndex]: [ {role, text, method_name, comparison_note, speech_ja, createdAt} ] }
       overallChatBusy: false, // 全体質問送信中フラグ
       currentSteps: [],

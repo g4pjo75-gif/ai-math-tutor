@@ -90,7 +90,7 @@ export async function simplifyStep(idx) {
         // 質問履歴をリセットして古い文脈との混線を防止
         const chatKey = `${state.currentProblemIndex}:${idx}`;
         state.stepChats[chatKey] = [];
-        delete stepQuotes[chatKey];
+        delete state.stepQuotes[chatKey];
 
         renderStepCards();
         highlightStepCard(idx);
