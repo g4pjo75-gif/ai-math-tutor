@@ -5198,6 +5198,170 @@ feat(math): compact step cards (body first, collapsible details)
 
 ---
 
+### 4.12 Hotfix (iOS) — 스텝 질문 시 화면 확대 / 입력칸 가림
+
+**증상**: iPhone에서 풀이 단계의 「❓ 質問」을 누르면 **화면 일부가 크게 확대**되고 질문 입력칸이 잘 보이지 않는다.
+
+#### 4.12.1 원인
+
+iOS Safari는 **포커스된 입력 요소의 글자 크기가 16px 미만이면 자동으로 확대**한다.
+이 앱의 입력칸은 Tailwind `text-xs`(12px)·`text-sm`(14px)이고,
+`toggleStepChat()`이 패널을 열면서 **곧바로 `input.focus()`를 호출**한다.
+
+```
+질문 버튼 탭 → 패널 표시 → input.focus() → iOS 자동 줌(≈1.33x) → 키보드 →
+sticky 헤더 아래로 입력칸이 밀림
+```
+
+관련 위치:
+
+| 파일 | 내용 |
+|---|---|
+| `math/render.js` | `step-chat-input` 이 `text-xs` (12px) |
+| `math/chat-step.js` | `toggleStepChat()` / `openStepChatWithQuote()` 에서 `inputEl.focus()` |
+| `math/index.html` | `overallChatInput` `text-xs`, `questionInput` `text-sm` |
+| `shared/ui.css` | 16px 규칙 없음 |
+
+#### 4.12.2 수정
+
+**(1) `shared/ui.css` — 모바일에서 입력 글자를 16px로**
+
+```css
+/* ===== iOS Safari: 16px 未満の入力欄はフォーカス時に自動ズームする ===== */
+@media (max-width: 820px) {
+  input[type="text"],
+  input[type="password"],
+  input[type="search"],
+  input[type="email"],
+  input[type="url"],
+  input[type="tel"],
+  input[type="number"],
+  input:not([type]),
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* sticky ヘッダーに隠れないようにスクロール余白を確保 */
+.step-chat-box {
+  scroll-margin-top: 88px;
+}
+```
+
+> **`select`는 제외**한다. 16px를 적용하면 `#unitSelect`의 고유 폭이 커져 375px에서
+> 가로 넘침이 생긴다(실측). iOS의 select는 피커 UI라 자동 확대도 발생하지 않는다.
+
+**(2) `math/chat-step.js` — 자동 포커스 제거**
+
+```js
+// toggleStepChat
+if (!isHidden) {
+  stopSpeech();
+  // iOS: 自動フォーカスはキーボードを即座に出して入力欄を隠すため、スクロールのみ行う
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// openStepChatWithQuote
+panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+const inputEl = document.getElementById(`step-chat-input-${stepIdx}`);
+if (inputEl) {
+  inputEl.value = `この部分について教えてください: `;   // 引用は入れるが focus しない
+}
+```
+
+사용자가 입력칸을 직접 탭하면 iOS가 알아서 스크롤하므로, **원할 때만 키보드가 올라온다.**
+
+#### 4.12.3 검증 (프로토타입)
+
+| 항목 | 결과 |
+|---|---|
+| 375px: `.step-chat-input` / `#questionInput` font-size | **16px** |
+| 375px: 질문 열기 직후 자동 포커스 | **없음** (`activeElement` ≠ input) |
+| 375px: 「ここを聞く」 | 인용은 채워지고 포커스 없음 |
+| 1280px: 입력 글자 크기 | 기존 유지(확대 없음) |
+| 375px 가로 넘침 | 기존 `#modelSelect` 1px 외 **새 넘침 없음** |
+| `npx playwright test` | **24 passed** (기존 21 + 신규 3) |
+
+**신규 스펙** `tests/e2e/ios-input.spec.js`:
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, collectErrors, bootApp, solveMath } = require('./helpers');
+
+test.describe('iOS input: 16px + no auto focus', () => {
+  test.use({ viewport: { width: 375, height: 700 } });
+
+  test('단계 질문을 열어도 자동 포커스/확대가 없다', async ({ page }) => {
+    const errors = collectErrors(page);
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+
+    await page.click('[data-action="toggle-step-chat"][data-idx="0"]');
+    await expect(page.locator('#step-chat-panel-0')).toBeVisible();
+
+    const r = await page.evaluate(() => {
+      const input = document.getElementById('step-chat-input-0');
+      return {
+        fontSize: getComputedStyle(input).fontSize,
+        focused: document.activeElement === input,
+        activeTag: document.activeElement && document.activeElement.tagName,
+        questionFont: getComputedStyle(document.getElementById('questionInput')).fontSize
+      };
+    });
+    expect(r.fontSize).toBe('16px');
+    expect(r.questionFont).toBe('16px');
+    expect(r.focused).toBe(false);
+    expect(errors).toEqual([]);
+    await page.evaluate(() => { const e = document.getElementById('step-chat-panel-0'); window.scrollTo(0, e.getBoundingClientRect().top + window.scrollY - 120); });
+    await page.screenshot({ path: '/tmp/opencode/ui-ios-chat.png' });
+  });
+
+  test('「ここを聞く」도 포커스만 뺀 채 인용을 채운다', async ({ page }) => {
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+
+    await page.click('[data-action="step-quote"][data-idx="0"][data-part="math"]');
+    await expect(page.locator('#step-chat-panel-0')).toBeVisible();
+    const r = await page.evaluate(() => {
+      const input = document.getElementById('step-chat-input-0');
+      return { value: input.value, focused: document.activeElement === input };
+    });
+    expect(r.value).toContain('この部分について教えてください');
+    expect(r.focused).toBe(false);
+  });
+
+  test('데스크톱(820px 초과)에서는 기존 글자 크기 유지', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    await page.click('[data-action="toggle-step-chat"][data-idx="0"]');
+    const fs = await page.evaluate(() => getComputedStyle(document.getElementById('step-chat-input-0')).fontSize);
+    expect(fs).not.toBe('16px');
+  });
+});
+```
+
+#### 4.12.4 커밋
+
+```
+fix(math): prevent iOS focus zoom in step chat
+```
+
+- 수정: `shared/ui.css`, `math/chat-step.js`
+- 신규: `tests/e2e/ios-input.spec.js`
+- gate: `npx playwright test` → 24 passed
+- 실기기(iPhone): 질문 열기 → 확대 없음, 입력칸 보임 / 입력칸 탭 → 키보드 + 자동 스크롤
+
+#### 4.12.5 남은 선택 사항
+
+1. **`--keyboard-height` 활용**: 현재 값만 설정되고 CSS에서 미사용. 키보드 높이만큼 하단 패딩을 주면
+   입력칸이 키보드에 가리는 문제를 더 줄일 수 있다(브라우저별 편차 큼).
+2. **select 글자 크기**: iOS 피커 가독성을 위해 14px 정도로만 올리는 별도 조정 가능.
+3. **전체 화면 입력**(overall chat)도 동일 규칙으로 자동 해결됨 — 별도 수정 불필요.
+
 ---
 
 ## 5. 리스크와 대응
