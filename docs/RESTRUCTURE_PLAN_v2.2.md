@@ -4907,6 +4907,297 @@ fixture는 "고정된 응답이 들어왔을 때 UI가 맞게 동작하는가"�
 
 **롤백**: 커밋 2 → 1. 전체는 `git reset --hard v1.9-phase6`.
 
+### 4.11 Phase 6.5-A (수학 스텝 카드 UI 개편)
+
+**배경**: 스텝 카드에서 `着眼点`·`なぜ`·`つまずき`가 **모두 펼쳐진 채** 표시되어, 정작 중요한
+**풀이 본문(数式)** 이 위아래 설명에 묻힌다. 한 스텝이 화면(778px)보다 커서 전체 흐름을 보기 어렵다.
+
+**목표**: ① 풀이 본문을 **맨 위**에 ② 보조 설명은 **칩(버튼)으로 접고** ③ 상단 조작 버튼도 **가로 1줄**로.
+
+#### 4.11.1 실측 (프로토타입, 동일 데이터·그래프 포함 스텝)
+
+| 상태 | `#step-card-0` 높이 |
+|---|---:|
+| 기존 (전부 펼침 + 세로 버튼 3개) | **789px** |
+| 칩으로 접기만 적용 | 609px |
+| **칩 + 버튼 가로화 (최종)** | **552px** (−30%) |
+| 그래프 없는 스텝(최종) | 244px |
+
+- 375px 폭에서도 **새 가로 넘침 없음**(기존 헤더 `#modelSelect` 1px 초과는 이번 변경과 무관한 기존 사항).
+
+#### 4.11.2 새 카드 구조
+
+```
+[Step 1] タイトル
+[🔊 もう一度聞く] [🪄 もっとやさしく] [❓ 質問]   ← 가로 1줄
+┌──────────────────────────────────────┐
+│ 数式（本体）                          │  ← 항상 표시, 글자 크기 ↑
+└──────────────────────────────────────┘
+[그래프/그림]
+[👀 着眼点] [🧭 なぜ？] [⚠️ つまずき]      ← 칩 1줄 (기본 닫힘)
+┌ 선택한 패널 (한 번에 하나) ────────────┐
+│ 着眼点（どこを見る？）      ❓ ここを聞く │
+│ 내용                                    │
+└─────────────────────────────────────────┘
+🗣️ 音声ガイドの全文 (details, 기본 닫힘)
+❓ この部分を質問 (패널, 기본 숨김)
+```
+
+- 칩은 **존재하는 항목만** 표시(`focus`/`why`/`watch_out`).
+- 같은 칩을 다시 누르면 닫힌다. 다른 칩을 누르면 그쪽으로 전환(one-at-a-time).
+- 패널의 `❓ ここを聞く`는 **열린 파트를 따라간다**(`data-part` 갱신).
+- 기존 id(`step-focus-*` / `step-why-*` / `step-watch-*` / `step-math-*`)를 그대로 유지해
+  `renderStepCards()`의 fill·KaTeX 렌더가 수정 없이 동작한다.
+- 상단 버튼은 `flex-1` 3등분 + `truncate`로 375px에서도 한 줄 유지. 3번째 라벨은 `質問`으로 축약.
+
+#### 4.11.3 변경 파일
+
+| 파일 | 변경 |
+|---|---|
+| `math/render.js` | `stepCardHtml()` 교체(본문 우선·헤더 가로화) + `toggleStepDetail()` 추가 |
+| `math/actions-map.js` | import 1줄 + `'step-detail'` 등록 1줄 |
+| `tests/e2e/health.spec.js` | `actions: 42 → 43` |
+| `tests/e2e/offline.spec.js` | `actions: 42 → 43` |
+| `tests/e2e/step-detail.spec.js` | **신규** (열기/전환/닫기 + quote 파트 추적) |
+
+**`math/actions-map.js`**
+
+```js
+import { toggleStepDetail } from './render.js';
+...
+  'step-detail': (el) => toggleStepDetail(el),
+```
+
+**`math/render.js`** — 기존 `stepCardHtml` 전체를 아래로 교체
+
+```js
+    // 1ステップカードの HTML（本文を先に、補足は「説明ポイント」チップで開閉）
+export function stepCardHtml(step, idx) {
+      const focus = String(step.focus || '').trim();
+      const why = String(step.why || '').trim();
+      const watch = String(step.watch_out || '').trim();
+
+      const chips = [
+        focus ? { part: 'focus', icon: '👀', label: '着眼点', title: '着眼点（どこを見る？）' } : null,
+        why ? { part: 'why', icon: '🧭', label: 'なぜ？', title: 'なぜこのやり方？' } : null,
+        watch ? { part: 'watch', icon: '⚠️', label: 'つまずき', title: 'ここでつまずきやすい' } : null
+      ].filter(Boolean);
+
+      return `
+        <div class="flex items-start gap-2 min-w-0">
+          <span class="shrink-0 bg-emerald-700 dark:bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded-full mt-0.5">Step ${step.step_number || idx + 1}</span>
+          <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100 leading-snug pt-0.5">${escapeHtml(step.title || '')}</h4>
+        </div>
+        <div class="flex items-stretch gap-1.5">
+          <button data-action="play-step" data-idx="${idx}"
+            class="flex-1 min-w-0 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 transition flex items-center justify-center gap-1">
+            <span>🔊</span><span class="truncate">もう一度聞く</span>
+          </button>
+          <button data-action="simplify-step" data-idx="${idx}" id="simplify-btn-${idx}"
+            class="flex-1 min-w-0 bg-fuchsia-50 hover:bg-fuchsia-100 dark:bg-fuchsia-950/60 dark:hover:bg-fuchsia-900/80 text-fuchsia-700 dark:text-fuchsia-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-fuchsia-200 dark:border-fuchsia-800 transition flex items-center justify-center gap-1">
+            <span>🪄</span><span class="truncate">もっとやさしく</span>
+          </button>
+          <button data-action="toggle-step-chat" data-idx="${idx}" id="chat-toggle-btn-${idx}"
+            class="flex-1 min-w-0 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold px-2 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 transition flex items-center justify-center gap-1">
+            <span>❓</span><span class="truncate">質問</span>
+          </button>
+        </div>
+
+        <!-- ① まず「解き方の本体」を最初に見せる -->
+        <div class="relative">
+          <div id="step-math-${idx}" class="text-[15px] text-slate-800 dark:text-slate-100 leading-relaxed bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 pr-11 whitespace-pre-wrap"></div>
+          <button type="button" data-action="step-quote" data-idx="${idx}" data-part="math" class="absolute top-2 right-2 text-[10px] text-slate-500 dark:text-slate-400 hover:underline bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">❓ この式を聞く</button>
+        </div>
+
+        <!-- グラフ・図形描画コンテナ (SVG) -->
+        <div id="step-visual-${idx}" class="viz-container hidden"></div>
+
+        <!-- ② 補足はチップで開閉（既定は閉じる） -->
+        ${chips.length ? `
+        <div class="flex flex-wrap items-center gap-1.5">
+          ${chips.map(c => `
+          <button type="button" data-action="step-detail" data-idx="${idx}" data-part="${c.part}" data-title="${c.title}" aria-expanded="false" data-active="0"
+            class="text-[11px] font-bold px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-emerald-400 dark:hover:border-emerald-500 transition data-[active=1]:bg-emerald-600 data-[active=1]:text-white data-[active=1]:border-emerald-600">
+            <span>${c.icon}</span> ${c.label}
+          </button>`).join('')}
+        </div>
+        <div id="step-detail-${idx}" class="hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3" data-part="">
+          <div class="flex items-center justify-between gap-2 mb-1.5">
+            <span data-detail-title class="text-[11px] font-bold text-slate-700 dark:text-slate-200"></span>
+            <button type="button" data-action="step-quote" data-idx="${idx}" data-part="focus" class="shrink-0 text-[10px] text-slate-500 dark:text-slate-400 hover:underline">❓ ここを聞く</button>
+          </div>
+          ${focus ? `<div data-detail-part="focus"><div id="step-focus-${idx}" class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed"></div></div>` : ''}
+          ${why ? `<div data-detail-part="why" class="hidden"><div id="step-why-${idx}" class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed"></div></div>` : ''}
+          ${watch ? `<div data-detail-part="watch" class="hidden"><div id="step-watch-${idx}" class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed"></div></div>` : ''}
+        </div>` : ''}
+
+        <details id="step-speech-details-${idx}" class="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2.5 py-1.5">
+          <summary class="cursor-pointer select-none">🗣️ 音声ガイドの全文</summary>
+          <p id="step-speech-${idx}" class="mt-1.5 leading-relaxed whitespace-pre-wrap"></p>
+        </details>
+
+        <!-- ステップ別フォローアップ・質問インラインチャットパネル -->
+        <div id="step-chat-panel-${idx}" class="hidden step-chat-box bg-slate-50 dark:bg-slate-800/90 border-2 border-emerald-500/50 rounded-xl p-3 sm:p-4 space-y-2.5 mt-2">
+          <div class="flex items-center justify-between border-b dark:border-slate-700 pb-2">
+            <div class="flex items-center gap-1.5">
+              <span class="text-base">👨‍🏫</span>
+              <span class="text-xs font-bold text-emerald-800 dark:text-emerald-300">Step ${step.step_number || idx + 1} の先生に質問</span>
+            </div>
+            <button data-action="toggle-step-chat" data-idx="${idx}" class="text-xs text-slate-400 hover:text-slate-600 font-bold p-1">✕ 閉じる</button>
+          </div>
+
+          <!-- 引用プレビュー（クリックした箇所） -->
+          <div id="step-chat-quote-${idx}" class="hidden text-[11px] bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border-l-4 border-amber-500 p-2 rounded"></div>
+
+          <!-- クイック質問チップ群 -->
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[10px] text-slate-500 font-bold">よくある質問:</span>
+            <button type="button" data-action="quick-question" data-idx="${idx}" data-text="なぜこの式や変形になるのですか？もう少し噛み砕いて教えてください。" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">🧭 なぜこの式？</button>
+            <button type="button" data-action="quick-question" data-idx="${idx}" data-text="符号や不等号の向き（＋・ー・≦・≧）がこうなる理由を教えてください。" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">± 符号・不等号の理由</button>
+            <button type="button" data-action="quick-question" data-idx="${idx}" data-text="具体的な数字の例を1つ使ってわかりやすく説明してください。" class="text-[10px] bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-emerald-50">💡 具体例で教えて</button>
+          </div>
+
+          <!-- 会話ログエリア -->
+          <div id="step-chat-logs-${idx}" class="space-y-2 max-h-60 overflow-y-auto p-1 text-xs">
+            <!-- JSで動的レンダリング -->
+          </div>
+
+          <!-- 質問入力フォーム -->
+          <div class="flex gap-1.5 pt-1">
+            <input type="text" id="step-chat-input-${idx}"
+              placeholder="このステップで分からない部分を質問（例: なぜマイナスで割るの？）"
+              class="flex-1 text-xs border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 bg-white dark:bg-slate-900 dark:text-white focus:outline-none focus:border-emerald-600"
+              data-enter="step-question-send" data-idx="${idx}" />
+            <button data-action="step-question-send" data-idx="${idx}" id="step-chat-btn-${idx}"
+              class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-2 rounded-xl text-xs shadow flex items-center gap-1 shrink-0">
+              <span>送信 🚀</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // 説明ポイントのチップ開閉（同じカード内で1つだけ開く）
+export function toggleStepDetail(btn) {
+      const idx = btn.dataset.idx;
+      const part = btn.dataset.part;
+      const box = document.getElementById(`step-detail-${idx}`);
+      if (!box) return;
+
+      const isOpen = box.dataset.part === part && !box.classList.contains('hidden');
+      const chips = document.querySelectorAll(`[data-action="step-detail"][data-idx="${idx}"]`);
+      chips.forEach((c) => {
+        const on = !isOpen && c.dataset.part === part;
+        c.dataset.active = on ? '1' : '0';
+        c.setAttribute('aria-expanded', String(on));
+      });
+
+      if (isOpen) {
+        box.classList.add('hidden');
+        box.dataset.part = '';
+        return;
+      }
+
+      box.dataset.part = part;
+      box.classList.remove('hidden');
+      box.querySelectorAll('[data-detail-part]').forEach((p) => {
+        p.classList.toggle('hidden', p.dataset.detailPart !== part);
+      });
+      const title = box.querySelector('[data-detail-title]');
+      if (title) title.textContent = btn.dataset.title || '';
+      const quote = box.querySelector('[data-action="step-quote"]');
+      if (quote) quote.dataset.part = part;
+    }
+```
+
+**`tests/e2e/step-detail.spec.js`** (신규)
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, collectErrors, bootApp, solveMath } = require('./helpers');
+
+test.describe('step detail: 説明ポイントの開閉', () => {
+  test('칩으로 하나씩 열고, 같은 칩을 다시 누르면 닫힌다', async ({ page }) => {
+    const errors = collectErrors(page);
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+
+    const panel = page.locator('#step-detail-0');
+    const focusChip = page.locator('[data-action="step-detail"][data-idx="0"][data-part="focus"]');
+    const whyChip = page.locator('[data-action="step-detail"][data-idx="0"][data-part="why"]');
+
+    // 기본은 닫힘
+    await expect(panel).toBeHidden();
+    await expect(focusChip).toHaveAttribute('aria-expanded', 'false');
+
+    // 着眼点 열기
+    await focusChip.click();
+    await expect(panel).toBeVisible();
+    await expect(page.locator('#step-focus-0')).toBeVisible();
+    await expect(page.locator('#step-focus-0')).toContainText('の形');
+    await expect(focusChip).toHaveAttribute('aria-expanded', 'true');
+
+    // なぜ로 전환 (한 번에 하나)
+    await whyChip.click();
+    await expect(page.locator('#step-why-0')).toBeVisible();
+    await expect(page.locator('#step-focus-0')).toBeHidden();
+    await expect(focusChip).toHaveAttribute('aria-expanded', 'false');
+    await expect(whyChip).toHaveAttribute('aria-expanded', 'true');
+
+    // 같은 칩 다시 → 닫힘
+    await whyChip.click();
+    await expect(panel).toBeHidden();
+    await expect(whyChip).toHaveAttribute('aria-expanded', 'false');
+
+    expect(errors).toEqual([]);
+  });
+
+  test('「ここを聞く」 버튼이 열린 파트를 따라간다', async ({ page }) => {
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+
+    await page.click('[data-action="step-detail"][data-idx="0"][data-part="focus"]');
+    const quote = page.locator('#step-detail-0 [data-action="step-quote"]');
+    await expect(quote).toHaveAttribute('data-part', 'focus');
+
+    await page.click('[data-action="step-detail"][data-idx="0"][data-part="watch"]');
+    await expect(quote).toHaveAttribute('data-part', 'watch');
+  });
+});
+```
+
+#### 4.11.4 테스트 영향
+
+- 액션 수: **42 → 43** (`step-detail`). `check-actions`는 `used=43 defined=43`.
+- import 바인딩: math **167 → 168** (`toggleStepDetail`).
+- `health.spec` / `offline.spec`의 `actions` 단언을 43으로 수정.
+- 기존 스펙(`math-solve`, `math-history`, `race`, `features`)은 영향 없음.
+
+**프로토타입 실측**: `npx playwright test` → **21 passed** (기존 19 + 신규 2).
+
+#### 4.11.5 커밋
+
+```
+feat(math): compact step cards (body first, collapsible details)
+```
+
+- 대상: `math/render.js`, `math/actions-map.js`, `tests/e2e/{health,offline,step-detail}.spec.js`
+- gate:
+  - `node tests/check-actions.js` → 43/43
+  - `node tests/check-imports.js` → math 168
+  - `npx playwright test` → 21 passed
+  - 실제 화면: 스텝 1개가 화면 안에 들어오고, 칩으로 열고 닫힘, 375px에서 한 줄 유지
+
+#### 4.11.6 남은 선택 개선
+
+1. **音声ガイド全文 자동 열림 억제**: 재생 중에만 펼치도록 `highlightStepCard(idx, { openSpeech })` 옵션화.
+2. **그래프 접기**: `グラフを見る` 토글로 감싸기(도형 문제는 항상 표시 권장).
+3. **기존 1px 넘침 정리**: 헤더 `#modelSelect` 폭(375px에서 1px 초과) — 별건의 소소한 수정.
+
+---
+
 ---
 
 ## 5. 리스크와 대응
