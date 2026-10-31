@@ -4060,6 +4060,581 @@ grep -rn "shared/core.js" math english shared core   # → 0 (커밋 3 이후)
 **알려진 문구 변경 1건**: `MAX_TOKENS`로 JSON 파싱이 실패할 때의 메시지가 수학 전용
 ("写真を1〜2問ずつ…")에서 중립 문구("入力内容を小さく分割して…")로 바뀐다. 오류 경로 한정.
 
+### 4.9 Phase 6 (L2 브라우저 자동화 + L3 수동)
+
+**전제**: Phase 5 완료(`aa03159`), 태그 `v1.9-phase5` 생성.
+**목표**: 스모크 M1·M2·M3·M4·M6·M7·M8을 **실제 브라우저에서 자동 검증**한다.
+**비목표**: 프로덕션 기능 추가. 테스트가 발견한 버그 2건만 고친다.
+
+**원칙**
+
+1. **실제 Gemini 호출 0회.** `page.route`로 가로채 `tests/fixtures/*.json`을 반환한다.
+2. fixture 선택은 기존 `tests/stub-gemini.js`의 `pickFixture`를 **그대로 재사용**한다(중복 구현 금지).
+3. Service Worker는 **기본 차단**(테스트 결정성). M8만 `serviceWorkers: 'allow'`.
+4. 각 테스트는 새 컨텍스트(=깨끗한 localStorage)에서 시작한다.
+5. 브라우저는 **설치된 Chrome 채널**을 쓴다(Playwright 브라우저 다운로드 없음).
+
+#### 4.9.1 테스트가 발견한 버그 2건 (선행 수정)
+
+**(1) 오프라인 재방문 시 앱이 죽는다 — SW 캐시 미스**
+
+`index.html`은 `main.js?v=20261031`을 요청하는데, 프리캐시는 `'./main.js'`(쿼리 없음)로 저장한다.
+`caches.match(request)`는 기본적으로 **쿼리를 포함해** 비교하므로 오프라인에서 miss → `ERR_FAILED`
+→ 모듈 그래프 전체가 로드되지 않는다.
+
+```js
+// before
+.catch(() => caches.match(event.request))
+// after
+.catch(() => caches.match(event.request, { ignoreSearch: true }))
+```
+
+`math/sw.js`, `english/sw.js` 두 곳.
+
+**(2) 오프라인에서 `tailwind.config.js`가 예외를 던진다**
+
+CDN이 로드되지 않으면 `tailwind` 전역이 없어 `ReferenceError`가 난다(앱 동작에는 영향 없지만 콘솔 오염).
+
+```js
+// math/tailwind.config.js, english/tailwind.config.js
+// tailwind play CDN config
+if (typeof tailwind !== 'undefined') {
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          chalk: {
+            dark: '#142820',
+            mid: '#1e3a2f',
+          }
+        }
+      }
+    }
+  };
+}
+```
+
+> 알려진 한계: Tailwind/KaTeX는 **CDN 전용**이라 오프라인에서는 스타일/수식이 빠진다.
+> 앱 셸·모듈·기능은 정상 동작한다. CDN 로컬화는 별도 과제(Phase 7 이후)로 남긴다.
+
+#### 4.9.2 설정 파일
+
+**`package.json`** (신규, 루트)
+
+```json
+{
+  "name": "ai-math-tutor",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "npm run test:l1 && npm run test:l2",
+    "test:l1": "node --test tests/core.test.js",
+    "test:l2": "playwright test",
+    "serve": "python3 -m http.server 8765 --bind 127.0.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}
+```
+
+`"type": "commonjs"`를 명시해 `tests/**`가 CJS로 유지되게 한다.
+`core/package.json`의 `"type":"module"`이 `core/`에만 적용되므로 충돌하지 않는다.
+
+**`playwright.config.js`** (신규)
+
+```js
+const { defineConfig } = require('@playwright/test');
+
+module.exports = defineConfig({
+  testDir: './tests/e2e',
+  timeout: 60000,
+  fullyParallel: false,
+  workers: 1,
+  reporter: [['list']],
+  use: {
+    baseURL: 'http://localhost:8765',
+    channel: 'chrome',
+    headless: true,
+    serviceWorkers: 'block',
+    viewport: { width: 1280, height: 900 }
+  },
+  webServer: {
+    command: 'python3 -m http.server 8765 --bind 127.0.0.1',
+    cwd: __dirname,
+    url: 'http://localhost:8765/math/',
+    reuseExistingServer: true,
+    timeout: 30000
+  }
+});
+```
+
+- `channel: 'chrome'` → 시스템 Chrome 사용. 없으면 `npx playwright install chromium` 후 이 줄 제거.
+- `webServer.cwd: __dirname` → 어디서 실행해도 저장소 루트를 서빙.
+- `reuseExistingServer: true` → 개발 서버가 떠 있으면 재사용.
+- `serviceWorkers: 'block'` → M8 스펙만 `test.use({ serviceWorkers: 'allow' })`로 해제.
+
+**`.gitignore`** 추가:
+
+```
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+```
+
+#### 4.9.3 공통 헬퍼 `tests/e2e/helpers.js`
+
+```js
+// tests/e2e/helpers.js — 공통 헬퍼 (Playwright, CJS)
+const path = require('path');
+const stub = require(path.join(__dirname, '..', 'stub-gemini.js'));
+
+/**
+ * Gemini API를 fixture로 대체한다. 반환값은 호출 기록 배열.
+ * - GET  /v1beta/models  -> 모델 1개
+ * - POST ...:generateContent -> schema로 fixture 선택 (stub-gemini.js 재사용)
+ */
+async function stubGemini(page) {
+  const calls = [];
+  await page.route('**/generativelanguage.googleapis.com/**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'GET') {
+      return route.fulfill({
+        json: {
+          models: [{
+            name: 'models/gemini-3.8-flash',
+            displayName: 'Gemini 3.8 Flash',
+            supportedGenerationMethods: ['generateContent']
+          }]
+        }
+      });
+    }
+    const body = req.postData();
+    calls.push(body);
+    const key = stub.pickFixture(req.url(), { method: 'POST', body });
+    const fixture = stub.FIXTURES[key];
+    if (!fixture) throw new Error('e2e: no fixture for ' + key);
+    return route.fulfill({ json: stub.envelope(fixture) });
+  });
+  return calls;
+}
+
+/** 콘솔 에러/페이지 에러 수집 */
+function collectErrors(page) {
+  const errors = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
+  page.on('pageerror', (err) => errors.push(String(err && err.message || err)));
+  return errors;
+}
+
+async function bootApp(page, app, { apiKey = 'TEST_KEY' } = {}) {
+  await page.addInitScript((key) => {
+    if (key) localStorage.setItem('tutor_gemini_api_key', key);
+  }, apiKey);
+  await page.goto(`/${app}/`);
+  await unlock(page);
+}
+
+async function unlock(page) {
+  const pin = page.locator('#pinInput');
+  if (await pin.isVisible().catch(() => false)) {
+    await pin.fill('1234');
+    await page.click('[data-action="unlock"]');
+    await page.waitForFunction(() => {
+      const m = document.getElementById('pinModal');
+      return !m || m.style.display === 'none';
+    });
+  }
+}
+
+async function solveMath(page, question) {
+  await page.fill('#questionInput', question);
+  await page.click('[data-action="solve"]');
+  await page.locator('#resultSection').waitFor({ state: 'visible', timeout: 20000 });
+}
+
+async function analyzeEnglish(page, text) {
+  await page.fill('#questionInput', text);
+  await page.click('[data-action="analyze"]');
+  await page.locator('#resultSection').waitFor({ state: 'visible', timeout: 20000 });
+}
+
+module.exports = { stubGemini, collectErrors, bootApp, unlock, solveMath, analyzeEnglish };
+```
+
+#### 4.9.4 스펙 6개
+
+**`tests/e2e/math-solve.spec.js`** — M1, M6
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, collectErrors, bootApp, solveMath } = require('./helpers');
+
+test.describe('math: 解説とタブ', () => {
+  test('M1: 2問の解説が独立タブで表示され、切替で内容が変わる', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+
+    await expect(page.locator('#problemTabBar')).toBeVisible();
+    await expect(page.locator('#problem-tab-0')).toBeVisible();
+    await expect(page.locator('#problem-tab-1')).toBeVisible();
+
+    const first = await page.locator('#recognizedProblem').innerText();
+    await page.click('#problem-tab-1');
+    const second = await page.locator('#recognizedProblem').innerText();
+    expect(second).not.toBe(first);
+
+    await page.click('#problem-tab-0');
+    expect(await page.locator('#recognizedProblem').innerText()).toBe(first);
+
+    expect(calls.length).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
+  test('M6: 同じ問題の再実行は API 0回', async ({ page }) => {
+    const calls = await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    expect(calls.length).toBe(1);
+
+    await page.click('[data-action="solve"]');
+    await page.waitForTimeout(800);
+    await expect(page.locator('#resultSection')).toBeVisible();
+    expect(calls.length).toBe(1);
+  });
+});
+```
+
+**`tests/e2e/math-quiz.spec.js`** — M2, M3
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, collectErrors, bootApp, solveMath } = require('./helpers');
+const path = require('path');
+const stub = require(path.join(__dirname, '..', 'stub-gemini.js'));
+
+test.describe('math: 類題クイズ (API 0回)', () => {
+  test('M2/M3: twin_quiz をそのまま使い、誤答はローカル採点される', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+
+    const problem = stub.FIXTURES['math-solve-2problems'].problems[0];
+    const quiz = problem.twin_quiz;
+    const before = calls.length;
+
+    await page.click('[data-action="start-quiz"]');
+    await expect(page.locator('#quizSection')).toBeVisible();
+    await expect(page.locator('[data-action="select-choice"]')).toHaveCount(4);
+
+    // twin_quiz 사용 → 추가 API 호출 없음
+    expect(calls.length).toBe(before);
+
+    const wrongIdx = [0, 1, 2, 3].find((i) => i !== quiz.correct_index);
+    await page.click(`[data-action="select-choice"][data-idx="${wrongIdx}"]`);
+    await page.click('[data-action="submit-choice"]');
+
+    await expect(page.locator('#quizResultBox')).toBeVisible();
+    await expect(page.locator('#quizResultBox')).toContainText(String(quiz.choices[quiz.correct_index]).replace(/\$/g, '').slice(0, 4));
+    expect(calls.length).toBe(before);
+    expect(errors).toEqual([]);
+  });
+
+  test('M3: 힌트는 API 없이 열린다', async ({ page }) => {
+    const calls = await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    await page.click('[data-action="start-quiz"]');
+    const before = calls.length;
+
+    await page.click('[data-action="toggle-quiz-hint"]');
+    await expect(page.locator('#quizHintContent')).toBeVisible();
+    expect(calls.length).toBe(before);
+  });
+});
+```
+
+**`tests/e2e/math-history.spec.js`** — M4
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, collectErrors, bootApp, solveMath, unlock } = require('./helpers');
+
+test.describe('math: マイノート', () => {
+  test('M4: 保存 → リロード → 復元でタブとステップが戻る', async ({ page }) => {
+    const errors = collectErrors(page);
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+
+    await page.click('[data-action="save-current-history"]');
+    await page.waitForTimeout(400);
+
+    await page.reload();
+    await unlock(page);
+
+    await page.click('[data-action="show-tutor-history"]');
+    const items = page.locator('[data-action="restore-history"]');
+    await expect(items.first()).toBeVisible();
+    expect(await items.count()).toBeGreaterThan(0);
+
+    await items.first().click();
+    await expect(page.locator('#resultSection')).toBeVisible();
+    // 노트는 "현재 문제 1건"을 저장하므로 복원 후 탭은 1개다.
+    await expect(page.locator('[data-action="play-step"]').first()).toBeVisible();
+    await expect(page.locator('#recognizedProblem')).toContainText('x');
+
+    expect(errors).toEqual([]);
+  });
+
+  test('M4: 삭제하면 목록에서 사라진다', async ({ page }) => {
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    await page.click('[data-action="save-current-history"]');
+    await page.waitForTimeout(400);
+
+    await page.click('[data-action="show-tutor-history"]');
+    await expect(page.locator('[data-action="delete-tutor-history"]').first()).toBeVisible();
+    await page.locator('[data-action="delete-tutor-history"]').first().click();
+    await expect(page.locator('[data-action="restore-history"]')).toHaveCount(0);
+  });
+});
+```
+
+**`tests/e2e/english-flow.spec.js`** — M7
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, collectErrors, bootApp, analyzeEnglish } = require('./helpers');
+const path = require('path');
+const stub = require(path.join(__dirname, '..', 'stub-gemini.js'));
+
+test.describe('english: 読解 → クイズ → 単語帳 → ノート', () => {
+  test('M7: 一連のフローが API 追加なしで動く', async ({ page }) => {
+    const errors = collectErrors(page);
+    const calls = await stubGemini(page);
+    await bootApp(page, 'english');
+    await analyzeEnglish(page, 'He runs fast every morning.');
+
+    const reading = stub.FIXTURES['english-reading'];
+    await expect(page.locator('#resultContent')).toContainText(reading.passage_en.slice(0, 10));
+    expect(calls.length).toBe(1);
+
+    // 読解結果の CTA → twin_quiz (API 0)
+    await page.click('[data-action="quiz-generate"][data-force="1"]');
+    await expect(page.locator('#panelQuiz')).toBeVisible();
+    await expect(page.locator('#quizActiveContainer')).toBeVisible();
+    await expect(page.locator('[data-action="select-quiz-choice"]')).toHaveCount(4);
+    expect(calls.length).toBe(1);
+
+    const quiz = reading.twin_quiz;
+    const wrongIdx = [0, 1, 2, 3].find((i) => i !== quiz.correct_index);
+    await page.click(`[data-action="select-quiz-choice"][data-idx="${wrongIdx}"]`);
+    await page.click('[data-action="submit-quiz"]');
+    await expect(page.locator('#quizResultBox')).toBeVisible();
+    expect(calls.length).toBe(1);
+
+    // 単語帳へ一括登録
+    await page.click('[data-action="switch-mode"][data-mode="reading"]');
+    await page.click('[data-action="save-all-words"]');
+    await page.click('[data-action="open-history"]');
+    await expect(page.locator('#historyListContainer')).toContainText(reading.vocabulary[0].word);
+    await page.click('[data-action="close-history"]');
+
+    // ノート保存 → 復元
+    await page.click('[data-action="save-lesson-history"]');
+    await page.click('[data-action="open-history"]');
+    await page.click('[data-action="history-tab"][data-tab="notes"]');
+    const restore = page.locator('[data-action="restore-history-item"]').first();
+    await expect(restore).toBeVisible();
+    await restore.click();
+    await expect(page.locator('#resultSection')).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+});
+```
+
+**`tests/e2e/health.spec.js`** — 콘솔/CSP/레지스트리
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, collectErrors, bootApp, solveMath, analyzeEnglish } = require('./helpers');
+
+test.describe('health: 콘솔 / 액션 레지스트리 / CSP', () => {
+  test('math: 로드 후 에러 0, data-action 누락 0', async ({ page }) => {
+    const errors = collectErrors(page);
+    await stubGemini(page);
+    await bootApp(page, 'math');
+
+    const audit = await page.evaluate(async () => {
+      const m = await import('/shared/actions.js');
+      return m.audit();
+    });
+    expect(audit.missing).toEqual([]);
+    expect(audit.actions).toBe(42);
+    expect(audit.nodes).toBeGreaterThanOrEqual(51);
+
+    const csp = await page.evaluate(() => !!document.querySelector('meta[http-equiv="Content-Security-Policy"]'));
+    expect(csp).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  test('english: 로드 후 에러 0, data-action 누락 0', async ({ page }) => {
+    const errors = collectErrors(page);
+    await stubGemini(page);
+    await bootApp(page, 'english');
+
+    const audit = await page.evaluate(async () => {
+      const m = await import('/shared/actions.js');
+      return m.audit();
+    });
+    expect(audit.missing).toEqual([]);
+    expect(audit.actions).toBe(44);
+
+    expect(errors).toEqual([]);
+  });
+
+  test('렌더 후에도 누락 액션이 없다 (수학/영어)', async ({ page }) => {
+    await stubGemini(page);
+    await bootApp(page, 'math');
+    await solveMath(page, 'x^2 - 5x + 6 = 0 を解け');
+    const m = await page.evaluate(async () => (await import('/shared/actions.js')).audit());
+    expect(m.missing).toEqual([]);
+    expect(m.nodes).toBeGreaterThan(51);
+
+    const calls = await stubGemini(page);
+    await bootApp(page, 'english');
+    await analyzeEnglish(page, 'He runs fast.');
+    const e = await page.evaluate(async () => (await import('/shared/actions.js')).audit());
+    expect(e.missing).toEqual([]);
+    expect(calls.length).toBe(1);
+  });
+});
+```
+
+**`tests/e2e/offline.spec.js`** — M8
+
+```js
+const { test, expect } = require('@playwright/test');
+const { stubGemini, bootApp, unlock } = require('./helpers');
+
+// SW를 허용하고 오프라인 재방문을 검증한다.
+test.use({ serviceWorkers: 'allow' });
+
+test.describe('PWA: オフライン再訪', () => {
+  test('M8: 一度オンラインで開いた後、オフラインでも UI とノートが動く', async ({ page, context }) => {
+    await stubGemini(page);
+    await bootApp(page, 'math');
+
+    // SW 有効化 + プリキャッシュ完了を待つ
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 20000 });
+    await page.waitForFunction(async () => {
+      const keys = await caches.keys();
+      if (!keys.length) return false;
+      const c = await caches.open(keys[0]);
+      return (await c.keys()).length > 10;
+    }, null, { timeout: 20000 });
+
+    await context.setOffline(true);
+    await page.reload();
+    await unlock(page);
+
+    await expect(page.locator('#questionInput')).toBeVisible();
+    const audit = await page.evaluate(async () => (await import('/shared/actions.js')).audit());
+    expect(audit.missing).toEqual([]);
+    expect(audit.actions).toBe(42);
+    // 노트 UI도 오프라인에서 열린다
+    await page.click('[data-action="show-tutor-history"]');
+    await expect(page.locator('#tutorHistoryModal')).toBeVisible();
+  });
+});
+```
+
+#### 4.9.5 L3 수동 체크리스트
+
+`docs/SMOKE.md` 끝에 아래 절을 추가한다(자동화 범위 명시 + 서명).
+
+```md
+## 自動化範囲 (Phase 6 以降)
+
+| シナリオ | 自動 | 手動 |
+|---|:---:|---:|
+| M1 多問題解説とタブ切替 | L2 (`math-solve`) | — |
+| M2 類題の再利用 (API 0回) | L2 (`math-quiz`) | — |
+| M3 4択ローカル採点 (API 0回) | L2 (`math-quiz`) | — |
+| M4 ノート保存と復元 | L2 (`math-history`) | 実機UI確認 |
+| M5 全体Q&Aとタブ切替レース | — | **必須** |
+| M6 リクエストキャッシュ | L2 (`math-solve`) | — |
+| M7 英語アプリ主要フロー | L2 (`english-flow`) | 実機UI確認 |
+| M8 PWAオフライン再訪 | L2 (`offline`) | 実機インストール |
+
+- 자동: `npm test` (L1 16 + L2 11)
+- 수동: 上表の「手動」列 + 配信シミュレーション（JSを1行変更 → リロード → 即反映）
+
+### 手動チェック署名
+
+- 実施日: ______ / 実施者: ______ / 端末: ______
+- [ ] M5 全体Q&Aレース
+- [ ] M4/M7 実機UI (iOS Safari / Android Chrome)
+- [ ] M8 実機インストール → 機内モード → 起動
+- [ ] 配信シミュレーション (キャッシュ更新)
+```
+
+#### 4.9.6 게이트
+
+```bash
+# 1회 준비
+npm install                      # package-lock.json 생성/갱신
+# (Chrome이 없는 환경만) npx playwright install chromium
+
+npm run test:l1                  # 16 pass
+npx playwright test              # 11 passed (~35s)
+npm test                         # L1 + L2 연속
+```
+
+**프로토타입 실측값**
+
+| 항목 | 결과 |
+|---|---|
+| L1 | 16 pass |
+| L2 | **11 passed**, 약 33초 |
+| M8 오프라인 | 통과 (`ignoreSearch` 수정 후) |
+| API 호출 | fixture만, 실호출 0 |
+| 콘솔 에러 | health 스펙에서 0 |
+
+**M8이 실제로 잡아낸 것**: 수정 전에는 오프라인 재방문에서
+`main.js?v=...`가 `ERR_FAILED`로 실패해 **앱 전체가 정지**했다. 프리캐시는 `./main.js`로 저장되므로
+쿼리 불일치가 원인이었다. 이 버그는 수동 스모크로는 재현이 어렵다.
+
+#### 4.9.7 커밋 3개
+
+| # | 커밋 | 내용 | 게이트 |
+|---|---|---|---|
+| 1 | `fix(sw): match cached assets ignoring query string` | `math/sw.js`, `english/sw.js` + `tailwind.config.js` 2개 가드 | `node --check`, 오프라인 수동 1회 |
+| 2 | `test(e2e): add playwright L2 suite` | `package.json`, `package-lock.json`, `playwright.config.js`, `tests/e2e/*` 7파일, `.gitignore` | `npx playwright test` 11 pass |
+| 3 | `docs: document automated coverage and L3 signoff` | `docs/SMOKE.md` | — |
+
+#### 4.9.8 DoD
+
+- [ ] `npm run test:l1` → 16 pass
+- [ ] `npx playwright test` → **11 passed**
+- [ ] L2에서 실제 Gemini 호출 0 (route stub만)
+- [ ] M8 오프라인 통과
+- [ ] `health` 스펙: 콘솔 에러 0, `audit().missing === []`, CSP meta 존재
+- [ ] `docs/SMOKE.md`에 자동화 범위표 + 서명란 추가
+- [ ] `node_modules/`, `test-results/` 커밋되지 않음
+
+**롤백**: 커밋 3 → 2 → 1. 전체는 `git reset --hard v1.9-phase5`.
+
 ---
 
 ## 5. 리스크와 대응
