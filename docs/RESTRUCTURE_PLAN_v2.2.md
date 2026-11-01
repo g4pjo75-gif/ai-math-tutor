@@ -6163,6 +6163,548 @@ npx wrangler deploy
 4. 쿼터는 **UTC 월 경계**로 계산한다(Stripe 갱신일과 정확히 일치하지 않을 수 있음 — 7-4에서 기간 기준을 Stripe `current_period_end`로 맞춘다).
 5. `/v1/redeem`은 아직 레이트리밋이 없다. 키 공간이 크지만 7-3에서 IP 제한을 추가한다.
 
+### 4.15 Phase 7-3 (프록시 + 서버 캐시 + 레이트리밋)
+
+**전제**: 7-2 완료(`e6894ac`), D1·라이선스 동작.
+**목표**: `POST /v1/solve`로 Gemini를 서버에서 호출하고, 캐시·쿼터·레이트리밋을 적용한다.
+**비용**: 통합 검증은 **아주 작은 호출**(`maxOutputTokens ≤ 64`)로 1~2회만 수행한다.
+
+#### 4.15.1 `core/gemini.js` — `withMeta` 옵션 추가
+
+토큰 사용량을 기록하려면 응답의 `usageMetadata`가 필요하다. 기존 호출부는 그대로 두고 옵션만 추가한다.
+
+```js
+// before
+  if (effectiveOpts.rawText) {
+    return text.trim();
+  }
+
+  try {
+    return parseJson(text);
+  } catch (parseErr) {
+```
+
+```js
+// after
+  const usage = {
+    in: data.usageMetadata?.promptTokenCount || 0,
+    out: data.usageMetadata?.candidatesTokenCount || 0
+  };
+  const withMeta = Boolean(effectiveOpts.withMeta);
+
+  if (effectiveOpts.rawText) {
+    const outText = text.trim();
+    return withMeta ? { data: outText, usage } : outText;
+  }
+
+  try {
+    const parsed = parseJson(text);
+    return withMeta ? { data: parsed, usage } : parsed;
+  } catch (parseErr) {
+```
+
+`tests/core.test.js`에 1케이스 추가:
+
+```js
+test('callGeminiModel: withMeta 옵션이 usage를 함께 반환한다', async () => {
+  const { callGeminiModel } = await load();
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"ok":1}' }] } }],
+    usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7 }
+  }), { status: 200 });
+  try {
+    const r = await callGeminiModel('m', 'K', 'p', null, { schema: { type: 'object' }, withMeta: true });
+    assert.deepEqual(r.data, { ok: 1 });
+    assert.deepEqual(r.usage, { in: 11, out: 7 });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+```
+
+#### 4.15.2 인덱스 마이그레이션 `server/migrations/0002_indexes.sql`
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_usage_license_created ON usage (license_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_cache_created ON cache (created_at);
+```
+
+```bash
+npx wrangler d1 execute ai-math-tutor-db --local  --file=migrations/0002_indexes.sql
+npx wrangler d1 execute ai-math-tutor-db --remote --file=migrations/0002_indexes.sql
+```
+
+#### 4.15.3 `server/wrangler.jsonc` vars 추가
+
+```jsonc
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8765,https://g4pjo75-gif.github.io",
+    "MODEL": "gemini-3.8-flash",
+    "RATE_LIMIT_PER_MIN": "8"
+  }
+```
+
+#### 4.15.4 `server/src/validate.js` (신규)
+
+```js
+// server/src/validate.js — /v1/solve 요청 검증·클램프 (순수 함수)
+export const LIMITS = {
+  promptChars: 40000,
+  imageBase64Chars: 5_600_000, // 약 4MB 원본
+  schemaJsonChars: 32000,
+  maxOutputTokens: 32768,
+  timeoutMs: 60000
+};
+
+function clamp(n, min, max, fallback) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.min(max, Math.max(min, v));
+}
+
+export function validateSolveBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { ok: false, error: 'invalid_request' };
+  }
+
+  const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+  if (!prompt.trim()) return { ok: false, error: 'invalid_prompt' };
+  if (prompt.length > LIMITS.promptChars) return { ok: false, error: 'prompt_too_large' };
+
+  let image = null;
+  if (body.image != null) {
+    image = String(body.image).trim();
+    if (image) {
+      if (image.length > LIMITS.imageBase64Chars) return { ok: false, error: 'image_too_large' };
+      if (!/^[A-Za-z0-9+/=\r\n]+$/.test(image)) return { ok: false, error: 'invalid_image' };
+    } else {
+      image = null;
+    }
+  }
+
+  let schema = null;
+  if (body.schema != null) {
+    if (typeof body.schema !== 'object' || Array.isArray(body.schema)) {
+      return { ok: false, error: 'invalid_schema' };
+    }
+    if (JSON.stringify(body.schema).length > LIMITS.schemaJsonChars) {
+      return { ok: false, error: 'schema_too_large' };
+    }
+    schema = body.schema;
+  }
+
+  return {
+    ok: true,
+    value: {
+      prompt,
+      image,
+      schema,
+      rawText: body.rawText === true,
+      temperature: clamp(body.temperature, 0, 1, 0.35),
+      maxOutputTokens: Math.round(clamp(body.maxOutputTokens, 1, LIMITS.maxOutputTokens, 32768)),
+      timeoutMs: Math.round(clamp(body.timeoutMs, 5000, LIMITS.timeoutMs, 30000))
+    }
+  };
+}
+```
+
+#### 4.15.5 `server/src/solve.js` (신규)
+
+```js
+// server/src/solve.js — Gemini 프록시 + 서버 캐시 + 쿼터/레이트리밋
+import { callGeminiModel } from '../../core/gemini.js';
+import { getUsage, periodOf, quotaSnapshot, sha256Hex } from './license.js';
+import { validateSolveBody } from './validate.js';
+
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30일
+
+async function fingerprint(v, model) {
+  const payload = JSON.stringify({
+    model,
+    prompt: v.prompt,
+    imageLen: v.image ? v.image.length : 0,
+    imageHead: v.image ? v.image.slice(0, 256) : '',
+    schema: v.schema || null,
+    rawText: v.rawText
+  });
+  return sha256Hex(payload);
+}
+
+export async function solveProxy(env, license, rawBody) {
+  if (!env.GEMINI_API_KEY) {
+    return { status: 500, body: { ok: false, error: 'server_misconfigured' } };
+  }
+
+  const v = validateSolveBody(rawBody);
+  if (!v.ok) return { status: 400, body: { ok: false, error: v.error } };
+
+  const now = Date.now();
+
+  // 레이트리밋: 라이선스당 60초 내 호출 수
+  const perMin = Number(env.RATE_LIMIT_PER_MIN || 8);
+  const recent = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM usage WHERE license_id = ? AND created_at > ?'
+  ).bind(license.id, now - 60000).first();
+  if (((recent && recent.n) || 0) >= perMin) {
+    return { status: 429, body: { ok: false, error: 'rate_limited' } };
+  }
+
+  // 월 쿼터
+  const used = await getUsage(env, license.id);
+  const limit = Number(license.call_limit) || 0;
+  if (used >= limit) {
+    return {
+      status: 402,
+      body: {
+        ok: false,
+        error: 'quota_exceeded',
+        quota: { used, limit, remaining: 0, period: periodOf() }
+      }
+    };
+  }
+
+  const model = env.MODEL || 'gemini-3.8-flash';
+  const fp = await fingerprint(v, model);
+
+  // 서버 캐시 (히트 시 API 0회, 쿼터 미차감)
+  const cached = await env.DB.prepare('SELECT payload, created_at FROM cache WHERE fp = ?')
+    .bind(fp).first();
+  if (cached && now - cached.created_at < CACHE_TTL_MS) {
+    let data = null;
+    try {
+      data = JSON.parse(cached.payload);
+    } catch (e) {
+      data = null;
+    }
+    if (data !== null) {
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          cached: true,
+          data,
+          usage: { in: 0, out: 0 },
+          quota: await quotaSnapshot(env, license)
+        }
+      };
+    }
+  }
+
+  let result;
+  try {
+    result = await callGeminiModel(model, env.GEMINI_API_KEY, v.prompt, v.image, {
+      schema: v.schema,
+      rawText: v.rawText,
+      temperature: v.temperature,
+      maxOutputTokens: v.maxOutputTokens,
+      timeoutMs: v.timeoutMs,
+      withMeta: true
+    });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      return { status: 504, body: { ok: false, error: 'timeout' } };
+    }
+    if (err && (err.status === 429 || /quota|rate limit|resource_exhausted/i.test(err.message || ''))) {
+      return { status: 429, body: { ok: false, error: 'upstream_quota' } };
+    }
+    return { status: 502, body: { ok: false, error: 'upstream_error' } };
+  }
+
+  const data = result.data;
+  const usage = result.usage || { in: 0, out: 0 };
+
+  await env.DB.prepare(
+    'INSERT INTO usage (license_id, period, route, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(license.id, periodOf(), 'solve', usage.in, usage.out, now).run();
+
+  try {
+    await env.DB.prepare(
+      'INSERT INTO cache (fp, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(fp) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at'
+    ).bind(fp, JSON.stringify(data), now).run();
+  } catch (e) {
+    // 캐시 저장 실패는 요청 실패로 취급하지 않는다
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      cached: false,
+      data,
+      usage,
+      quota: await quotaSnapshot(env, license)
+    }
+  };
+}
+```
+
+#### 4.15.6 `server/src/index.js` (전체 교체)
+
+```js
+// server/src/index.js — API 라우터 (7-3)
+import { corsHeaders } from './cors.js';
+import {
+  bindDevice,
+  findLicense,
+  normalizeKey,
+  quotaSnapshot,
+  requireLicense,
+  sha256Hex
+} from './license.js';
+import { solveProxy } from './solve.js';
+
+const VERSION = '0.3.0';
+const MAX_JSON_BYTES = 8 * 1024;
+const MAX_SOLVE_BYTES = 8 * 1024 * 1024;
+
+function json(data, status = 200, extra = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...extra }
+  });
+}
+
+async function readJson(request, maxBytes) {
+  const text = await request.text();
+  if (text.length > maxBytes) {
+    const err = new Error('body_too_large');
+    err.status = 413;
+    throw err;
+  }
+  try {
+    return JSON.parse(text || '{}');
+  } catch (e) {
+    const err = new Error('invalid_json');
+    err.status = 400;
+    throw err;
+  }
+}
+
+function licensePayload(license, quota) {
+  return {
+    ok: true,
+    plan: license.plan,
+    status: license.status,
+    currentPeriodEnd: license.current_period_end,
+    quota
+  };
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const origin = request.headers.get('Origin') || '';
+    const cors = corsHeaders(origin, env);
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: cors });
+    }
+
+    const route = `${request.method} ${url.pathname}`;
+
+    try {
+      if (route === 'GET /health') {
+        return json({ ok: true, version: VERSION, time: Date.now() }, 200, cors);
+      }
+
+      if (route === 'POST /v1/redeem') {
+        const body = await readJson(request, MAX_JSON_BYTES);
+        const key = normalizeKey(body.key);
+        const deviceId = String(body.deviceId || '').trim();
+        if (!key || !deviceId) {
+          return json({ ok: false, error: 'invalid_request' }, 400, cors);
+        }
+
+        const license = await findLicense(env, key);
+        if (!license) return json({ ok: false, error: 'invalid_license' }, 401, cors);
+        if (license.status !== 'active') {
+          return json({ ok: false, error: 'license_' + license.status }, 402, cors);
+        }
+
+        const bound = await bindDevice(env, license.id, await sha256Hex(deviceId));
+        if (!bound.ok) return json({ ok: false, error: bound.reason }, 403, cors);
+
+        const quota = await quotaSnapshot(env, license);
+        return json(licensePayload(license, quota), 200, cors);
+      }
+
+      if (route === 'GET /v1/me') {
+        const auth = await requireLicense(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+        const quota = await quotaSnapshot(env, auth.license);
+        return json(licensePayload(auth.license, quota), 200, cors);
+      }
+
+      if (route === 'POST /v1/solve') {
+        const auth = await requireLicense(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+
+        const body = await readJson(request, MAX_SOLVE_BYTES);
+        const result = await solveProxy(env, auth.license, body);
+        return json(result.body, result.status, cors);
+      }
+
+      return json({ ok: false, error: 'not_found' }, 404, cors);
+    } catch (err) {
+      if (err && err.status) return json({ ok: false, error: err.message }, err.status, cors);
+      return json({ ok: false, error: 'internal' }, 500, cors);
+    }
+  }
+};
+```
+
+#### 4.15.7 `server/test/validate.test.js` (신규)
+
+```js
+// server/test/validate.test.js — /v1/solve 입력 검증
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { validateSolveBody, LIMITS } from '../src/validate.js';
+
+test('기본값: temperature .35, tokens 32768, timeout 30000', () => {
+  const r = validateSolveBody({ prompt: 'x^2 を因数分解して' });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.temperature, 0.35);
+  assert.equal(r.value.maxOutputTokens, 32768);
+  assert.equal(r.value.timeoutMs, 30000);
+  assert.equal(r.value.image, null);
+  assert.equal(r.value.schema, null);
+});
+
+test('클램프: 범위를 벗어난 값은 잘라낸다', () => {
+  const r = validateSolveBody({
+    prompt: 'p',
+    temperature: 9,
+    maxOutputTokens: 999999,
+    timeoutMs: 1
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.value.temperature, 1);
+  assert.equal(r.value.maxOutputTokens, LIMITS.maxOutputTokens);
+  assert.equal(r.value.timeoutMs, 5000);
+});
+
+test('prompt 없음/공백 → invalid_prompt', () => {
+  assert.equal(validateSolveBody({}).ok, false);
+  assert.equal(validateSolveBody({ prompt: '   ' }).error, 'invalid_prompt');
+  assert.equal(validateSolveBody(null).error, 'invalid_request');
+});
+
+test('prompt 길이 초과 → prompt_too_large', () => {
+  const r = validateSolveBody({ prompt: 'a'.repeat(LIMITS.promptChars + 1) });
+  assert.equal(r.error, 'prompt_too_large');
+});
+
+test('image: 빈 문자열은 null, 잘못된 문자는 거부', () => {
+  assert.equal(validateSolveBody({ prompt: 'p', image: '   ' }).value.image, null);
+  assert.equal(validateSolveBody({ prompt: 'p', image: '!!!' }).error, 'invalid_image');
+  assert.equal(validateSolveBody({ prompt: 'p', image: 'AAAA' }).value.image, 'AAAA');
+});
+
+test('image 크기 초과 → image_too_large', () => {
+  const r = validateSolveBody({ prompt: 'p', image: 'A'.repeat(LIMITS.imageBase64Chars + 1) });
+  assert.equal(r.error, 'image_too_large');
+});
+
+test('schema: 배열/원시값 거부, 크기 초과 거부', () => {
+  assert.equal(validateSolveBody({ prompt: 'p', schema: [] }).error, 'invalid_schema');
+  assert.equal(validateSolveBody({ prompt: 'p', schema: 'x' }).error, 'invalid_schema');
+  const big = { type: 'object', description: 'a'.repeat(LIMITS.schemaJsonChars) };
+  assert.equal(validateSolveBody({ prompt: 'p', schema: big }).error, 'schema_too_large');
+  assert.equal(validateSolveBody({ prompt: 'p', schema: { type: 'object' } }).ok, true);
+});
+
+test('rawText는 true일 때만 true', () => {
+  assert.equal(validateSolveBody({ prompt: 'p', rawText: true }).value.rawText, true);
+  assert.equal(validateSolveBody({ prompt: 'p', rawText: 'yes' }).value.rawText, false);
+});
+```
+
+#### 4.15.8 시크릿 주입
+
+```bash
+cd server
+npx wrangler secret put GEMINI_API_KEY
+# 프롬프트에 현재 사용 중인 키를 붙여넣는다 (저장소에 남지 않음)
+```
+
+로컬 개발용은 `.dev.vars`(gitignore됨):
+
+```bash
+printf 'GEMINI_API_KEY=%s\n' '<KEY>' > server/.dev.vars
+```
+
+#### 4.15.9 로컬 통합 검증 (실호출 1~2회, 소액)
+
+```bash
+cd server
+npx wrangler d1 execute ai-math-tutor-db --local --file=migrations/0002_indexes.sql
+node scripts/new-license.mjs --local --email t@example.com --limit 300
+# → KEY=AMT-....
+
+npx wrangler dev --port 8787 &
+
+# 1) 첫 호출 (실제 Gemini 호출)
+curl -s -X POST http://127.0.0.1:8787/v1/solve \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $KEY" -H 'X-Device-Id: dev-1' \
+  -d '{"prompt":"Reply with the single word OK.","rawText":true,"maxOutputTokens":16,"timeoutMs":15000}'
+# 기대: {"ok":true,"cached":false,"data":"OK","usage":{"in":...,"out":...},"quota":{"used":1,...}}
+
+# 2) 같은 요청 다시 → 캐시 히트, 쿼터 그대로
+curl -s -X POST http://127.0.0.1:8787/v1/solve ... (동일 body)
+# 기대: {"ok":true,"cached":true,"usage":{"in":0,"out":0},"quota":{"used":1,...}}
+
+# 3) 쿼터 초과
+node scripts/new-license.mjs --local --email q@example.com --limit 1
+# KEY1=...
+# solve 1회 → used 1, 다른 prompt로 solve → 402 quota_exceeded
+```
+
+스키마 경로도 1회 확인(선택):
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/v1/solve -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $KEY" -H 'X-Device-Id: dev-1' \
+  -d '{"prompt":"Return JSON: {\"ok\":\"yes\"}","schema":{"type":"object","properties":{"ok":{"type":"string"}},"required":["ok"]},"maxOutputTokens":64}'
+```
+
+#### 4.15.10 프로덕션
+
+```bash
+npx wrangler deploy
+npx wrangler d1 execute ai-math-tutor-db --remote --file=migrations/0002_indexes.sql
+node scripts/new-license.mjs --remote --email t@example.com --limit 300
+# 위와 동일한 solve 1회 + 캐시 히트 1회
+```
+
+#### 4.15.11 게이트
+
+```bash
+# 클라이언트 (core 변경 영향 확인)
+npm test                 # L1 17 + L2 24 = 41 pass
+# 서버
+cd server && npm test    # health 4 + license 4 + validate 8 = 16 pass
+```
+
+- [ ] 클라이언트 `npm test` 41 pass
+- [ ] 서버 `npm test` 16 pass
+- [ ] 로컬 solve 200 (`cached:false`, quota used 1)
+- [ ] 동일 요청 재호출 `cached:true`, quota used **1 그대로**
+- [ ] 쿼터 1 라이선스에서 2번째 solve → **402 quota_exceeded**
+- [ ] 프로덕션 solve 200 + 캐시 히트
+- [ ] `/health` version `0.3.0`
+
+#### 4.15.12 주의
+
+1. **이미지 본문 상한 8MB**(Worker) / base64 5.6M자. 초과 시 413.
+2. 캐시는 **30일**이며, 같은 프롬프트·이미지·스키마·모델이면 재호출하지 않는다. 쿼터도 차감하지 않는다.
+3. 레이트리밋은 **라이선스당 분당 8회**(env로 조정). IP 제한은 7-4에서 추가한다.
+4. 프롬프트·이미지·응답 원문은 **로그에 남기지 않는다**. `usage`에는 토큰 수만 기록.
+5. Gemini 오류는 `timeout(504)` / `upstream_quota(429)` / `upstream_error(502)`로 정규화한다.
+6. `core/gemini.js` 변경은 **하위 호환**이다(`withMeta` 미지정 시 기존 동작).
+
 ---
 
 ## 5. 리스크와 대응
