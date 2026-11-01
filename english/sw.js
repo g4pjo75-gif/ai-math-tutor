@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aet-cache-v2.5';
+const CACHE_NAME = 'aet-cache-v2.6';
 const ASSETS = [
   './',
   './index.html',
@@ -25,6 +25,7 @@ const ASSETS = [
   '../core/cache.js',
   '../core/math-expr.js',
   '../core/gemini.js',
+  '../core/transport.js',
   '../shared/actions.js',
   '../shared/storage.js',
   '../shared/speech.js',
