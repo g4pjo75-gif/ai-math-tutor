@@ -40,8 +40,28 @@
         <li>写真・音声・クイズ・添削すべて</li>
         <li>いつでも解約可能</li>
       </ul>
-      <!-- Stripe のテスト用 Payment Link に差し替える -->
-      <a class="cta" href="https://buy.stripe.com/test_REPLACE_ME">サブスクをはじめる</a>
+      <button class="cta" id="subscribeBtn" type="button">サブスクをはじめる</button>
+      <script>
+      (function () {
+        var API = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+        var btn = document.getElementById('subscribeBtn');
+        btn.addEventListener('click', function () {
+          btn.disabled = true;
+          btn.textContent = '決済ページを準備中…';
+          fetch(API + '/v1/checkout', { method: 'POST' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (!d.ok || !d.url) throw new Error((d && d.error) || 'checkout_failed');
+              location.href = d.url;
+            })
+            .catch(function (e) {
+              btn.disabled = false;
+              btn.textContent = 'サブスクをはじめる';
+              alert('決済ページを開けませんでした: ' + e.message);
+            });
+        });
+      })();
+      </script>
       <p class="muted" style="margin-top:10px">現在は<strong>テストモード</strong>です。テストカード 4242 4242 4242 4242 で動作確認できます。</p>
     </div>
   </div>

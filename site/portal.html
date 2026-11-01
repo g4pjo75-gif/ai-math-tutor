@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>契約管理 | AI家庭教師</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+    <nav class="site"><a href="./pricing.html">料金</a></nav>
+  </header>
+
+  <h1>契約管理</h1>
+  <p class="lead">ライセンスキーを入力すると、Stripe のカスタマーポータルが開きます。解約・カード変更ができます。</p>
+
+  <div class="card">
+    <label for="licenseInput" class="muted" style="display:block; margin-bottom:6px;">ライセンスキー</label>
+    <input id="licenseInput" type="text" autocomplete="off" spellcheck="false"
+      placeholder="AMT-XXXX-XXXX-XXXX-XXXX"
+      style="width:100%; font-size:16px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--fg);">
+    <button class="cta" id="portalBtn" type="button" style="margin-top:14px;">カスタマーポータルを開く</button>
+    <p class="muted" id="statusLine" style="margin-top:12px;"></p>
+  </div>
+
+  <div class="notice">
+    ポータルは Stripe が提供します。当サービスはカード情報を保持しません。<br>
+    ライセンスキーが分からない場合は、購入時のメールに記載のリンクからご確認ください。
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var API = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+  var input = document.getElementById('licenseInput');
+  var btn = document.getElementById('portalBtn');
+  var status = document.getElementById('statusLine');
+
+  function setStatus(text) { status.textContent = text || ''; }
+
+  function normalize(raw) {
+    var s = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (s.indexOf('AMT') !== 0 || s.length !== 19) return '';
+    return 'AMT-' + s.slice(3).match(/.{4}/g).join('-');
+  }
+
+  btn.addEventListener('click', function () {
+    var key = normalize(input.value);
+    if (!key) { setStatus('ライセンスキーの形式が正しくありません（AMT-XXXX-…）。'); return; }
+
+    btn.disabled = true;
+    setStatus('ポータルを準備しています…');
+
+    fetch(API + '/v1/portal', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key }
+    })
+      .then(function (res) { return res.json().then(function (body) { return { status: res.status, body: body }; }); })
+      .then(function (r) {
+        if (r.body && r.body.ok && r.body.url) {
+          location.href = r.body.url;
+          return;
+        }
+        var code = (r.body && r.body.error) || 'unknown';
+        if (code === 'no_customer') setStatus('このライセンスは手動発行のため、ポータル対象外です。');
+        else if (code === 'invalid_license') setStatus('ライセンスキーが見つかりません。');
+        else if (code === 'license_canceled') setStatus('解約済みのライセンスです。');
+        else setStatus('ポータルを開けませんでした（' + code + '）。時間をおいて再度お試しください。');
+        btn.disabled = false;
+      })
+      .catch(function (e) {
+        setStatus('通信エラー: ' + (e && e.message ? e.message : e));
+        btn.disabled = false;
+      });
+  });
+})();
+</script>
+</body>
+</html>
