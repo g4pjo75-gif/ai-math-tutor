@@ -5688,6 +5688,481 @@ npx wrangler deploy           # workers.dev URL 확보(최초 1회 login 필요)
 | 미성년자 | 보호자 동의 문구, 만 18세 미만 안내 |
 | 세금 | JPY 세금 포함 표시, Stripe Tax 사용 여부 결정 |
 
+### 4.14 Phase 7-2 (D1 · 라이선스 · 쿼터)
+
+**전제**: 7-1 완료(`a14f2da`), Worker 배포됨(`https://ai-math-tutor-api.g4pjo75.workers.dev`).
+**목표**: 라이선스 발급/검증 + 기기 바인딩 + 월 쿼터 조회. **결제(Stripe)는 7-4에서.**
+
+#### 4.14.1 D1 생성 및 바인딩
+
+```bash
+cd server
+npx wrangler d1 create ai-math-tutor-db
+```
+
+출력의 `database_id`를 `server/wrangler.jsonc`에 넣는다.
+
+```jsonc
+{
+  "name": "ai-math-tutor-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-30",
+  "observability": { "enabled": true },
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8765,https://g4pjo75-gif.github.io"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-math-tutor-db",
+      "database_id": "<npx wrangler d1 create 출력의 id>"
+    }
+  ]
+}
+```
+
+#### 4.14.2 마이그레이션 `server/migrations/0001_init.sql`
+
+```sql
+CREATE TABLE IF NOT EXISTS licenses (
+  id TEXT PRIMARY KEY,
+  key_hash TEXT NOT NULL UNIQUE,
+  email TEXT,
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  plan TEXT NOT NULL DEFAULT 'monthly',
+  status TEXT NOT NULL DEFAULT 'active',
+  call_limit INTEGER NOT NULL DEFAULT 300,
+  current_period_end INTEGER,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS devices (
+  license_id TEXT NOT NULL,
+  device_hash TEXT NOT NULL,
+  first_seen INTEGER,
+  last_seen INTEGER,
+  PRIMARY KEY (license_id, device_hash)
+);
+
+CREATE TABLE IF NOT EXISTS usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_id TEXT NOT NULL,
+  period TEXT NOT NULL,
+  route TEXT NOT NULL,
+  tokens_in INTEGER DEFAULT 0,
+  tokens_out INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_license_period ON usage (license_id, period);
+
+CREATE TABLE IF NOT EXISTS cache (
+  fp TEXT PRIMARY KEY,
+  payload TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+```
+
+적용:
+
+```bash
+npx wrangler d1 execute ai-math-tutor-db --local  --file=migrations/0001_init.sql
+npx wrangler d1 execute ai-math-tutor-db --remote --file=migrations/0001_init.sql
+```
+
+> `call_limit`은 7-1 설계에 없던 컬럼이다. 플랜별 쿼터를 DB에 두기 위해 추가한다(기본 300).
+
+#### 4.14.3 `server/src/license.js`
+
+```js
+// server/src/license.js — 라이선스 발급·검증·기기 바인딩·쿼터
+
+// Crockford Base32: 혼동되는 I, L, O, U 제외
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const KEY_LEN = 16; // AMT + 16자 → AMT-XXXX-XXXX-XXXX-XXXX (80bit)
+
+export function generateLicenseKey() {
+  const bytes = new Uint8Array(KEY_LEN);
+  crypto.getRandomValues(bytes);
+  let raw = '';
+  for (const b of bytes) raw += ALPHABET[b % ALPHABET.length];
+  return 'AMT-' + raw.match(/.{4}/g).join('-');
+}
+
+export function normalizeKey(input) {
+  const s = String(input || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!s.startsWith('AMT') || s.length !== 3 + KEY_LEN) return '';
+  return 'AMT-' + s.slice(3).match(/.{4}/g).join('-');
+}
+
+export async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text)));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function hashKey(key) {
+  const norm = normalizeKey(key);
+  return norm ? sha256Hex(norm) : '';
+}
+
+export function periodOf(ts = Date.now()) {
+  const d = new Date(ts);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+export async function createLicense(env, { email = null, plan = 'monthly', limit = 300, days = 30 } = {}) {
+  const key = generateLicenseKey();
+  const keyHash = await hashKey(key);
+  const id = 'lic_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+  const now = Date.now();
+  const periodEnd = now + days * 86400000;
+
+  await env.DB.prepare(
+    'INSERT INTO licenses (id, key_hash, email, plan, status, call_limit, current_period_end, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(id, keyHash, email, plan, 'active', limit, periodEnd, now).run();
+
+  return { id, key, keyHash, periodEnd };
+}
+
+export async function findLicense(env, key) {
+  const h = await hashKey(key);
+  if (!h) return null;
+  return env.DB.prepare('SELECT * FROM licenses WHERE key_hash = ?').bind(h).first();
+}
+
+export async function bindDevice(env, licenseId, deviceHash, maxDevices = 2) {
+  const now = Date.now();
+
+  const existing = await env.DB.prepare(
+    'SELECT 1 AS ok FROM devices WHERE license_id = ? AND device_hash = ?'
+  ).bind(licenseId, deviceHash).first();
+
+  if (existing) {
+    await env.DB.prepare('UPDATE devices SET last_seen = ? WHERE license_id = ? AND device_hash = ?')
+      .bind(now, licenseId, deviceHash).run();
+    return { ok: true, newDevice: false };
+  }
+
+  const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM devices WHERE license_id = ?')
+    .bind(licenseId).first();
+  if ((count && count.n ? count.n : 0) >= maxDevices) {
+    return { ok: false, reason: 'device_limit' };
+  }
+
+  await env.DB.prepare('INSERT INTO devices (license_id, device_hash, first_seen, last_seen) VALUES (?, ?, ?, ?)')
+    .bind(licenseId, deviceHash, now, now).run();
+  return { ok: true, newDevice: true };
+}
+
+export async function getUsage(env, licenseId, period = periodOf()) {
+  const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM usage WHERE license_id = ? AND period = ?')
+    .bind(licenseId, period).first();
+  return (row && row.n) || 0;
+}
+
+// Authorization: Bearer <license> + X-Device-Id 필수
+export async function requireLicense(request, env) {
+  const auth = request.headers.get('Authorization') || '';
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m) return { error: 'missing_license', status: 401 };
+
+  const license = await findLicense(env, m[1].trim());
+  if (!license) return { error: 'invalid_license', status: 401 };
+  if (license.status !== 'active') return { error: 'license_' + license.status, status: 402 };
+
+  const deviceId = (request.headers.get('X-Device-Id') || '').trim();
+  if (!deviceId) return { error: 'missing_device', status: 400 };
+
+  const deviceHash = await sha256Hex(deviceId);
+  const bound = await env.DB.prepare(
+    'SELECT 1 AS ok FROM devices WHERE license_id = ? AND device_hash = ?'
+  ).bind(license.id, deviceHash).first();
+  if (!bound) return { error: 'device_not_bound', status: 403 };
+
+  return { license, deviceHash };
+}
+
+export async function quotaSnapshot(env, license) {
+  const used = await getUsage(env, license.id);
+  const limit = Number(license.call_limit) || 0;
+  return { used, limit, remaining: Math.max(0, limit - used), period: periodOf() };
+}
+```
+
+#### 4.14.4 `server/src/index.js` (전체 교체)
+
+```js
+// server/src/index.js — API 라우터 (7-2)
+import { corsHeaders } from './cors.js';
+import {
+  bindDevice,
+  findLicense,
+  normalizeKey,
+  quotaSnapshot,
+  requireLicense,
+  sha256Hex
+} from './license.js';
+
+const VERSION = '0.2.0';
+const MAX_BODY_BYTES = 8 * 1024;
+
+function json(data, status = 200, extra = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...extra }
+  });
+}
+
+async function readJson(request) {
+  const text = await request.text();
+  if (text.length > MAX_BODY_BYTES) {
+    const err = new Error('body_too_large');
+    err.status = 413;
+    throw err;
+  }
+  try {
+    return JSON.parse(text || '{}');
+  } catch (e) {
+    const err = new Error('invalid_json');
+    err.status = 400;
+    throw err;
+  }
+}
+
+function licensePayload(license, quota) {
+  return {
+    ok: true,
+    plan: license.plan,
+    status: license.status,
+    currentPeriodEnd: license.current_period_end,
+    quota
+  };
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const origin = request.headers.get('Origin') || '';
+    const cors = corsHeaders(origin, env);
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: cors });
+    }
+
+    const route = `${request.method} ${url.pathname}`;
+
+    try {
+      if (route === 'GET /health') {
+        return json({ ok: true, version: VERSION, time: Date.now() }, 200, cors);
+      }
+
+      if (route === 'POST /v1/redeem') {
+        const body = await readJson(request);
+        const key = normalizeKey(body.key);
+        const deviceId = String(body.deviceId || '').trim();
+        if (!key || !deviceId) {
+          return json({ ok: false, error: 'invalid_request' }, 400, cors);
+        }
+
+        const license = await findLicense(env, key);
+        if (!license) return json({ ok: false, error: 'invalid_license' }, 401, cors);
+        if (license.status !== 'active') {
+          return json({ ok: false, error: 'license_' + license.status }, 402, cors);
+        }
+
+        const bound = await bindDevice(env, license.id, await sha256Hex(deviceId));
+        if (!bound.ok) return json({ ok: false, error: bound.reason }, 403, cors);
+
+        const quota = await quotaSnapshot(env, license);
+        return json(licensePayload(license, quota), 200, cors);
+      }
+
+      if (route === 'GET /v1/me') {
+        const auth = await requireLicense(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+        const quota = await quotaSnapshot(env, auth.license);
+        return json(licensePayload(auth.license, quota), 200, cors);
+      }
+
+      return json({ ok: false, error: 'not_found' }, 404, cors);
+    } catch (err) {
+      if (err && err.status) return json({ ok: false, error: err.message }, err.status, cors);
+      return json({ ok: false, error: 'internal' }, 500, cors);
+    }
+  }
+};
+```
+
+#### 4.14.5 관리용 발급 스크립트 `server/scripts/new-license.mjs`
+
+결제 붙기 전까지 라이선스를 **수동 발급**한다. 키는 DB에 해시로만 저장되고, 화면에 1회만 출력된다.
+
+```js
+// server/scripts/new-license.mjs — 수동 라이선스 발급 (7-4에서 Stripe webhook으로 대체)
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { generateLicenseKey, hashKey } from '../src/license.js';
+
+function arg(name, fallback = null) {
+  const i = process.argv.indexOf('--' + name);
+  return i > -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
+}
+
+const local = process.argv.includes('--local');
+const email = arg('email');
+const plan = arg('plan', 'monthly');
+const limit = Number(arg('limit', '300'));
+const days = Number(arg('days', '30'));
+
+const key = generateLicenseKey();
+const keyHash = await hashKey(key);
+const id = 'lic_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+const now = Date.now();
+const periodEnd = now + days * 86400000;
+
+const esc = (v) => String(v).replace(/'/g, "''");
+const sql = `INSERT INTO licenses (id, key_hash, email, plan, status, call_limit, current_period_end, created_at)
+VALUES ('${esc(id)}', '${esc(keyHash)}', ${email ? `'${esc(email)}'` : 'NULL'}, '${esc(plan)}', 'active', ${limit}, ${periodEnd}, ${now});`;
+
+const dir = mkdtempSync(join(tmpdir(), 'license-'));
+const file = join(dir, 'insert.sql');
+writeFileSync(file, sql, 'utf8');
+
+const args = ['wrangler', 'd1', 'execute', 'ai-math-tutor-db', '--file', file];
+args.push(local ? '--local' : '--remote');
+execFileSync('npx', args, { stdio: 'inherit' });
+
+console.log('\n==============================');
+console.log('LICENSE KEY (1회만 표시):', key);
+console.log('==============================');
+console.log({ id, plan, limit, email, periodEnd: new Date(periodEnd).toISOString() });
+```
+
+사용:
+
+```bash
+node scripts/new-license.mjs --local  --email me@example.com --limit 300
+node scripts/new-license.mjs --remote --email me@example.com --limit 300
+```
+
+#### 4.14.6 단위 테스트 `server/test/license.test.js`
+
+```js
+// server/test/license.test.js — 순수 로직 단위 테스트
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { generateLicenseKey, normalizeKey, hashKey, periodOf } from '../src/license.js';
+
+test('generateLicenseKey: AMT-XXXX-XXXX-XXXX-XXXX 형식', () => {
+  for (let i = 0; i < 20; i++) {
+    const k = generateLicenseKey();
+    assert.match(k, /^AMT(-[0-9A-HJKMNP-TV-Z]{4}){4}$/);
+  }
+});
+
+test('normalizeKey: 공백·소문자·하이픈 없이도 정규화', () => {
+  assert.equal(normalizeKey(' amt abcd-efgh jkmn-pqrs '), 'AMT-ABCD-EFGH-JKMN-PQRS');
+  assert.equal(normalizeKey('AMTABCDEFGHJKMNPQRS'), 'AMT-ABCD-EFGH-JKMN-PQRS');
+  assert.equal(normalizeKey('AMT-ABCD'), '');
+  assert.equal(normalizeKey('nope'), '');
+  assert.equal(normalizeKey(null), '');
+});
+
+test('hashKey: 결정적이고 64자 hex, 정규화 무관', async () => {
+  const a = await hashKey('AMT-ABCD-EFGH-JKMN-PQRS');
+  const b = await hashKey('amt abcd efgh jkmn pqrs');
+  assert.equal(a, b);
+  assert.match(a, /^[0-9a-f]{64}$/);
+  assert.equal(await hashKey('invalid'), '');
+});
+
+test('periodOf: UTC 월 경계', () => {
+  assert.equal(periodOf(Date.UTC(2026, 10, 1)), '2026-11');
+  assert.equal(periodOf(Date.UTC(2026, 0, 9)), '2026-01');
+  assert.equal(periodOf(Date.UTC(2026, 11, 31, 23, 59)), '2026-12');
+});
+```
+
+#### 4.14.7 로컬 통합 검증
+
+```bash
+cd server
+npx wrangler d1 execute ai-math-tutor-db --local --file=migrations/0001_init.sql
+node scripts/new-license.mjs --local --email test@example.com --limit 300
+# → LICENSE KEY: AMT-....  (복사)
+
+npx wrangler dev --port 8787 &
+KEY=AMT-....   # 위에서 복사
+
+# 1) redeem (기기 1)
+curl -s -X POST http://127.0.0.1:8787/v1/redeem \
+  -H 'Content-Type: application/json' \
+  -d "{\"key\":\"$KEY\",\"deviceId\":\"dev-1\"}"
+
+# 2) me
+curl -s http://127.0.0.1:8787/v1/me \
+  -H "Authorization: Bearer $KEY" -H 'X-Device-Id: dev-1'
+
+# 3) 잘못된 키
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/v1/me \
+  -H "Authorization: Bearer AMT-0000-0000-0000-0000" -H 'X-Device-Id: dev-1'
+# 기대: 401
+
+# 4) 기기 3대째 (dev-2 까지 허용, dev-3 은 403)
+curl -s -X POST http://127.0.0.1:8787/v1/redeem -H 'Content-Type: application/json' \
+  -d "{\"key\":\"$KEY\",\"deviceId\":\"dev-2\"}"
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8787/v1/redeem \
+  -H 'Content-Type: application/json' -d "{\"key\":\"$KEY\",\"deviceId\":\"dev-3\"}"
+# 기대: 403
+```
+
+기대 응답(정상):
+
+```json
+{"ok":true,"plan":"monthly","status":"active","currentPeriodEnd":1796128000000,
+ "quota":{"used":0,"limit":300,"remaining":300,"period":"2026-11"}}
+```
+
+#### 4.14.8 프로덕션 검증
+
+```bash
+cd server
+npx wrangler deploy
+npx wrangler d1 execute ai-math-tutor-db --remote --file=migrations/0001_init.sql
+node scripts/new-license.mjs --remote --email me@example.com --limit 300
+
+KEY=AMT-....
+curl -s -X POST https://ai-math-tutor-api.g4pjo75.workers.dev/v1/redeem \
+  -H 'Content-Type: application/json' -d "{\"key\":\"$KEY\",\"deviceId\":\"prod-1\"}"
+curl -s https://ai-math-tutor-api.g4pjo75.workers.dev/v1/me \
+  -H "Authorization: Bearer $KEY" -H 'X-Device-Id: prod-1'
+```
+
+#### 4.14.9 게이트
+
+```bash
+cd server
+npm test                        # 8 pass (health 4 + license 4)
+npx wrangler deploy
+```
+
+- [ ] `npm test` 8 pass
+- [ ] 로컬: redeem 200 / me 200 / 잘못된 키 401 / 3번째 기기 403
+- [ ] 프로덕션: redeem·me 200, 쿼터 `{used:0, limit:300}`
+- [ ] `licenses`에 평문 키 없음(해시만)
+- [ ] 커밋: `feat(server): add license, device binding and quota`
+
+#### 4.14.10 주의
+
+1. **키는 1회만 표시**된다. 스크립트 출력을 반드시 보관(또는 메일 발송은 7-4).
+2. `wrangler d1 execute --remote`는 **배포된 DB**에 적용된다. 로컬과 별개다.
+3. `X-Device-Id`는 7-5에서 앱이 만든 UUID를 사용한다. 지금은 curl로 검증.
+4. 쿼터는 **UTC 월 경계**로 계산한다(Stripe 갱신일과 정확히 일치하지 않을 수 있음 — 7-4에서 기간 기준을 Stripe `current_period_end`로 맞춘다).
+5. `/v1/redeem`은 아직 레이트리밋이 없다. 키 공간이 크지만 7-3에서 IP 제한을 추가한다.
+
 ---
 
 ## 5. 리스크와 대응
