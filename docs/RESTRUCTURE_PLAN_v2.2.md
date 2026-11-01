@@ -8559,6 +8559,853 @@ feat(server): add stripe checkout and customer portal
 feat(site): add portal page and checkout button
 ```
 
+### 4.20 Phase 7-5-A (transport: BYOK ↔ 구독 프록시)
+
+**배경**: 7-4까지 서버(프록시·라이선스·결제)는 완성됐지만, 클라이언트 앱은 여전히
+사용자 키로 Gemini를 직접 호출한다(BYOK). 7-5는 앱에 **라이선스 모드**를 붙이는 단계다.
+
+**이번 단계(7-5-A)의 범위**: `core/transport.js` 신규 + `core/gemini.js` 분기 + L1 테스트.
+**아무 것도 활성화하지 않는다.** `configureTransport()`를 호출하는 곳이 없으므로
+기본값은 `byok`이고, 앱 동작은 7-4와 완전히 동일하다. UI·CSP·초기화는 7-5-B에서 한다.
+
+#### 4.20.1 동작 계약
+
+| 항목 | BYOK(기본) | 라이선스(구독) |
+|---|---|---|
+| 호출 대상 | `generativelanguage.googleapis.com` | `https://ai-math-tutor-api.g4pjo75.workers.dev/v1/solve` |
+| API 키 | 사용자 키 필수 | **불필요**(서버 `GEMINI_API_KEY`) |
+| 모델 | 호출자 `modelId` | **서버 `MODEL`**(클라이언트 값 무시) |
+| thinkingLevel | 호출자 옵션 | **서버 `THINKING_LEVEL`** |
+| schema/rawText/temperature/maxOutputTokens/timeoutMs | 그대로 | 프록시 본문으로 전달 |
+| 쿼터/레이트리밋 | 없음(사용자 키) | 서버 D1(월 300회, 분당 8회) |
+| 캐시 | 클라이언트 로컬 캐시(기존) | 로컬 + **서버 캐시** |
+| 반환값 | `data` 또는 `{data, usage}` | 동일(+ `cached`, `quota`) |
+| 실패 | `Error`/`AbortError` | `Error` + `code` + `status`(+ `quota`) |
+
+핵심: **`callGeminiModel` 시그니처는 바꾸지 않는다.** 호출부 8곳
+(api-solve, similar, simplify, quiz, quiz-result, chat-step, chat-overall,
+english reading/quiz/writing)은 수정하지 않는다.
+
+#### 4.20.2 `core/transport.js` (신규)
+
+```js
+// core/transport.js — BYOK(직접 호출) / 구독(프록시) 전환
+import { fetchWithTimeout } from './http.js';
+
+export const DEFAULT_API_BASE = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+
+const state = {
+  mode: 'byok', // 'byok' | 'license'
+  baseUrl: '',
+  licenseKey: '',
+  deviceId: ''
+};
+
+// UI에 그대로 보여줄 수 있는 기본 메시지. 세부 UX는 7-5-C에서 다듬는다.
+const MESSAGES = {
+  transport_not_configured: 'ライセンスモードが設定されていません。',
+  invalid_license: 'ライセンスキーが無効です。設定を確認してください。',
+  missing_license: 'ライセンスキーが設定されていません。',
+  license_canceled: 'サブスクリプションが終了しています。',
+  license_past_due: 'お支払いに問題があります。契約管理ページをご確認ください。',
+  license_inactive: 'ライセンスが有効ではありません。',
+  missing_device: '端末の認証情報がありません。アプリを再読み込みしてください。',
+  device_not_bound: 'この端末はライセンスに登録されていません。設定からキーを再登録してください。',
+  device_limit: '登録できる端末数の上限に達しました。',
+  quota_exceeded: '今月の利用上限に達しました。',
+  rate_limited: 'リクエストが多すぎます。少し待ってからお試しください。',
+  timeout: 'AIの応答がタイムアウトしました。もう一度お試しください。',
+  network_error: 'サーバーに接続できませんでした。通信環境を確認してください。',
+  invalid_request: 'リクエストが不正です。',
+  invalid_prompt: '入力内容を確認してください。',
+  prompt_too_large: '入力が長すぎます。内容を分けてお試しください。',
+  image_too_large: '画像が大きすぎます。別の画像でお試しください。',
+  upstream_quota: 'AIの利用上限に達しました。時間をおいてお試しください。',
+  upstream_error: 'AIの応答でエラーが発生しました。もう一度お試しください。',
+  server_misconfigured: 'サーバー設定に問題があります。管理者にお問い合わせください。'
+};
+
+function proxyError(code, status, extra = {}) {
+  const err = new Error(MESSAGES[code] || '通信エラーが発生しました。もう一度お試しください。');
+  err.code = code;
+  err.status = status;
+  Object.assign(err, extra);
+  return err;
+}
+
+export function configureTransport(next = {}) {
+  if (next.mode === 'byok' || next.mode === 'license') state.mode = next.mode;
+  if (typeof next.baseUrl === 'string') state.baseUrl = next.baseUrl.trim();
+  if (typeof next.licenseKey === 'string') state.licenseKey = next.licenseKey.trim();
+  if (typeof next.deviceId === 'string') state.deviceId = next.deviceId.trim();
+  if (state.mode === 'license' && !state.baseUrl) state.baseUrl = DEFAULT_API_BASE;
+  return { ...state };
+}
+
+export function resetTransport() {
+  state.mode = 'byok';
+  state.baseUrl = '';
+  state.licenseKey = '';
+  state.deviceId = '';
+}
+
+export function getTransport() {
+  return { ...state };
+}
+
+export function isLicenseMode() {
+  return state.mode === 'license' && Boolean(state.licenseKey) && Boolean(state.baseUrl);
+}
+
+// 기기 ID는 앱 공용(tutor_ 프리픽스 스토리지)으로 저장한다.
+export function getOrCreateDeviceId(storage, key = 'device_id') {
+  if (!storage) return '';
+  let id = storage.getItem(key);
+  if (!id) {
+    const c = globalThis.crypto;
+    id = c && typeof c.randomUUID === 'function'
+      ? c.randomUUID()
+      : String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+    storage.setItem(key, id);
+  }
+  return id;
+}
+
+export async function callProxied(payload = {}) {
+  if (!isLicenseMode()) {
+    throw proxyError('transport_not_configured', 0);
+  }
+
+  const timeoutMs = Number(payload.timeoutMs) || 30000;
+  const url = state.baseUrl.replace(/\/+$/, '') + '/v1/solve';
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer ' + state.licenseKey
+  };
+  if (state.deviceId) headers['X-Device-Id'] = state.deviceId;
+
+  let res;
+  try {
+    res = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    }, timeoutMs + 5000);
+  } catch (err) {
+    if (err && err.name === 'AbortError') throw proxyError('timeout', 504);
+    throw proxyError('network_error', 0);
+  }
+
+  let body = null;
+  try {
+    body = await res.json();
+  } catch (err) {
+    body = null;
+  }
+
+  if (!res.ok || !body || body.ok !== true) {
+    const code = (body && body.error) || 'proxy_' + res.status;
+    throw proxyError(code, res.status, { quota: (body && body.quota) || null });
+  }
+
+  return body;
+}
+```
+
+설계 메모:
+
+- 모듈 상태는 `mode/baseUrl/licenseKey/deviceId` 4개뿐이다.
+- `isLicenseMode()`는 **mode + key + baseUrl**이 모두 있어야 true다.
+  키를 지우면 즉시 BYOK로 돌아간다(설정 UI에서 "해제"가 쉬움).
+- `configureTransport({mode:'license', licenseKey})`처럼 `baseUrl`을 생략하면
+  `DEFAULT_API_BASE`가 자동으로 들어간다.
+- `undefined`는 기존 값을 덮어쓰지 않는다(부분 갱신).
+- 기기 ID는 `TutorStorage`의 `tutor_` 프리픽스에 `device_id` 키로 저장한다.
+  수학/영어가 같은 기기 ID를 공유하므로 **기기 2대 제한이 앱 전체에 하나로 적용**된다.
+- 프록시 응답이 `200`이어도 `ok:true`가 아니면 실패로 처리한다.
+- `AbortError`는 `code:'timeout'`, 그 외 네트워크 오류는 `code:'network_error'`로 정규화한다.
+- 오류 `message`는 UI에 바로 나갈 수 있는 일본어로 둔다. 7-5-C에서 화면별 문구를 다듬는다.
+
+#### 4.20.3 `core/gemini.js` (전체 교체)
+
+추가된 부분은 세 곳뿐이다.
+
+1. `transport.js` import
+2. `callViaProxy()` 헬퍼
+3. `if (!effectiveApiKey)` **앞에** 라이선스 분기
+
+```js
+// core/gemini.js — Gemini 전송 계층 (DOM 비의존)
+import { fetchWithTimeout } from './http.js';
+import { parseJson } from './json.js';
+import { callProxied, isLicenseMode } from './transport.js';
+
+const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// 구독 모드: 모델/키는 서버가 결정하고, 클라이언트는 프록시에만 요청한다.
+async function callViaProxy(prompt, image, opts = {}) {
+  const useJson = !opts.rawText && Boolean(opts.schema);
+  const payload = {
+    prompt: prompt || '',
+    schema: opts.schema || null,
+    rawText: Boolean(opts.rawText),
+    temperature: opts.temperature ?? (useJson ? 0.35 : 0.3),
+    maxOutputTokens: opts.maxOutputTokens ?? 32768,
+    timeoutMs: opts.timeoutMs || 30000
+  };
+  if (image) payload.image = image;
+
+  const res = await callProxied(payload);
+  const data = res.data;
+  const usage = res.usage || { in: 0, out: 0 };
+  if (!opts.withMeta) return data;
+  return { data, usage, cached: res.cached === true, quota: res.quota || null };
+}
+
+/**
+ * 호출 형식 두 가지를 모두 받는다.
+ *   1) callGeminiModel(modelId, apiKey, promptText, imageBase64, options)
+ *   2) callGeminiModel({ modelId, apiKey, promptText, imageBase64, schema, ... })
+ * schema는 **반드시 호출자가 넘긴다**(core는 앱의 스키마를 모른다).
+ */
+export async function callGeminiModel(arg1, apiKey, promptText, imageBase64, options = {}) {
+  let modelId, effectiveApiKey, effectivePrompt, effectiveImage, effectiveOpts;
+  if (typeof arg1 === 'object' && arg1 !== null && !apiKey) {
+    modelId = arg1.modelId;
+    effectiveApiKey = arg1.apiKey;
+    effectivePrompt = arg1.promptText || arg1.prompt;
+    effectiveImage = arg1.imageBase64 || null;
+    effectiveOpts = arg1;
+  } else {
+    modelId = arg1;
+    effectiveApiKey = apiKey;
+    effectivePrompt = promptText;
+    effectiveImage = imageBase64;
+    effectiveOpts = options || {};
+  }
+
+  if (isLicenseMode()) {
+    return callViaProxy(effectivePrompt, effectiveImage, effectiveOpts);
+  }
+
+  if (!effectiveApiKey) {
+    throw new Error('Gemini APIキーが設定されていません。');
+  }
+
+  const cleanModelId = String(modelId || 'gemini-3.8-flash').replace(/^models\//, '').trim();
+  const url = `${ENDPOINT}/${encodeURIComponent(cleanModelId)}:generateContent`;
+
+  const parts = [{ text: effectivePrompt || '' }];
+  if (effectiveImage) {
+    parts.push({
+      inline_data: { mime_type: 'image/jpeg', data: effectiveImage }
+    });
+  }
+
+  const temperature = effectiveOpts.temperature ?? 0.35;
+  const maxOutputTokens = effectiveOpts.maxOutputTokens ?? 32768;
+  const schema = effectiveOpts.schema || null;
+  const useJson = !effectiveOpts.rawText && Boolean(schema);
+  const timeoutMs = effectiveOpts.timeoutMs || 30000;
+
+  const thinkingLevel = effectiveOpts.thinkingLevel || null;
+
+  const buildPayload = (useStructured, useThinking) => {
+    const cfg = useStructured && useJson
+      ? { temperature, maxOutputTokens, responseMimeType: 'application/json', responseSchema: schema }
+      : { temperature: useStructured ? temperature : 0.3, maxOutputTokens };
+    if (useThinking && thinkingLevel) cfg.thinkingConfig = { thinkingLevel };
+    return { contents: [{ role: 'user', parts }], generationConfig: cfg };
+  };
+
+  const send = async (useStructured, useThinking) => {
+    const res = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': effectiveApiKey
+      },
+      body: JSON.stringify(buildPayload(useStructured, useThinking))
+    }, timeoutMs);
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error?.message || `HTTP Error ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  };
+
+  let data;
+  try {
+    data = await send(true, true);
+  } catch (err) {
+    const msg = (err && err.message) || '';
+    if (err.status === 400 && /thinking/i.test(msg)) {
+      // thinkingLevel 미지원 모델: 스키마는 유지하고 thinking만 끈다
+      data = await send(true, false);
+    } else if (err.status === 400 && /response|schema|mime/i.test(msg)) {
+      // 구조화 출력(responseSchema) 미지원 모델 폴백
+      data = await send(false, true);
+    } else {
+      throw err;
+    }
+  }
+
+  const candidate = data.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const text = candidate?.content?.parts?.map(p => p.text || '').join('\n') || '';
+  if (!text) {
+    if (finishReason === 'MAX_TOKENS') {
+      throw new Error('AIの回答が途中で切れました（思考・出力トークン上限）。もう一度試すか、入力内容を絞ってください。');
+    }
+    const blockReason = data.promptFeedback?.blockReason || finishReason;
+    throw new Error(blockReason
+      ? `モデルが応答を中断しました（理由: ${blockReason}）`
+      : 'モデルから空の応答が返されました。');
+  }
+
+  const usage = {
+    in: data.usageMetadata?.promptTokenCount || 0,
+    out: data.usageMetadata?.candidatesTokenCount || 0
+  };
+  const withMeta = Boolean(effectiveOpts.withMeta);
+
+  if (effectiveOpts.rawText) {
+    const outText = text.trim();
+    return withMeta ? { data: outText, usage } : outText;
+  }
+
+  try {
+    const parsed = parseJson(text);
+    return withMeta ? { data: parsed, usage } : parsed;
+  } catch (parseErr) {
+    if (finishReason === 'MAX_TOKENS') {
+      throw new Error('問題数が多いためAIの回答が途中で切れました（思考・出力トークン上限）。入力内容を小さく分割して試してください。');
+    }
+    throw parseErr;
+  }
+}
+
+// 모델 목록은 BYOK 전용이다(프록시 모드는 서버가 모델을 고정한다).
+export async function fetchAvailableModels(arg = {}) {
+  const apiKey = typeof arg === 'string' ? arg : arg.apiKey;
+  const timeoutMs = typeof arg === 'object' && arg.timeoutMs ? arg.timeoutMs : 15000;
+  if (!apiKey) {
+    throw new Error('Gemini APIキーが必要です。');
+  }
+
+  const res = await fetchWithTimeout(`${ENDPOINT}`, {
+    method: 'GET',
+    headers: { 'x-goog-api-key': apiKey }
+  }, timeoutMs);
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error?.message || `HTTP ${res.status}`);
+  }
+
+  const validModels = (data.models || [])
+    .filter(m =>
+      Array.isArray(m.supportedGenerationMethods) &&
+      m.supportedGenerationMethods.includes('generateContent') &&
+      m.name.includes('gemini') &&
+      !m.name.includes('embedding') &&
+      !m.name.includes('imagen') &&
+      !m.name.includes('tts')
+    )
+    .map(m => ({
+      id: m.name.replace(/^models\//, ''),
+      displayName: m.displayName || m.name.replace(/^models\//, '')
+    }));
+
+  if (validModels.length === 0) {
+    throw new Error('generateContentに対応したGeminiモデルが見つかりませんでした。');
+  }
+
+  validModels.sort((a, b) => {
+    const score = id => (id.includes('flash') ? 2 : id.includes('pro') ? 1 : 0);
+    return score(b.id) - score(a.id) || b.id.localeCompare(a.id);
+  });
+
+  return validModels;
+}
+```
+
+주의: 분기는 반드시 **API 키 검사보다 먼저** 와야 한다. 라이선스 모드에는
+사용자 키가 없기 때문이다. `fetchAvailableModels()`는 BYOK 전용으로 남긴다
+(프록시 모드에서는 모델 목록 UI를 숨긴다 — 7-5-B).
+
+#### 4.20.4 `core/index.js` (전체 교체)
+
+```js
+// core/index.js — 배럴 (앱은 이 파일 하나만 import 한다)
+
+export { fetchWithTimeout } from './http.js';
+export { parseJson } from './json.js';
+export { isQuotaError } from './errors.js';
+export { callGeminiModel, fetchAvailableModels } from './gemini.js';
+export {
+  DEFAULT_API_BASE,
+  callProxied,
+  configureTransport,
+  getOrCreateDeviceId,
+  getTransport,
+  isLicenseMode,
+  resetTransport
+} from './transport.js';
+export {
+  CACHE_SCHEMA_VERSION,
+  DEFAULT_CACHE_MAX_AGE_MS,
+  computeRequestHash,
+  getCachedResponse,
+  setCachedResponse
+} from './cache.js';
+export { normalizeMathExpr, isLocalMathMatch } from './math-expr.js';
+```
+
+#### 4.20.5 Service Worker 프리캐시 (필수)
+
+`gemini.js`가 `transport.js`를 import하므로, 두 SW의 ASSETS에 파일을 추가하고
+캐시 이름을 올린다. **온라인 첫 로드**는 네트워크에서 받아오지만,
+업데이트 직후 오프라인 실행에서 `transport.js`가 없으면 앱이 죽는다.
+
+`math/sw.js`:
+
+```diff
+-const CACHE_NAME = 'amt-cache-v3.5';
++const CACHE_NAME = 'amt-cache-v3.6';
+@@
+   '../core/math-expr.js',
+   '../core/gemini.js',
++  '../core/transport.js',
+   '../shared/actions.js',
+```
+
+`english/sw.js`:
+
+```diff
+-const CACHE_NAME = 'aet-cache-v2.5';
++const CACHE_NAME = 'aet-cache-v2.6';
+@@
+   '../core/math-expr.js',
+   '../core/gemini.js',
++  '../core/transport.js',
+   '../shared/actions.js',
+```
+
+#### 4.20.6 `tests/transport.test.js` (신규)
+
+```js
+// tests/transport.test.js — Phase 7-5-A: BYOK/구독 전환 transport
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const load = () => import('../core/index.js');
+
+function fakeStorage() {
+  const m = new Map();
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => { m.set(k, String(v)); return true; },
+    raw: m
+  };
+}
+
+function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+test('transport: 기본값은 BYOK이고 라이선스 모드가 아니다', async () => {
+  const { getTransport, isLicenseMode, resetTransport } = await load();
+  resetTransport();
+  assert.deepEqual(getTransport(), { mode: 'byok', baseUrl: '', licenseKey: '', deviceId: '' });
+  assert.equal(isLicenseMode(), false);
+});
+
+test('transport: license 모드는 키와 baseUrl이 모두 있어야 성립', async () => {
+  const { configureTransport, isLicenseMode, resetTransport, DEFAULT_API_BASE } = await load();
+  resetTransport();
+
+  configureTransport({ mode: 'license' });
+  assert.equal(isLicenseMode(), false, '키 없음');
+
+  const s = configureTransport({ licenseKey: ' AMT-AAAA-BBBB-CCCC-DDDD ' });
+  assert.equal(s.baseUrl, DEFAULT_API_BASE, 'baseUrl 기본값');
+  assert.equal(s.licenseKey, 'AMT-AAAA-BBBB-CCCC-DDDD', 'trim');
+  assert.equal(isLicenseMode(), true);
+
+  configureTransport({ licenseKey: '' });
+  assert.equal(isLicenseMode(), false, '키 해제');
+});
+
+test('transport: undefined는 기존 값을 지우지 않는다', async () => {
+  const { configureTransport, getTransport, resetTransport } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://x.test', deviceId: 'D' });
+  configureTransport({ baseUrl: undefined, licenseKey: undefined, deviceId: undefined });
+  assert.deepEqual(getTransport(), {
+    mode: 'license',
+    baseUrl: 'https://x.test',
+    licenseKey: 'K',
+    deviceId: 'D'
+  });
+});
+
+test('transport: resetTransport는 전부 초기화한다', async () => {
+  const { configureTransport, getTransport, resetTransport } = await load();
+  configureTransport({ mode: 'license', licenseKey: 'K', deviceId: 'D' });
+  resetTransport();
+  assert.deepEqual(getTransport(), { mode: 'byok', baseUrl: '', licenseKey: '', deviceId: '' });
+});
+
+test('deviceId: 최초 1회 생성 후 재사용, storage 없으면 빈 문자열', async () => {
+  const { getOrCreateDeviceId } = await load();
+  const storage = fakeStorage();
+  const a = getOrCreateDeviceId(storage, 'device_id');
+  const b = getOrCreateDeviceId(storage, 'device_id');
+  assert.equal(typeof a, 'string');
+  assert.ok(a.length > 0);
+  assert.equal(a, b);
+  assert.equal(storage.raw.get('device_id'), a);
+  assert.equal(getOrCreateDeviceId(null), '');
+});
+
+test('callProxied: BYOK에서는 호출을 거부한다', async () => {
+  const { resetTransport, callProxied } = await load();
+  resetTransport();
+  await assert.rejects(callProxied({ prompt: 'x' }), (err) => {
+    assert.equal(err.code, 'transport_not_configured');
+    assert.equal(err.status, 0);
+    return true;
+  });
+});
+
+test('callProxied: URL/헤더/본문을 프록시 규격으로 보낸다', async () => {
+  const { configureTransport, resetTransport, callProxied } = await load();
+  resetTransport();
+  configureTransport({
+    mode: 'license',
+    licenseKey: 'AMT-AAAA-BBBB-CCCC-DDDD',
+    baseUrl: 'https://api.test/',
+    deviceId: 'dev-1'
+  });
+
+  const prev = globalThis.fetch;
+  let seen = null;
+  globalThis.fetch = async (url, init) => {
+    seen = { url, init };
+    return jsonResponse({ ok: true, cached: false, data: { a: 1 }, usage: { in: 3, out: 4, costYen: 0.002 }, quota: { used: 1, limit: 300 } });
+  };
+  try {
+    const body = await callProxied({ prompt: 'p', rawText: true, timeoutMs: 12000 });
+    assert.equal(seen.url, 'https://api.test/v1/solve');
+    assert.equal(seen.init.method, 'POST');
+    assert.equal(seen.init.headers.Authorization, 'Bearer AMT-AAAA-BBBB-CCCC-DDDD');
+    assert.equal(seen.init.headers['X-Device-Id'], 'dev-1');
+    assert.equal(seen.init.headers['Content-Type'], 'application/json');
+    assert.deepEqual(JSON.parse(seen.init.body), { prompt: 'p', rawText: true, timeoutMs: 12000 });
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.data, { a: 1 });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callProxied: deviceId가 없으면 X-Device-Id를 보내지 않는다', async () => {
+  const { configureTransport, resetTransport, callProxied } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+
+  const prev = globalThis.fetch;
+  let headers = null;
+  globalThis.fetch = async (url, init) => {
+    headers = init.headers;
+    return jsonResponse({ ok: true, data: 'x' });
+  };
+  try {
+    await callProxied({ prompt: 'p' });
+    assert.equal(headers['X-Device-Id'], undefined);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callProxied: 오류 응답은 code/status/quota로 전달한다', async () => {
+  const { configureTransport, resetTransport, callProxied } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({
+    ok: false,
+    error: 'quota_exceeded',
+    quota: { used: 300, limit: 300, remaining: 0 }
+  }, 402);
+  try {
+    await assert.rejects(callProxied({ prompt: 'p' }), (err) => {
+      assert.equal(err.code, 'quota_exceeded');
+      assert.equal(err.status, 402);
+      assert.deepEqual(err.quota, { used: 300, limit: 300, remaining: 0 });
+      assert.match(err.message, /上限/);
+      return true;
+    });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callProxied: 200이어도 ok:true가 아니면 실패로 본다', async () => {
+  const { configureTransport, resetTransport, callProxied } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({ ok: false, error: 'invalid_license' }, 200);
+  try {
+    await assert.rejects(callProxied({ prompt: 'p' }), (err) => {
+      assert.equal(err.code, 'invalid_license');
+      assert.equal(err.status, 200);
+      return true;
+    });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callProxied: JSON이 아닌 오류 응답은 proxy_<status>로 처리', async () => {
+  const { configureTransport, resetTransport, callProxied } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => new Response('<html>bad gateway</html>', { status: 502 });
+  try {
+    await assert.rejects(callProxied({ prompt: 'p' }), (err) => {
+      assert.equal(err.code, 'proxy_502');
+      assert.equal(err.status, 502);
+      return true;
+    });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callProxied: 타임아웃/네트워크 오류를 구분한다', async () => {
+  const { configureTransport, resetTransport, callProxied } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+
+  const prev = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => {
+      const err = new Error('aborted');
+      err.name = 'AbortError';
+      throw err;
+    };
+    await assert.rejects(callProxied({ prompt: 'p' }), (err) => {
+      assert.equal(err.code, 'timeout');
+      assert.equal(err.status, 504);
+      return true;
+    });
+
+    globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
+    await assert.rejects(callProxied({ prompt: 'p' }), (err) => {
+      assert.equal(err.code, 'network_error');
+      assert.equal(err.status, 0);
+      return true;
+    });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callGeminiModel: 라이선스 모드면 apiKey 없이 프록시로 보낸다', async () => {
+  const { configureTransport, resetTransport, callGeminiModel } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test', deviceId: 'D' });
+
+  const prev = globalThis.fetch;
+  let seen = null;
+  globalThis.fetch = async (url, init) => {
+    seen = { url, init };
+    return jsonResponse({
+      ok: true,
+      cached: false,
+      data: { answer: 42 },
+      usage: { in: 10, out: 5, costYen: 0.003 },
+      quota: { used: 2, limit: 300, remaining: 298, period: '2026-11' }
+    });
+  };
+  try {
+    const out = await callGeminiModel('gemini-3.8-flash', null, 'solve this', null, {
+      schema: { type: 'object' },
+      temperature: 0.2,
+      maxOutputTokens: 1000
+    });
+    assert.deepEqual(out, { answer: 42 });
+    assert.match(seen.url, /\/v1\/solve$/);
+    const sent = JSON.parse(seen.init.body);
+    assert.equal(sent.prompt, 'solve this');
+    assert.deepEqual(sent.schema, { type: 'object' });
+    assert.equal(sent.temperature, 0.2);
+    assert.equal(sent.maxOutputTokens, 1000);
+    assert.equal(sent.rawText, false);
+    assert.equal(sent.image, undefined);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callGeminiModel: withMeta는 data/usage/cached/quota를 돌려준다', async () => {
+  const { configureTransport, resetTransport, callGeminiModel } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({
+    ok: true,
+    cached: true,
+    data: { a: 1 },
+    usage: { in: 0, out: 0, costYen: 0 },
+    quota: { used: 3, limit: 300 }
+  });
+  try {
+    const r = await callGeminiModel({ promptText: 'p', schema: { type: 'object' }, withMeta: true });
+    assert.deepEqual(r.data, { a: 1 });
+    assert.deepEqual(r.usage, { in: 0, out: 0, costYen: 0 });
+    assert.equal(r.cached, true);
+    assert.deepEqual(r.quota, { used: 3, limit: 300 });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callGeminiModel: rawText와 이미지를 프록시 본문에 넣는다', async () => {
+  const { configureTransport, resetTransport, callGeminiModel } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+
+  const prev = globalThis.fetch;
+  let sent = null;
+  globalThis.fetch = async (url, init) => {
+    sent = JSON.parse(init.body);
+    return jsonResponse({ ok: true, data: 'OK', usage: { in: 5, out: 1 } });
+  };
+  try {
+    const out = await callGeminiModel({ promptText: 'reply OK', imageBase64: 'AAAA', rawText: true });
+    assert.equal(out, 'OK');
+    assert.equal(sent.rawText, true);
+    assert.equal(sent.image, 'AAAA');
+    assert.equal(sent.schema, null);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callGeminiModel: 프록시 오류를 code와 함께 전파한다', async () => {
+  const { configureTransport, resetTransport, callGeminiModel } = await load();
+  resetTransport();
+  configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({
+    ok: false,
+    error: 'license_canceled',
+    quota: { used: 0, limit: 0, remaining: 0 }
+  }, 402);
+  try {
+    await assert.rejects(callGeminiModel({ promptText: 'p' }), (err) => {
+      assert.equal(err.code, 'license_canceled');
+      assert.equal(err.status, 402);
+      assert.match(err.message, /サブスクリプション/);
+      return true;
+    });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('callGeminiModel: BYOK는 기존처럼 apiKey가 필요하다', async () => {
+  const { resetTransport, callGeminiModel } = await load();
+  resetTransport();
+  await assert.rejects(
+    callGeminiModel('gemini-3.8-flash', '', 'p', null, {}),
+    /Gemini APIキーが設定されていません/
+  );
+});
+```
+
+#### 4.20.7 `package.json` — L1 글롭
+
+테스트 파일이 2개가 되었으므로 `test:l1`을 특정 파일에서 글롭으로 바꾼다.
+
+```diff
+-    "test:l1": "node --test tests/core.test.js",
++    "test:l1": "node --test tests/*.test.js",
+```
+
+#### 4.20.8 게이트
+
+```bash
+cd /home/park/projects/ai-math-tutor
+
+# L1: 18 + 17 = 35 pass
+npm run test:l1
+
+# L2: 24 pass (앱 코드 변경 없음)
+npx playwright test
+
+# 합계 59 pass
+npm test
+```
+
+수동 회귀(라이선스 모드 비활성 확인):
+
+```bash
+python3 -m http.server 8765 --bind 127.0.0.1
+# http://localhost:8765/math/ を開く
+# - 설정に「ライセンスキー」欄がまだ無いこと(7-5-B 전)
+# - 問題を1問解き、DevTools Network が
+#   generativelanguage.googleapis.com へ行くこと(프록시 아님)
+```
+
+#### 4.20.9 DoD
+
+- [ ] `core/transport.js` 신규, `core/index.js`에서 export
+- [ ] `core/gemini.js`가 라이선스 모드에서 API 키 없이 프록시 호출
+- [ ] 기본값은 `byok`이며 `configureTransport()` 호출부가 없음(비활성)
+- [ ] `math/sw.js`·`english/sw.js`에 `transport.js` 추가 + 캐시 버전 bump
+- [ ] `npm run test:l1` → **35 pass**
+- [ ] `npx playwright test` → **24 pass**
+- [ ] BYOK 실호출이 기존과 동일(수동 1회)
+- [ ] 저장소·채팅에 시크릿 없음
+
+**커밋 2개**
+
+```
+feat(core): add byok/license transport switch
+chore: precache transport module and run all l1 tests
+```
+
+#### 4.20.10 다음 단계(7-5-B) 예고
+
+7-5-A는 코드만 넣고 끝난다. 실제 활성화는 7-5-B에서 한다.
+
+1. `math/init.js`·`english/init.js`에서 저장된 라이선스 키를 읽어 `configureTransport()`
+2. 설정 UI: 라이선스 키 입력/저장/해제, 잔여 횟수(`GET /v1/me`), 포털 링크
+3. `!geminiKey` 가드 8곳을 `!geminiKey && !isLicenseMode()`로 변경
+4. CSP `connect-src`에 `https://ai-math-tutor-api.g4pjo75.workers.dev` 추가
+5. 기기 ID는 `getOrCreateDeviceId(storage)` 1회 생성 후 transport에 주입
+6. 오류 UX(402/401/429/504)는 7-5-C
+
+> 7-5-B에서 키를 저장할 때는 `TutorStorage`(`tutor_` 프리픽스)를 사용한다.
+> 라이선스 키는 비밀번호와 동등하게 취급하고, 로그·스크린샷에 남기지 않는다.
+
 ---
 
 ## 5. 리스크와 대응
