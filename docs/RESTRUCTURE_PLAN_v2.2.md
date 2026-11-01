@@ -7983,6 +7983,582 @@ feat(site): add landing, pricing, thanks and legal pages
 feat(server): issue licenses from stripe webhook
 ```
 
+### 4.19 Phase 7-4-B-3 (Checkout API + Customer Portal)
+
+**배경**: 이 Stripe 샌드박스 UI에는 Payment Link 생성 메뉴가 노출되지 않는다.
+Payment Link 대신 **Checkout Session API**로 결제를 만들고, 같은 Stripe 키로 **Customer Portal**을 붙인다.
+
+**결과**: 상품/가격을 Stripe 대시보드에 만들 필요 없이 **인라인 가격(¥980/월)** 으로 결제한다.
+웹훅(`checkout.session.completed`)은 7-4-B-2 구현을 그대로 사용한다.
+
+#### 4.19.1 필요한 시크릿/변수
+
+| 종류 | 이름 | 값 |
+|---|---|---|
+| secret | `STRIPE_SECRET_KEY` | 샌드박스 `sk_test_...` |
+| secret | `STRIPE_WEBHOOK_SECRET` | 웹훅 서명 `whsec_...` (7-4-B-2) |
+| var | `CHECKOUT_SUCCESS_URL` | `https://g4pjo75-gif.github.io/ai-math-tutor/site/thanks.html?session_id={CHECKOUT_SESSION_ID}` |
+| var | `CHECKOUT_CANCEL_URL` | `https://g4pjo75-gif.github.io/ai-math-tutor/site/pricing.html` |
+| var | `PORTAL_RETURN_URL` | `https://g4pjo75-gif.github.io/ai-math-tutor/site/portal.html` |
+| var | `PLAN_PRICE_JPY` | `980` |
+| var | `PLAN_NAME` | `AI家庭教師 スタンダード` |
+
+```bash
+cd server
+npx wrangler secret put STRIPE_SECRET_KEY     # 대화형, 값 공유 금지
+```
+
+`server/wrangler.jsonc` 의 `vars` 에 추가:
+
+```jsonc
+    "CHECKOUT_SUCCESS_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/thanks.html?session_id={CHECKOUT_SESSION_ID}",
+    "CHECKOUT_CANCEL_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/pricing.html",
+    "PORTAL_RETURN_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/portal.html",
+    "PLAN_PRICE_JPY": "980",
+    "PLAN_NAME": "AI家庭教師 スタンダード"
+```
+
+#### 4.19.2 `server/src/billing.js` (신규)
+
+```js
+// server/src/billing.js — Stripe Checkout / Customer Portal
+import { findLicense } from './license.js';
+
+const STRIPE_API = 'https://api.stripe.com/v1';
+
+function form(params) {
+  const sp = new URLSearchParams();
+  Object.keys(params).forEach((k) => {
+    if (params[k] !== undefined && params[k] !== null) sp.append(k, String(params[k]));
+  });
+  return sp;
+}
+
+export function buildCheckoutParams(env) {
+  const price = Number(env.PLAN_PRICE_JPY || 980);
+  const name = env.PLAN_NAME || 'AI家庭教師 スタンダード';
+  return {
+    mode: 'subscription',
+    'line_items[0][quantity]': 1,
+    'line_items[0][price_data][currency]': 'jpy',
+    'line_items[0][price_data][unit_amount]': price,
+    'line_items[0][price_data][recurring][interval]': 'month',
+    'line_items[0][price_data][product_data][name]': name,
+    success_url: env.CHECKOUT_SUCCESS_URL,
+    cancel_url: env.CHECKOUT_CANCEL_URL
+  };
+}
+
+async function stripePost(env, path, params) {
+  const res = await fetch(STRIPE_API + path, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: form(params).toString()
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error((data.error && data.error.message) || 'stripe_' + res.status);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+export async function createCheckoutSession(env) {
+  if (!env.STRIPE_SECRET_KEY || !env.CHECKOUT_SUCCESS_URL || !env.CHECKOUT_CANCEL_URL) {
+    return { status: 500, body: { ok: false, error: 'server_misconfigured' } };
+  }
+  try {
+    const session = await stripePost(env, '/checkout/sessions', buildCheckoutParams(env));
+    return { status: 200, body: { ok: true, url: session.url, id: session.id } };
+  } catch (err) {
+    return { status: 502, body: { ok: false, error: 'stripe_error' } };
+  }
+}
+
+// 포털은 기기 바인딩 없이 라이선스 키만 확인한다(새 기기에서도 구독 관리 가능).
+export async function findLicenseByRequest(request, env) {
+  const m = (request.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
+  if (!m) return { error: 'missing_license', status: 401 };
+  const license = await findLicense(env, m[1].trim());
+  if (!license) return { error: 'invalid_license', status: 401 };
+  if (license.status !== 'active') return { error: 'license_' + license.status, status: 402 };
+  return { license };
+}
+
+export async function createPortalSession(env, license) {
+  if (!env.STRIPE_SECRET_KEY) {
+    return { status: 500, body: { ok: false, error: 'server_misconfigured' } };
+  }
+  if (!license.stripe_customer_id) {
+    return { status: 400, body: { ok: false, error: 'no_customer' } };
+  }
+  try {
+    const session = await stripePost(env, '/billing_portal/sessions', {
+      customer: license.stripe_customer_id,
+      return_url: env.PORTAL_RETURN_URL || env.CHECKOUT_CANCEL_URL || ''
+    });
+    return { status: 200, body: { ok: true, url: session.url } };
+  } catch (err) {
+    return { status: 502, body: { ok: false, error: 'stripe_error' } };
+  }
+}
+```
+
+#### 4.19.3 `server/src/index.js` (전체 교체, v0.6.0)
+
+```js
+// server/src/index.js — API 라우터 (7-4-B-3)
+import { corsHeaders } from './cors.js';
+import {
+  bindDevice,
+  findLicense,
+  normalizeKey,
+  quotaSnapshot,
+  requireLicense,
+  sha256Hex
+} from './license.js';
+import { solveProxy } from './solve.js';
+import { deriveLicenseKey, handleStripeWebhook } from './stripe.js';
+import { createCheckoutSession, createPortalSession, findLicenseByRequest } from './billing.js';
+
+const VERSION = '0.6.0';
+const MAX_JSON_BYTES = 8 * 1024;
+const MAX_SOLVE_BYTES = 8 * 1024 * 1024;
+
+function json(data, status = 200, extra = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...extra }
+  });
+}
+
+async function readJson(request, maxBytes) {
+  const text = await request.text();
+  if (text.length > maxBytes) {
+    const err = new Error('body_too_large');
+    err.status = 413;
+    throw err;
+  }
+  try {
+    return JSON.parse(text || '{}');
+  } catch (e) {
+    const err = new Error('invalid_json');
+    err.status = 400;
+    throw err;
+  }
+}
+
+function licensePayload(license, quota) {
+  return {
+    ok: true,
+    plan: license.plan,
+    status: license.status,
+    currentPeriodEnd: license.current_period_end,
+    quota
+  };
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const origin = request.headers.get('Origin') || '';
+    const cors = corsHeaders(origin, env);
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: cors });
+    }
+
+    const route = `${request.method} ${url.pathname}`;
+
+    try {
+      if (route === 'GET /health') {
+        return json({ ok: true, version: VERSION, time: Date.now() }, 200, cors);
+      }
+
+      if (route === 'POST /webhook/stripe') {
+        const result = await handleStripeWebhook(request, env);
+        return json(result.body, result.status);
+      }
+
+      if (route === 'POST /v1/checkout') {
+        const result = await createCheckoutSession(env);
+        return json(result.body, result.status, cors);
+      }
+
+      if (route === 'POST /v1/portal') {
+        const auth = await findLicenseByRequest(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+        const result = await createPortalSession(env, auth.license);
+        return json(result.body, result.status, cors);
+      }
+
+      if (route === 'GET /v1/license') {
+        const sessionId = url.searchParams.get('session_id') || '';
+        if (!sessionId) return json({ ok: false, error: 'missing_session' }, 400, cors);
+
+        const row = await env.DB.prepare('SELECT * FROM licenses WHERE stripe_session_id = ?')
+          .bind(sessionId).first();
+        if (!row) return json({ ok: false, error: 'not_found' }, 404, cors);
+        if (!env.LICENSE_SECRET) {
+          return json({ ok: false, error: 'server_misconfigured' }, 500, cors);
+        }
+
+        const key = await deriveLicenseKey(env.LICENSE_SECRET, sessionId);
+        if ((await sha256Hex(key)) !== row.key_hash) {
+          return json({ ok: false, error: 'key_mismatch' }, 500, cors);
+        }
+
+        return json({
+          ok: true,
+          key,
+          plan: row.plan,
+          status: row.status,
+          currentPeriodEnd: row.current_period_end
+        }, 200, cors);
+      }
+
+      if (route === 'POST /v1/redeem') {
+        const body = await readJson(request, MAX_JSON_BYTES);
+        const key = normalizeKey(body.key);
+        const deviceId = String(body.deviceId || '').trim();
+        if (!key || !deviceId) {
+          return json({ ok: false, error: 'invalid_request' }, 400, cors);
+        }
+
+        const license = await findLicense(env, key);
+        if (!license) return json({ ok: false, error: 'invalid_license' }, 401, cors);
+        if (license.status !== 'active') {
+          return json({ ok: false, error: 'license_' + license.status }, 402, cors);
+        }
+
+        const bound = await bindDevice(env, license.id, await sha256Hex(deviceId));
+        if (!bound.ok) return json({ ok: false, error: bound.reason }, 403, cors);
+
+        const quota = await quotaSnapshot(env, license);
+        return json(licensePayload(license, quota), 200, cors);
+      }
+
+      if (route === 'GET /v1/me') {
+        const auth = await requireLicense(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+        const quota = await quotaSnapshot(env, auth.license);
+        return json(licensePayload(auth.license, quota), 200, cors);
+      }
+
+      if (route === 'POST /v1/solve') {
+        const auth = await requireLicense(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+
+        const body = await readJson(request, MAX_SOLVE_BYTES);
+        const result = await solveProxy(env, auth.license, body);
+        return json(result.body, result.status, cors);
+      }
+
+      return json({ ok: false, error: 'not_found' }, 404, cors);
+    } catch (err) {
+      if (err && err.status) return json({ ok: false, error: err.message }, err.status, cors);
+      return json({ ok: false, error: 'internal' }, 500, cors);
+    }
+  }
+};
+```
+
+추가 라우트:
+
+| Method | Path | 인증 | 설명 |
+|---|---|---|---|
+| POST | `/v1/checkout` | — | Checkout Session 생성 → `{ok,url}` |
+| POST | `/v1/portal` | Bearer(라이선스, 기기 불필요) | Customer Portal URL |
+
+#### 4.19.4 `server/test/billing.test.js` (신규)
+
+```js
+// server/test/billing.test.js — Checkout/Portal 파라미터와 오류 처리
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  buildCheckoutParams,
+  createCheckoutSession,
+  createPortalSession
+} from '../src/billing.js';
+
+const env = {
+  STRIPE_SECRET_KEY: 'sk_test_x',
+  CHECKOUT_SUCCESS_URL: 'https://example.com/thanks?session_id={CHECKOUT_SESSION_ID}',
+  CHECKOUT_CANCEL_URL: 'https://example.com/pricing',
+  PORTAL_RETURN_URL: 'https://example.com/portal',
+  PLAN_PRICE_JPY: '980',
+  PLAN_NAME: 'AI家庭教師 スタンダード'
+};
+
+test('buildCheckoutParams: JPY 980 / monthly / success·cancel', () => {
+  const p = buildCheckoutParams(env);
+  assert.equal(p.mode, 'subscription');
+  assert.equal(p['line_items[0][price_data][currency]'], 'jpy');
+  assert.equal(p['line_items[0][price_data][unit_amount]'], 980);
+  assert.equal(p['line_items[0][price_data][recurring][interval]'], 'month');
+  assert.equal(p.success_url, env.CHECKOUT_SUCCESS_URL);
+  assert.equal(p.cancel_url, env.CHECKOUT_CANCEL_URL);
+});
+
+test('buildCheckoutParams: 가격 기본값 980, 이름 기본값', () => {
+  const p = buildCheckoutParams({});
+  assert.equal(p['line_items[0][price_data][unit_amount]'], 980);
+  assert.equal(p['line_items[0][price_data][product_data][name]'], 'AI家庭教師 スタンダード');
+});
+
+test('createCheckoutSession: 설정 누락 시 500', async () => {
+  const r = await createCheckoutSession({});
+  assert.equal(r.status, 500);
+  assert.equal(r.body.error, 'server_misconfigured');
+});
+
+test('createCheckoutSession: Stripe 성공 → url 반환', async () => {
+  const prev = globalThis.fetch;
+  let body = '';
+  globalThis.fetch = async (url, init) => {
+    body = init.body;
+    return new Response(JSON.stringify({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/x' }), { status: 200 });
+  };
+  try {
+    const r = await createCheckoutSession(env);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.url, 'https://checkout.stripe.com/c/x');
+    const sp = new URLSearchParams(body);
+    assert.equal(sp.get('mode'), 'subscription');
+    assert.equal(sp.get('line_items[0][price_data][unit_amount]'), '980');
+    assert.equal(sp.get('line_items[0][price_data][currency]'), 'jpy');
+    assert.equal(sp.get('success_url'), env.CHECKOUT_SUCCESS_URL);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('createCheckoutSession: Stripe 오류 → 502', async () => {
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: { message: 'bad key' } }), { status: 401 });
+  try {
+    const r = await createCheckoutSession(env);
+    assert.equal(r.status, 502);
+    assert.equal(r.body.error, 'stripe_error');
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('createPortalSession: customer 없으면 400, 키 없으면 500', async () => {
+  const noCustomer = await createPortalSession(env, { stripe_customer_id: null });
+  assert.equal(noCustomer.status, 400);
+  assert.equal(noCustomer.body.error, 'no_customer');
+
+  const noKey = await createPortalSession({}, { stripe_customer_id: 'cus_1' });
+  assert.equal(noKey.status, 500);
+});
+
+test('createPortalSession: Stripe 성공 → url 반환', async () => {
+  const prev = globalThis.fetch;
+  let body = '';
+  globalThis.fetch = async (url, init) => {
+    body = init.body;
+    return new Response(JSON.stringify({ url: 'https://billing.stripe.com/p/x' }), { status: 200 });
+  };
+  try {
+    const r = await createPortalSession(env, { stripe_customer_id: 'cus_1' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.url, 'https://billing.stripe.com/p/x');
+    const sp = new URLSearchParams(body);
+    assert.equal(sp.get('customer'), 'cus_1');
+    assert.equal(sp.get('return_url'), env.PORTAL_RETURN_URL);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+```
+
+#### 4.19.5 `site/pricing.html` — 버튼으로 교체
+
+기존 앵커(플레이스홀더)를 아래로 바꾼다.
+
+```html
+<!-- before -->
+<a class="cta" href="https://buy.stripe.com/test_REPLACE_ME">サブスクをはじめる</a>
+
+<!-- after -->
+<button class="cta" id="subscribeBtn" type="button">サブスクをはじめる</button>
+<script>
+(function () {
+  var API = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+  var btn = document.getElementById('subscribeBtn');
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    btn.textContent = '決済ページを準備中…';
+    fetch(API + '/v1/checkout', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok || !d.url) throw new Error((d && d.error) || 'checkout_failed');
+        location.href = d.url;
+      })
+      .catch(function (e) {
+        btn.disabled = false;
+        btn.textContent = 'サブスクをはじめる';
+        alert('決済ページを開けませんでした: ' + e.message);
+      });
+  });
+})();
+</script>
+```
+
+> 아래의 "현재는 테스트 모드" 안내 문구는 그대로 둔다.
+
+#### 4.19.6 `site/portal.html` (신규)
+
+```html
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>契約管理 | AI家庭教師</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+    <nav class="site"><a href="./pricing.html">料金</a></nav>
+  </header>
+
+  <h1>契約管理</h1>
+  <p class="lead">ライセンスキーを入力すると、Stripe のカスタマーポータルが開きます。解約・カード変更ができます。</p>
+
+  <div class="card">
+    <label for="licenseInput" class="muted" style="display:block; margin-bottom:6px;">ライセンスキー</label>
+    <input id="licenseInput" type="text" autocomplete="off" spellcheck="false"
+      placeholder="AMT-XXXX-XXXX-XXXX-XXXX"
+      style="width:100%; font-size:16px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--fg);">
+    <button class="cta" id="portalBtn" type="button" style="margin-top:14px;">カスタマーポータルを開く</button>
+    <p class="muted" id="statusLine" style="margin-top:12px;"></p>
+  </div>
+
+  <div class="notice">
+    ポータルは Stripe が提供します。当サービスはカード情報を保持しません。<br>
+    ライセンスキーが分からない場合は、購入時のメールに記載のリンクからご確認ください。
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var API = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+  var input = document.getElementById('licenseInput');
+  var btn = document.getElementById('portalBtn');
+  var status = document.getElementById('statusLine');
+
+  function setStatus(text) { status.textContent = text || ''; }
+
+  function normalize(raw) {
+    var s = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (s.indexOf('AMT') !== 0 || s.length !== 19) return '';
+    return 'AMT-' + s.slice(3).match(/.{4}/g).join('-');
+  }
+
+  btn.addEventListener('click', function () {
+    var key = normalize(input.value);
+    if (!key) { setStatus('ライセンスキーの形式が正しくありません（AMT-XXXX-…）。'); return; }
+
+    btn.disabled = true;
+    setStatus('ポータルを準備しています…');
+
+    fetch(API + '/v1/portal', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key }
+    })
+      .then(function (res) { return res.json().then(function (body) { return { status: res.status, body: body }; }); })
+      .then(function (r) {
+        if (r.body && r.body.ok && r.body.url) {
+          location.href = r.body.url;
+          return;
+        }
+        var code = (r.body && r.body.error) || 'unknown';
+        if (code === 'no_customer') setStatus('このライセンスは手動発行のため、ポータル対象外です。');
+        else if (code === 'invalid_license') setStatus('ライセンスキーが見つかりません。');
+        else if (code === 'license_canceled') setStatus('解約済みのライセンスです。');
+        else setStatus('ポータルを開けませんでした（' + code + '）。時間をおいて再度お試しください。');
+        btn.disabled = false;
+      })
+      .catch(function (e) {
+        setStatus('通信エラー: ' + (e && e.message ? e.message : e));
+        btn.disabled = false;
+      });
+  });
+})();
+</script>
+</body>
+</html>
+```
+
+#### 4.19.7 검증
+
+```bash
+# 단위
+npx playwright test                 # 클라이언트 42 유지 (변경 없음)
+cd server && npm test               # 32 pass (25 + billing 7)
+
+# 로컬: Checkout 생성 (실제 Stripe 샌드박스 호출, 결제는 안 함)
+npx wrangler dev --port 8787 &
+curl -s -X POST http://127.0.0.1:8787/v1/checkout
+# → {"ok":true,"url":"https://checkout.stripe.com/c/pay/...","id":"cs_test_..."}
+
+# 로컬 포털: 수동 발급 라이선스는 no_customer(400)
+KEY=<수동 발급 키>
+curl -s -X POST http://127.0.0.1:8787/v1/portal -H "Authorization: Bearer $KEY"
+# → {"ok":false,"error":"no_customer"} (정상)
+```
+
+**프로덕션 E2E**
+
+```bash
+npx wrangler deploy
+# 사이트 푸시 후 GitHub Pages 반영 대기(1~2분)
+```
+
+1. Stripe → **Developers → Webhooks → Add endpoint**
+   - URL `https://ai-math-tutor-api.g4pjo75.workers.dev/webhook/stripe`
+   - 이벤트 4개 → `whsec_...` → `wrangler secret put STRIPE_WEBHOOK_SECRET`
+2. Stripe → **Settings → Billing → Customer portal** 활성화
+   - 해지 허용 ON, return URL `.../site/portal.html`
+3. `https://.../site/pricing.html` → **サブスクをはじめる**
+4. Checkout에서 `4242 4242 4242 4242` 결제
+5. `thanks.html` 에 키 표시 → 앱/curl로 redeem → solve
+6. `site/portal.html` 에 키 입력 → Stripe 포털 열림 → 해지 → 웹훅으로 `canceled` 반영
+
+#### 4.19.8 DoD
+
+- [ ] 서버 `npm test` **32 pass**
+- [ ] 클라이언트 **42 pass** (변경 없음)
+- [ ] `/health` version `0.6.0`
+- [ ] `POST /v1/checkout` → `url` 반환
+- [ ] 테스트 카드 결제 → `thanks.html` 키 표시 → redeem/solve 성공
+- [ ] `POST /v1/portal` → Stripe 포털 URL (수동 발급 키는 `400 no_customer`)
+- [ ] 해지 후 `/v1/me` status `canceled`, solve `402`
+- [ ] 시크릿 값이 저장소·채팅에 없음
+
+**커밋 2개**
+
+```
+feat(server): add stripe checkout and customer portal
+feat(site): add portal page and checkout button
+```
+
 ---
 
 ## 5. 리스크와 대응
