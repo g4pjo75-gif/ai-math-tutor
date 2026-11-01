@@ -5,5 +5,12 @@
   "observability": { "enabled": true },
   "vars": {
     "ALLOWED_ORIGINS": "http://localhost:8765,https://g4pjo75-gif.github.io"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-math-tutor-db",
+      "database_id": "181e96f0-21bc-4999-a723-a220a028ab2d"
+    }
+  ]
 }
