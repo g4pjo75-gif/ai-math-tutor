@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>お手続き完了 | AI家庭教師</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+  </header>
+
+  <h1>お手続きありがとうございます</h1>
+  <p class="lead">下のライセンスキーをアプリの設定画面に登録してください。</p>
+
+  <div class="card" id="loading">
+    <p class="muted" style="margin:0">ライセンスキーを取得しています…</p>
+  </div>
+
+  <div class="card hidden" id="result">
+    <h2 style="margin-top:0">あなたのライセンスキー</h2>
+    <code class="key" id="licenseKey">----</code>
+    <button class="copy" id="copyBtn" type="button">コピー</button>
+    <p class="muted" id="planLine"></p>
+
+    <h2>登録方法</h2>
+    <ol>
+      <li>下のボタンからアプリを開く</li>
+      <li>右上の <strong>⚙️ 設定</strong> を開く</li>
+      <li><strong>ライセンスキー</strong> 欄に貼り付けて保存</li>
+    </ol>
+    <a class="cta" href="../math/" id="openMath">数学アプリを開く</a>
+    <a class="cta ghost" href="../english/" id="openEnglish">英語アプリを開く</a>
+    <p class="muted" style="margin-top:14px">このページを閉じても、同じURL（session_id付き）で再表示できます。大切に保管してください。</p>
+  </div>
+
+  <div class="card hidden" id="error">
+    <h2 style="margin-top:0">ライセンスキーを取得できませんでした</h2>
+    <p>時間をおいて再度このページを開くか、お問い合わせください。</p>
+    <p class="muted" id="errorDetail"></p>
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var API = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+  var params = new URLSearchParams(location.search);
+  var sessionId = params.get('session_id');
+
+  var loading = document.getElementById('loading');
+  var result = document.getElementById('result');
+  var error = document.getElementById('error');
+
+  function showError(detail) {
+    loading.classList.add('hidden');
+    error.classList.remove('hidden');
+    document.getElementById('errorDetail').textContent = detail || '';
+  }
+
+  if (!sessionId) {
+    showError('URL に session_id がありません。決済完了メールのリンクから開いてください。');
+    return;
+  }
+
+  fetch(API + '/v1/license?session_id=' + encodeURIComponent(sessionId))
+    .then(function (res) { return res.json().then(function (body) { return { status: res.status, body: body }; }); })
+    .then(function (r) {
+      if (!r.body || !r.body.ok) {
+        showError((r.body && r.body.error ? r.body.error : 'unknown') + ' (' + r.status + ')');
+        return;
+      }
+      loading.classList.add('hidden');
+      result.classList.remove('hidden');
+      document.getElementById('licenseKey').textContent = r.body.key;
+      document.getElementById('planLine').textContent =
+        'プラン: ' + (r.body.plan || '-') + ' / 状態: ' + (r.body.status || '-');
+    })
+    .catch(function (e) { showError(String(e && e.message || e)); });
+
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    var text = document.getElementById('licenseKey').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        document.getElementById('copyBtn').textContent = 'コピーしました';
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>

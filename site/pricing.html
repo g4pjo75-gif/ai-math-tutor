@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>料金 | AI家庭教師</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+    <nav class="site">
+      <a href="./pricing.html">料金</a>
+      <a href="../">アプリ</a>
+    </nav>
+  </header>
+
+  <h1>料金</h1>
+  <p class="lead">まずは無料で試せます。続ける場合はサブスクリプションをご利用ください。</p>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2 style="margin-top:0">無料</h2>
+      <p class="price">¥0 <small>/ 月</small></p>
+      <ul class="checks">
+        <li>自分の Gemini API キーを使用</li>
+        <li>回数制限なし（API料金は自己負担）</li>
+        <li>数学・英語のすべての機能</li>
+      </ul>
+      <a class="cta ghost" href="../math/">アプリを開く</a>
+    </div>
+
+    <div class="card" style="border-color: var(--accent); border-width: 2px;">
+      <h2 style="margin-top:0">スタンダード</h2>
+      <p class="price">¥980 <small>/ 月（税込）</small></p>
+      <ul class="checks">
+        <li><strong>APIキー設定不要</strong></li>
+        <li>月 <strong>300回</strong>まで解説・質問</li>
+        <li>写真・音声・クイズ・添削すべて</li>
+        <li>いつでも解約可能</li>
+      </ul>
+      <!-- Stripe のテスト用 Payment Link に差し替える -->
+      <a class="cta" href="https://buy.stripe.com/test_REPLACE_ME">サブスクをはじめる</a>
+      <p class="muted" style="margin-top:10px">現在は<strong>テストモード</strong>です。テストカード 4242 4242 4242 4242 で動作確認できます。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">購入後にすること</h2>
+    <ol>
+      <li>決済完了ページに<strong>ライセンスキー</strong>が表示されます（<code>AMT-XXXX-…</code>）</li>
+      <li>アプリの <strong>⚙️ 設定</strong> にキーを入力</li>
+      <li>以後はAPIキーなしで利用できます</li>
+    </ol>
+    <p class="muted">ライセンスは最大2台の端末で利用できます。</p>
+  </div>
+
+  <div class="notice">
+    表示価格は税込です。支払い方法はクレジットカード（Stripe）です。
+    解約はカスタマーポータルから、次回更新日の前までに行ってください。
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+</body>
+</html>
