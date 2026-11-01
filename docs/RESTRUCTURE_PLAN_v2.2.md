@@ -7076,6 +7076,913 @@ npx wrangler deploy
 
 **선행 조건**: 도메인(Resend 발신 인증), Stripe 계정/세금 설정, 약관 문안.
 
+### 4.18 Phase 7-4-B-1/B-2 (사이트 + Stripe 웹훅 + 라이선스 표시)
+
+**전제**: 7-4-A 완료(`be4562c`).
+**목표**: 도메인·메일 없이 **결제 → 라이선스 표시 → 앱 등록**까지 연결한다.
+
+```
+Stripe Payment Link (테스트)
+   └─ 결제 완료 → success_url: site/thanks.html?session_id={CHECKOUT_SESSION_ID}
+                        │
+                        ├─ Worker /webhook/stripe  (라이선스 생성: session_id로 키 유도)
+                        └─ Worker /v1/license?session_id=...  (키 표시)
+```
+
+**핵심**: 키를 DB에 평문 저장하지 않는다. `HMAC(LICENSE_SECRET, "license:"+session_id)`로
+**결정적으로 유도**하고, DB에는 해시만 저장한다. `LICENSE_SECRET`은 반드시 백업한다.
+
+#### 4.18.1 사이트 `site/` (5파일, GitHub Pages)
+
+배포 위치: `https://g4pjo75-gif.github.io/ai-math-tutor/site/`
+
+| 파일 | 역할 |
+|---|---|
+| `site/style.css` | 공통 스타일(라이트/다크) |
+| `site/index.html` | 랜딩 |
+| `site/pricing.html` | 요금제 + Stripe 버튼 |
+| `site/thanks.html` | `session_id`로 키 표시 |
+| `site/legal.html` | 特定商取引法 · 利用規約 · プライバシー |
+
+**`site/style.css`**
+
+```css
+:root {
+  --bg: #f6f7f5; --fg: #1f2933; --sub: #5b6b7a;
+  --card: #ffffff; --line: #e3e8ec; --accent: #1e6b4f; --accent-weak: #e7f2ec;
+  --warn: #b45309; --radius: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1512; --fg: #e8eeea; --sub: #9fb0a8;
+    --card: #17201c; --line: #26332d; --accent: #4ade80; --accent-weak: #143024;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', Meiryo, 'Noto Sans JP', sans-serif;
+  -webkit-font-smoothing: antialiased; line-height: 1.75;
+}
+a { color: var(--accent); }
+.wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
+header.site { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 28px; }
+.brand { font-weight: 800; letter-spacing: .02em; text-decoration: none; color: var(--fg); }
+.brand .logo { font-size: 22px; margin-right: 6px; }
+nav.site a { margin-left: 14px; font-size: 13px; color: var(--sub); text-decoration: none; }
+nav.site a:hover { color: var(--accent); }
+h1 { font-size: 26px; line-height: 1.4; margin: 0 0 12px; }
+h2 { font-size: 18px; margin: 32px 0 10px; }
+p.lead { color: var(--sub); margin: 0 0 24px; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 20px 18px; margin: 14px 0;
+}
+.grid { display: grid; gap: 14px; }
+@media (min-width: 640px) { .grid.cols-2 { grid-template-columns: 1fr 1fr; } }
+.cta {
+  display: inline-block; background: var(--accent); color: #fff; text-decoration: none;
+  font-weight: 700; padding: 12px 20px; border-radius: 12px; margin-top: 8px;
+}
+@media (prefers-color-scheme: dark) { .cta { color: #06251a; } }
+.cta.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.muted { color: var(--sub); font-size: 13px; }
+.price { font-size: 34px; font-weight: 800; margin: 4px 0; }
+.price small { font-size: 13px; font-weight: 500; color: var(--sub); }
+ul.checks { list-style: none; padding: 0; margin: 10px 0; }
+ul.checks li::before { content: '✓'; color: var(--accent); font-weight: 800; margin-right: 8px; }
+code.key {
+  display: block; background: var(--accent-weak); color: var(--fg); border: 1px dashed var(--accent);
+  border-radius: 12px; padding: 14px; font-size: 18px; font-weight: 700; letter-spacing: .06em;
+  text-align: center; margin: 12px 0; word-break: break-all;
+}
+button.copy {
+  background: var(--accent); color: #fff; border: 0; border-radius: 10px;
+  padding: 10px 16px; font-weight: 700; cursor: pointer;
+}
+@media (prefers-color-scheme: dark) { button.copy { color: #06251a; } }
+.notice { border-left: 4px solid var(--warn); background: rgba(180,83,9,.08); padding: 10px 14px; border-radius: 8px; font-size: 13px; }
+footer.site { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 18px; font-size: 12px; color: var(--sub); }
+footer.site a { color: var(--sub); margin-right: 12px; }
+table.legal { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.legal th, table.legal td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; vertical-align: top; }
+table.legal th { width: 34%; color: var(--sub); font-weight: 600; }
+.hidden { display: none; }
+```
+
+**`site/index.html`**
+
+```html
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI家庭教師 | 高校数学・英語のAIチューター</title>
+<meta name="description" content="写真1枚で質問できる高校数学I・Aと英語のAI家庭教師。ステップ解説・音声・4択クイズ・英作文添削。">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+    <nav class="site">
+      <a href="./pricing.html">料金</a>
+      <a href="../">アプリ</a>
+    </nav>
+  </header>
+
+  <h1>写真を撮って質問するだけ。<br>高校数学と英語の「わからない」を、その場で解く。</h1>
+  <p class="lead">数学I・A と 英語コミュニケーションI に対応。解説はステップごと、音声でも聞けます。</p>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2 style="margin-top:0">📐 数学 I・A</h2>
+      <ul class="checks">
+        <li>写真から問題を読み取り、ステップ解説</li>
+        <li>類題4択でその場で理解度チェック</li>
+        <li>「もっとやさしく」で言い換え</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">🇬🇧 英語</h2>
+      <ul class="checks">
+        <li>長文の構文・語彙を1文ずつ解説</li>
+        <li>英文法・語彙の4択クイズ</li>
+        <li>英作文の添削と自然な表現</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">使い方は2通り</h2>
+    <p class="muted" style="margin-top:0">どちらも同じアプリです。用途に合わせて選べます。</p>
+    <ul class="checks">
+      <li><strong>無料（自分のAPIキー）</strong> — 回数制限なし。Gemini APIキーを設定画面で登録</li>
+      <li><strong>サブスク</strong> — キー設定不要。アプリにライセンスキーを入力するだけ</li>
+    </ul>
+    <a class="cta" href="./pricing.html">料金を見る</a>
+    <a class="cta ghost" href="../math/">数学をはじめる</a>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">よくある質問</h2>
+    <p><strong>Q. 写真だけで使えますか？</strong><br>はい。テキスト入力だけでも使えます。</p>
+    <p><strong>Q. 無料でどこまで使えますか？</strong><br>自分のAPIキーを使う場合は回数制限がありません（API利用料はご自身の負担）。</p>
+    <p><strong>Q. 解約は？</strong><br>購入後のメールに記載のカスタマーポータルからいつでも解約できます。</p>
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+</body>
+</html>
+```
+
+**`site/pricing.html`**
+
+```html
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>料金 | AI家庭教師</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+    <nav class="site">
+      <a href="./pricing.html">料金</a>
+      <a href="../">アプリ</a>
+    </nav>
+  </header>
+
+  <h1>料金</h1>
+  <p class="lead">まずは無料で試せます。続ける場合はサブスクリプションをご利用ください。</p>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2 style="margin-top:0">無料</h2>
+      <p class="price">¥0 <small>/ 月</small></p>
+      <ul class="checks">
+        <li>自分の Gemini API キーを使用</li>
+        <li>回数制限なし（API料金は自己負担）</li>
+        <li>数学・英語のすべての機能</li>
+      </ul>
+      <a class="cta ghost" href="../math/">アプリを開く</a>
+    </div>
+
+    <div class="card" style="border-color: var(--accent); border-width: 2px;">
+      <h2 style="margin-top:0">スタンダード</h2>
+      <p class="price">¥980 <small>/ 月（税込）</small></p>
+      <ul class="checks">
+        <li><strong>APIキー設定不要</strong></li>
+        <li>月 <strong>300回</strong>まで解説・質問</li>
+        <li>写真・音声・クイズ・添削すべて</li>
+        <li>いつでも解約可能</li>
+      </ul>
+      <!-- Stripe のテスト用 Payment Link に差し替える -->
+      <a class="cta" href="https://buy.stripe.com/test_REPLACE_ME">サブスクをはじめる</a>
+      <p class="muted" style="margin-top:10px">現在は<strong>テストモード</strong>です。テストカード 4242 4242 4242 4242 で動作確認できます。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">購入後にすること</h2>
+    <ol>
+      <li>決済完了ページに<strong>ライセンスキー</strong>が表示されます（<code>AMT-XXXX-…</code>）</li>
+      <li>アプリの <strong>⚙️ 設定</strong> にキーを入力</li>
+      <li>以後はAPIキーなしで利用できます</li>
+    </ol>
+    <p class="muted">ライセンスは最大2台の端末で利用できます。</p>
+  </div>
+
+  <div class="notice">
+    表示価格は税込です。支払い方法はクレジットカード（Stripe）です。
+    解約はカスタマーポータルから、次回更新日の前までに行ってください。
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+</body>
+</html>
+```
+
+**`site/thanks.html`**
+
+```html
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>お手続き完了 | AI家庭教師</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+  </header>
+
+  <h1>お手続きありがとうございます</h1>
+  <p class="lead">下のライセンスキーをアプリの設定画面に登録してください。</p>
+
+  <div class="card" id="loading">
+    <p class="muted" style="margin:0">ライセンスキーを取得しています…</p>
+  </div>
+
+  <div class="card hidden" id="result">
+    <h2 style="margin-top:0">あなたのライセンスキー</h2>
+    <code class="key" id="licenseKey">----</code>
+    <button class="copy" id="copyBtn" type="button">コピー</button>
+    <p class="muted" id="planLine"></p>
+
+    <h2>登録方法</h2>
+    <ol>
+      <li>下のボタンからアプリを開く</li>
+      <li>右上の <strong>⚙️ 設定</strong> を開く</li>
+      <li><strong>ライセンスキー</strong> 欄に貼り付けて保存</li>
+    </ol>
+    <a class="cta" href="../math/" id="openMath">数学アプリを開く</a>
+    <a class="cta ghost" href="../english/" id="openEnglish">英語アプリを開く</a>
+    <p class="muted" style="margin-top:14px">このページを閉じても、同じURL（session_id付き）で再表示できます。大切に保管してください。</p>
+  </div>
+
+  <div class="card hidden" id="error">
+    <h2 style="margin-top:0">ライセンスキーを取得できませんでした</h2>
+    <p>時間をおいて再度このページを開くか、お問い合わせください。</p>
+    <p class="muted" id="errorDetail"></p>
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var API = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+  var params = new URLSearchParams(location.search);
+  var sessionId = params.get('session_id');
+
+  var loading = document.getElementById('loading');
+  var result = document.getElementById('result');
+  var error = document.getElementById('error');
+
+  function showError(detail) {
+    loading.classList.add('hidden');
+    error.classList.remove('hidden');
+    document.getElementById('errorDetail').textContent = detail || '';
+  }
+
+  if (!sessionId) {
+    showError('URL に session_id がありません。決済完了メールのリンクから開いてください。');
+    return;
+  }
+
+  fetch(API + '/v1/license?session_id=' + encodeURIComponent(sessionId))
+    .then(function (res) { return res.json().then(function (body) { return { status: res.status, body: body }; }); })
+    .then(function (r) {
+      if (!r.body || !r.body.ok) {
+        showError((r.body && r.body.error ? r.body.error : 'unknown') + ' (' + r.status + ')');
+        return;
+      }
+      loading.classList.add('hidden');
+      result.classList.remove('hidden');
+      document.getElementById('licenseKey').textContent = r.body.key;
+      document.getElementById('planLine').textContent =
+        'プラン: ' + (r.body.plan || '-') + ' / 状態: ' + (r.body.status || '-');
+    })
+    .catch(function (e) { showError(String(e && e.message || e)); });
+
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    var text = document.getElementById('licenseKey').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        document.getElementById('copyBtn').textContent = 'コピーしました';
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>
+```
+
+**`site/legal.html`**
+
+```html
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>特定商取引法・利用規約・プライバシー | AI家庭教師</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+    <nav class="site"><a href="./pricing.html">料金</a></nav>
+  </header>
+
+  <h1>特定商取引法に基づく表記</h1>
+  <div class="card">
+    <table class="legal">
+      <tr><th>販売事業者</th><td>（氏名）</td></tr>
+      <tr><th>所在地</th><td>請求があった場合に遅滞なく開示します</td></tr>
+      <tr><th>連絡先</th><td>（メールアドレス）</td></tr>
+      <tr><th>販売価格</th><td>スタンダード 月額 ¥980（税込）</td></tr>
+      <tr><th>支払方法</th><td>クレジットカード（Stripe）</td></tr>
+      <tr><th>支払時期</th><td>購入時および毎月の更新日</td></tr>
+      <tr><th>役務の提供時期</th><td>決済完了後、直ちにライセンスキーを発行</td></tr>
+      <tr><th>返品・キャンセル</th><td>デジタルサービスの性質上、提供開始後の返金は行いません。次回更新日の前までにカスタマーポータルから解約できます。</td></tr>
+      <tr><th>動作環境</th><td>最新の Safari / Chrome / Edge（iOS・Android・PC）</td></tr>
+    </table>
+  </div>
+
+  <h1 id="terms">利用規約</h1>
+  <div class="card">
+    <p>本サービスは、高校数学・英語の学習支援を目的とするAIサービスです。</p>
+    <ul>
+      <li>ライセンスキーの第三者への譲渡・共有・転売を禁止します。</li>
+      <li>1つのライセンスは最大2台の端末で利用できます。</li>
+      <li>AIの回答は学習の補助であり、正確性を保証するものではありません。</li>
+      <li>不正利用・過度な負荷をかける行為があった場合、利用を停止することがあります。</li>
+      <li>未成年者は保護者の同意を得て利用してください。</li>
+    </ul>
+  </div>
+
+  <h1 id="privacy">プライバシーポリシー</h1>
+  <div class="card">
+    <ul>
+      <li>取得する情報: メールアドレス（決済時）、利用回数・トークン数、端末識別子のハッシュ。</li>
+      <li>問題文・画像・解説文は<strong>サーバーに保存しません</strong>（AIへの転送のみ）。</li>
+      <li>決済情報は Stripe が処理し、当方はカード情報を保持しません。</li>
+      <li>AI処理のため Google Gemini API に内容を送信します。</li>
+      <li>未成年者の利用については、保護者の同意を得たうえでご利用ください。</li>
+      <li>開示・訂正・削除のご請求は上記連絡先まで。</li>
+    </ul>
+  </div>
+
+  <div class="notice">
+    本文は<strong>雛形</strong>です。販売事業者名・住所・連絡先・返金条件は公開前に必ず確定してください。
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+</body>
+</html>
+```
+
+> `pricing.html`의 `https://buy.stripe.com/test_REPLACE_ME`는 4.18.2에서 만든 Payment Link로 교체한다.
+> `legal.html`의 사업자명·주소·연락처는 **공개 전 반드시 확정**한다.
+
+#### 4.18.2 Stripe 테스트 모드 준비
+
+1. Stripe 대시보드 → **테스트 모드** ON
+2. 상품 생성: `AI家庭教師 スタンダード`, 가격 **¥980 / 月 / 税込**, 반복
+3. **Payment Link** 생성
+   - 성공 URL: `https://g4pjo75-gif.github.io/ai-math-tutor/site/thanks.html?session_id={CHECKOUT_SESSION_ID}`
+   - 취소 URL: `https://g4pjo75-gif.github.io/ai-math-tutor/site/pricing.html`
+   - 생성된 링크를 `site/pricing.html`에 붙여넣기
+4. **Webhook** 추가
+   - URL: `https://ai-math-tutor-api.g4pjo75.workers.dev/webhook/stripe`
+   - 이벤트: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
+   - 서명 시크릿(`whsec_...`) 확보
+
+시크릿 주입:
+
+```bash
+cd server
+npx wrangler secret put STRIPE_WEBHOOK_SECRET     # whsec_...
+openssl rand -hex 32                              # LICENSE_SECRET 값 생성
+npx wrangler secret put LICENSE_SECRET            # 위에서 생성한 값 (반드시 백업)
+```
+
+`server/wrangler.jsonc` vars에 추가:
+
+```jsonc
+    "PLAN_LIMIT": "300"
+```
+
+로컬용 `.dev.vars`(gitignore, chmod 600):
+
+```
+STRIPE_WEBHOOK_SECRET=whsec_test_local
+LICENSE_SECRET=<openssl rand -hex 32 결과>
+PLAN_LIMIT=300
+```
+
+#### 4.18.3 마이그레이션 `server/migrations/0004_stripe.sql`
+
+```sql
+ALTER TABLE licenses ADD COLUMN stripe_session_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_licenses_session ON licenses (stripe_session_id);
+```
+
+```bash
+npx wrangler d1 execute ai-math-tutor-db --local  --file=migrations/0004_stripe.sql
+npx wrangler d1 execute ai-math-tutor-db --remote --file=migrations/0004_stripe.sql
+```
+
+#### 4.18.4 `server/src/stripe.js` (신규)
+
+```js
+// server/src/stripe.js — Stripe webhook 검증 + 라이선스 키 유도 + 이벤트 처리
+import { hashKey } from './license.js';
+
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const TOLERANCE_SEC = 300;
+
+async function hmacBytes(secret, message) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return new Uint8Array(sig);
+}
+
+function toHex(bytes) {
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function hmacHex(secret, message) {
+  return toHex(await hmacBytes(secret, message));
+}
+
+export function timingSafeEqual(a, b) {
+  const x = String(a || '');
+  const y = String(b || '');
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return diff === 0;
+}
+
+export function parseStripeSignature(header) {
+  const out = {};
+  for (const part of String(header || '').split(',')) {
+    const i = part.indexOf('=');
+    if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim();
+  }
+  return out;
+}
+
+export async function verifyStripeSignature(payload, header, secret, toleranceSec = TOLERANCE_SEC) {
+  if (!secret) return false;
+  const sig = parseStripeSignature(header);
+  const t = Number(sig.t);
+  if (!t) return false;
+  if (Math.abs(Date.now() / 1000 - t) > toleranceSec) return false;
+  const expected = await hmacHex(secret, `${t}.${payload}`);
+  return timingSafeEqual(expected, sig.v1 || '');
+}
+
+function base32(bytes) {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const b of bytes) {
+    value = (value << 8) | b;
+    bits += 8;
+    while (bits >= 5) {
+      out += ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += ALPHABET[(value << (5 - bits)) & 31];
+  return out;
+}
+
+// session_id로부터 결정적으로 라이선스 키를 만든다(평문 저장 불필요).
+export async function deriveLicenseKey(secret, sessionId) {
+  if (!secret) throw new Error('LICENSE_SECRET missing');
+  const mac = await hmacBytes(secret, `license:${sessionId}`);
+  const raw = base32(mac).slice(0, 16);
+  return 'AMT-' + raw.match(/.{4}/g).join('-');
+}
+
+export async function handleStripeWebhook(request, env) {
+  const payload = await request.text();
+  const signature = request.headers.get('Stripe-Signature') || '';
+
+  if (!(await verifyStripeSignature(payload, signature, env.STRIPE_WEBHOOK_SECRET))) {
+    return { status: 400, body: { ok: false, error: 'invalid_signature' } };
+  }
+
+  let event;
+  try {
+    event = JSON.parse(payload);
+  } catch (e) {
+    return { status: 400, body: { ok: false, error: 'invalid_json' } };
+  }
+
+  const type = event.type;
+  const obj = event.data && event.data.object ? event.data.object : null;
+  if (!obj) return { status: 200, body: { ok: true, ignored: 'no_object' } };
+
+  if (type === 'checkout.session.completed') {
+    if (obj.mode !== 'subscription') {
+      return { status: 200, body: { ok: true, ignored: 'not_subscription' } };
+    }
+    const existing = await env.DB.prepare('SELECT id FROM licenses WHERE stripe_session_id = ?')
+      .bind(obj.id).first();
+    if (existing) return { status: 200, body: { ok: true, duplicate: true } };
+
+    if (!env.LICENSE_SECRET) {
+      return { status: 500, body: { ok: false, error: 'server_misconfigured' } };
+    }
+
+    const key = await deriveLicenseKey(env.LICENSE_SECRET, obj.id);
+    const keyHash = await hashKey(key);
+    const id = 'lic_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    const now = Date.now();
+    const periodEnd = now + 30 * 86400000;
+    const limit = Number(env.PLAN_LIMIT || 300);
+    const email = obj.customer_details && obj.customer_details.email ? obj.customer_details.email : null;
+
+    await env.DB.prepare(
+      'INSERT INTO licenses (id, key_hash, email, stripe_customer_id, stripe_subscription_id, plan, status, call_limit, current_period_end, created_at, stripe_session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      id, keyHash, email,
+      obj.customer || null, obj.subscription || null,
+      'standard', 'active', limit, periodEnd, now, obj.id
+    ).run();
+
+    return { status: 200, body: { ok: true, created: id } };
+  }
+
+  if (type === 'customer.subscription.updated' || type === 'customer.subscription.deleted' || type === 'invoice.payment_failed') {
+    const subId = type === 'invoice.payment_failed' ? (obj.subscription || null) : obj.id;
+    if (!subId) return { status: 200, body: { ok: true, ignored: 'no_subscription' } };
+
+    let status = 'active';
+    if (type === 'customer.subscription.deleted') status = 'canceled';
+    else if (type === 'invoice.payment_failed') status = 'past_due';
+    else if (obj.status) status = obj.status;
+
+    const periodEnd = obj.current_period_end ? obj.current_period_end * 1000 : null;
+
+    await env.DB.prepare(
+      'UPDATE licenses SET status = ?, current_period_end = COALESCE(?, current_period_end) WHERE stripe_subscription_id = ?'
+    ).bind(status, periodEnd, subId).run();
+
+    return { status: 200, body: { ok: true, updated: subId, status } };
+  }
+
+  return { status: 200, body: { ok: true, ignored: type } };
+}
+```
+
+#### 4.18.5 `server/src/index.js` (전체 교체, v0.5.0)
+
+```js
+// server/src/index.js — API 라우터 (7-4-B)
+import { corsHeaders } from './cors.js';
+import {
+  bindDevice,
+  findLicense,
+  normalizeKey,
+  quotaSnapshot,
+  requireLicense,
+  sha256Hex
+} from './license.js';
+import { solveProxy } from './solve.js';
+import { deriveLicenseKey, handleStripeWebhook } from './stripe.js';
+
+const VERSION = '0.5.0';
+const MAX_JSON_BYTES = 8 * 1024;
+const MAX_SOLVE_BYTES = 8 * 1024 * 1024;
+
+function json(data, status = 200, extra = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...extra }
+  });
+}
+
+async function readJson(request, maxBytes) {
+  const text = await request.text();
+  if (text.length > maxBytes) {
+    const err = new Error('body_too_large');
+    err.status = 413;
+    throw err;
+  }
+  try {
+    return JSON.parse(text || '{}');
+  } catch (e) {
+    const err = new Error('invalid_json');
+    err.status = 400;
+    throw err;
+  }
+}
+
+function licensePayload(license, quota) {
+  return {
+    ok: true,
+    plan: license.plan,
+    status: license.status,
+    currentPeriodEnd: license.current_period_end,
+    quota
+  };
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const origin = request.headers.get('Origin') || '';
+    const cors = corsHeaders(origin, env);
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: cors });
+    }
+
+    const route = `${request.method} ${url.pathname}`;
+
+    try {
+      if (route === 'GET /health') {
+        return json({ ok: true, version: VERSION, time: Date.now() }, 200, cors);
+      }
+
+      if (route === 'POST /webhook/stripe') {
+        const result = await handleStripeWebhook(request, env);
+        return json(result.body, result.status);
+      }
+
+      if (route === 'GET /v1/license') {
+        const sessionId = url.searchParams.get('session_id') || '';
+        if (!sessionId) return json({ ok: false, error: 'missing_session' }, 400, cors);
+
+        const row = await env.DB.prepare('SELECT * FROM licenses WHERE stripe_session_id = ?')
+          .bind(sessionId).first();
+        if (!row) return json({ ok: false, error: 'not_found' }, 404, cors);
+        if (!env.LICENSE_SECRET) {
+          return json({ ok: false, error: 'server_misconfigured' }, 500, cors);
+        }
+
+        const key = await deriveLicenseKey(env.LICENSE_SECRET, sessionId);
+        if ((await sha256Hex(key)) !== row.key_hash) {
+          return json({ ok: false, error: 'key_mismatch' }, 500, cors);
+        }
+
+        return json({
+          ok: true,
+          key,
+          plan: row.plan,
+          status: row.status,
+          currentPeriodEnd: row.current_period_end
+        }, 200, cors);
+      }
+
+      if (route === 'POST /v1/redeem') {
+        const body = await readJson(request, MAX_JSON_BYTES);
+        const key = normalizeKey(body.key);
+        const deviceId = String(body.deviceId || '').trim();
+        if (!key || !deviceId) {
+          return json({ ok: false, error: 'invalid_request' }, 400, cors);
+        }
+
+        const license = await findLicense(env, key);
+        if (!license) return json({ ok: false, error: 'invalid_license' }, 401, cors);
+        if (license.status !== 'active') {
+          return json({ ok: false, error: 'license_' + license.status }, 402, cors);
+        }
+
+        const bound = await bindDevice(env, license.id, await sha256Hex(deviceId));
+        if (!bound.ok) return json({ ok: false, error: bound.reason }, 403, cors);
+
+        const quota = await quotaSnapshot(env, license);
+        return json(licensePayload(license, quota), 200, cors);
+      }
+
+      if (route === 'GET /v1/me') {
+        const auth = await requireLicense(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+        const quota = await quotaSnapshot(env, auth.license);
+        return json(licensePayload(auth.license, quota), 200, cors);
+      }
+
+      if (route === 'POST /v1/solve') {
+        const auth = await requireLicense(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+
+        const body = await readJson(request, MAX_SOLVE_BYTES);
+        const result = await solveProxy(env, auth.license, body);
+        return json(result.body, result.status, cors);
+      }
+
+      return json({ ok: false, error: 'not_found' }, 404, cors);
+    } catch (err) {
+      if (err && err.status) return json({ ok: false, error: err.message }, err.status, cors);
+      return json({ ok: false, error: 'internal' }, 500, cors);
+    }
+  }
+};
+```
+
+추가된 라우트:
+
+| Method | Path | 설명 |
+|---|---|---|
+| POST | `/webhook/stripe` | 서명 검증 → 라이선스 생성/상태 갱신 |
+| GET | `/v1/license?session_id=` | 결제 세션으로 키 조회(재표시 가능) |
+
+#### 4.18.6 `server/test/stripe.test.js` (신규)
+
+```js
+// server/test/stripe.test.js — 서명 검증 / 키 유도 / 타이밍 세이프 비교
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import {
+  deriveLicenseKey,
+  hmacHex,
+  parseStripeSignature,
+  timingSafeEqual,
+  verifyStripeSignature
+} from '../src/stripe.js';
+
+const SECRET = 'whsec_test_secret';
+
+test('deriveLicenseKey: 형식·결정성·세션별 차이', async () => {
+  const a = await deriveLicenseKey(SECRET, 'cs_test_abc');
+  const b = await deriveLicenseKey(SECRET, 'cs_test_abc');
+  const c = await deriveLicenseKey(SECRET, 'cs_test_xyz');
+  assert.match(a, /^AMT(-[0-9A-HJKMNP-TV-Z]{4}){4}$/);
+  assert.equal(a, b);
+  assert.notEqual(a, c);
+  assert.notEqual(await deriveLicenseKey('other_secret', 'cs_test_abc'), a);
+});
+
+test('parseStripeSignature: t/v1 추출', () => {
+  const p = parseStripeSignature('t=123,v1=abc,v0=def');
+  assert.equal(p.t, '123');
+  assert.equal(p.v1, 'abc');
+});
+
+test('verifyStripeSignature: 정상 서명 통과', async () => {
+  const payload = '{"id":"evt_1"}';
+  const t = Math.floor(Date.now() / 1000);
+  const v1 = createHmac('sha256', SECRET).update(`${t}.${payload}`).digest('hex');
+  assert.equal(await verifyStripeSignature(payload, `t=${t},v1=${v1}`, SECRET), true);
+});
+
+test('verifyStripeSignature: 변조·오래된 타임스탬프·시크릿 없음 거부', async () => {
+  const payload = '{"id":"evt_1"}';
+  const t = Math.floor(Date.now() / 1000);
+  const v1 = createHmac('sha256', SECRET).update(`${t}.${payload}`).digest('hex');
+
+  assert.equal(await verifyStripeSignature(payload + 'x', `t=${t},v1=${v1}`, SECRET), false);
+  assert.equal(await verifyStripeSignature(payload, `t=${t},v1=${'0'.repeat(64)}`, SECRET), false);
+  assert.equal(await verifyStripeSignature(payload, `t=${t - 10000},v1=${v1}`, SECRET), false);
+  assert.equal(await verifyStripeSignature(payload, `t=${t},v1=${v1}`, ''), false);
+});
+
+test('timingSafeEqual / hmacHex 기본 동작', async () => {
+  assert.equal(timingSafeEqual('abc', 'abc'), true);
+  assert.equal(timingSafeEqual('abc', 'abd'), false);
+  assert.equal(timingSafeEqual('abc', 'abcd'), false);
+  const h = await hmacHex('k', 'm');
+  assert.match(h, /^[0-9a-f]{64}$/);
+  assert.equal(h, createHmac('sha256', 'k').update('m').digest('hex'));
+});
+```
+
+#### 4.18.7 로컬 통합 (Stripe 없이 서명된 웹훅)
+
+```bash
+cd server
+npx wrangler d1 execute ai-math-tutor-db --local --file=migrations/0004_stripe.sql
+npx wrangler dev --port 8787 &
+
+BODY='{"id":"evt_test_1","type":"checkout.session.completed","data":{"object":{"id":"cs_test_local_1","mode":"subscription","customer":"cus_test_1","subscription":"sub_test_1","customer_details":{"email":"buyer@example.com"}}}}'
+TS=$(date +%s)
+SIG=$(printf "%s.%s" "$TS" "$BODY" | openssl dgst -sha256 -hmac "$STRIPE_WEBHOOK_SECRET" | awk '{print $2}')
+
+# 1) 웹훅 → 라이선스 생성
+curl -s -X POST http://127.0.0.1:8787/webhook/stripe \
+  -H "Stripe-Signature: t=$TS,v1=$SIG" -H 'Content-Type: application/json' -d "$BODY"
+
+# 2) 키 조회
+curl -s "http://127.0.0.1:8787/v1/license?session_id=cs_test_local_1"
+
+# 3) 중복 웹훅 → duplicate
+curl -s -X POST http://127.0.0.1:8787/webhook/stripe \
+  -H "Stripe-Signature: t=$TS,v1=$SIG" -H 'Content-Type: application/json' -d "$BODY"
+
+# 4) 잘못된 서명 → 400
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8787/webhook/stripe \
+  -H "Stripe-Signature: t=$TS,v1=deadbeef" -H 'Content-Type: application/json' -d "$BODY"
+
+# 5) 발급된 키로 redeem + solve
+KEY=AMT-....
+curl -s -X POST http://127.0.0.1:8787/v1/redeem -H 'Content-Type: application/json' \
+  -d "{\"key\":\"$KEY\",\"deviceId\":\"dev-1\"}"
+curl -s -X POST http://127.0.0.1:8787/v1/solve -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $KEY" -H 'X-Device-Id: dev-1' \
+  -d '{"prompt":"Reply OK","rawText":true,"maxOutputTokens":16}'
+```
+
+기대: 웹훅 `{ok:true,created:...}` → 조회 `{ok:true,key:"AMT-..."}` → 중복 `{duplicate:true}` → 잘못된 서명 `400`.
+
+#### 4.18.8 프로덕션 E2E (테스트 카드)
+
+```bash
+npx wrangler deploy
+npx wrangler d1 execute ai-math-tutor-db --remote --file=migrations/0004_stripe.sql
+# site/ 커밋·푸시 후 GitHub Pages 반영 확인
+# Stripe 테스트 모드에서 Payment Link로 결제 (4242 4242 4242 4242)
+# thanks.html 에서 키 표시 → redeem → solve
+```
+
+#### 4.18.9 7-4-B-3 (다음): 카스타머 포털
+
+- `POST /v1/portal` (Bearer 라이선스) → Stripe `billing_portal/sessions` → URL 반환
+- 필요 시크릿: `STRIPE_SECRET_KEY`
+- `site/index.html` 또는 `pricing.html`에 "契約管理" 링크(라이선스 입력 후 이동)
+- 해지/카드 변경 webhook은 4.18.4에서 이미 처리
+
+#### 4.18.10 DoD
+
+- [ ] `site/` 5파일 추가, GitHub Pages에서 4페이지 정상 표시
+- [ ] 서버 `npm test` **25 pass** (기존 20 + stripe 5)
+- [ ] 클라이언트 `npm test` **42 pass** (변경 없음)
+- [ ] 웹훅: 생성 / 중복 / 잘못된 서명(400)
+- [ ] `/v1/license`로 키 조회 → `redeem` → `solve` 성공
+- [ ] `LICENSE_SECRET` 백업 완료, `.dev.vars` 미커밋
+- [ ] `/health` version `0.5.0`
+
+**커밋 2개**
+
+```
+feat(site): add landing, pricing, thanks and legal pages
+feat(server): issue licenses from stripe webhook
+```
+
 ---
 
 ## 5. 리스크와 대응
