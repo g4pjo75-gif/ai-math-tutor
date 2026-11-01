@@ -6,3 +6,9 @@ backup/
 test-results/
 playwright-report/
 blob-report/
+
+# Cloudflare Worker
+server/node_modules/
+server/.wrangler/
+server/.dev.vars
+
