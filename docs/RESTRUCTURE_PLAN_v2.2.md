@@ -6705,6 +6705,377 @@ cd server && npm test    # health 4 + license 4 + validate 8 = 16 pass
 5. Gemini 오류는 `timeout(504)` / `upstream_quota(429)` / `upstream_error(502)`로 정규화한다.
 6. `core/gemini.js` 변경은 **하위 호환**이다(`withMeta` 미지정 시 기존 동작).
 
+### 4.16 Phase 7-4-A (원가 제어: thinkingLevel + 원가 기록)
+
+**배경**: 2026-10 사용량에서 하루 출력 토큰이 **60K**까지 치솟았다. 원인은 Gemini 3.8 Flash의
+**thinking 기본 ON(medium)** 이고, **thinking 토큰이 출력으로 과금**되기 때문이다.
+현재 코드는 `thinkingConfig`를 전혀 보내지 않는다.
+
+**목표**: ① 작업에 맞는 thinking 수준 지정 ② 호출별 **원가(micro-yen)** 기록 ③ 7-3의 소소한 정리.
+
+#### 4.16.1 `core/gemini.js` — thinkingLevel 지원 + 400 폴백
+
+```diff
+--- a/core/gemini.js
++++ b/core/gemini.js
+@@ -46,21 +46,24 @@
+   const useJson = !effectiveOpts.rawText && Boolean(schema);
+   const timeoutMs = effectiveOpts.timeoutMs || 30000;
+ 
+-  const buildPayload = (useStructured) => ({
+-    contents: [{ role: 'user', parts }],
+-    generationConfig: useStructured && useJson
++  const thinkingLevel = effectiveOpts.thinkingLevel || null;
++
++  const buildPayload = (useStructured, useThinking) => {
++    const cfg = useStructured && useJson
+       ? { temperature, maxOutputTokens, responseMimeType: 'application/json', responseSchema: schema }
+-      : { temperature: useStructured ? temperature : 0.3, maxOutputTokens }
+-  });
++      : { temperature: useStructured ? temperature : 0.3, maxOutputTokens };
++    if (useThinking && thinkingLevel) cfg.thinkingConfig = { thinkingLevel };
++    return { contents: [{ role: 'user', parts }], generationConfig: cfg };
++  };
+ 
+-  const send = async (useStructured) => {
++  const send = async (useStructured, useThinking) => {
+     const res = await fetchWithTimeout(url, {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         'x-goog-api-key': effectiveApiKey
+       },
+-      body: JSON.stringify(buildPayload(useStructured))
++      body: JSON.stringify(buildPayload(useStructured, useThinking))
+     }, timeoutMs);
+ 
+     const data = await res.json().catch(() => ({}));
+@@ -74,11 +77,15 @@
+ 
+   let data;
+   try {
+-    data = await send(true);
++    data = await send(true, true);
+   } catch (err) {
+-    // 구조화 출력(responseSchema) 미지원 모델 폴백
+-    if (err.status === 400 && /response|schema|mime/i.test(err.message)) {
+-      data = await send(false);
++    const msg = (err && err.message) || '';
++    if (err.status === 400 && /thinking/i.test(msg)) {
++      // thinkingLevel 미지원 모델: 스키마는 유지하고 thinking만 끈다
++      data = await send(true, false);
++    } else if (err.status === 400 && /response|schema|mime/i.test(msg)) {
++      // 구조화 출력(responseSchema) 미지원 모델 폴백
++      data = await send(false, true);
+     } else {
+       throw err;
+     }
+```
+
+- `thinkingLevel`을 넘기지 않으면 **payload에 아무것도 추가되지 않는다**(클라이언트 하위 호환).
+- 400 응답이 `thinking` 관련이면 **스키마는 유지한 채** thinking만 끄고 1회 재시도한다.
+- 400이 `response|schema|mime` 관련이면 기존대로 스키마 없이 재시도한다.
+
+`tests/core.test.js`에 1케이스 추가:
+
+```js
+test('callGeminiModel: thinkingLevel을 payload에 넣고, 400이면 thinking 없이 재시도', async () => {
+  const { callGeminiModel } = await load();
+  const prev = globalThis.fetch;
+  const bodies = [];
+  globalThis.fetch = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    if (bodies.length === 1) {
+      return new Response(JSON.stringify({ error: { message: 'thinkingLevel is not supported' } }), { status: 400 });
+    }
+    return new Response(JSON.stringify({
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"ok":1}' }] } }]
+    }), { status: 200 });
+  };
+  try {
+    const out = await callGeminiModel('m', 'K', 'p', null, { schema: { type: 'object' }, thinkingLevel: 'low' });
+    assert.deepEqual(out, { ok: 1 });
+    assert.equal(bodies[0].generationConfig.thinkingConfig.thinkingLevel, 'low');
+    assert.equal(bodies[1].generationConfig.thinkingConfig, undefined);
+    assert.deepEqual(bodies[1].generationConfig.responseSchema, { type: 'object' });
+    assert.equal(bodies.length, 2);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+```
+
+#### 4.16.2 원가표 `server/src/pricing.js` (신규)
+
+```js
+// server/src/pricing.js — 모델별 단가와 원가 계산 (USD/1M tokens → micro-yen)
+export const PRICES_USD_PER_M = {
+  'gemini-3.8-flash': { in: 0.75, out: 3.75 },
+  'gemini-3.6-flash': { in: 0.75, out: 3.75 },
+  'gemini-3.5-flash-lite': { in: 0.30, out: 2.50 },
+  'gemini-3.1-flash-lite': { in: 0.25, out: 1.50 }
+};
+
+export const DEFAULT_MODEL = 'gemini-3.8-flash';
+export const DEFAULT_USD_JPY = 150;
+
+export function costMicroYen(model, tokensIn, tokensOut, usdJpy = DEFAULT_USD_JPY) {
+  const p = PRICES_USD_PER_M[model] || PRICES_USD_PER_M[DEFAULT_MODEL];
+  const usd = (Number(tokensIn || 0) / 1e6) * p.in + (Number(tokensOut || 0) / 1e6) * p.out;
+  return Math.round(usd * Number(usdJpy || DEFAULT_USD_JPY) * 1e6);
+}
+```
+
+`costMicroYen(model, in, out, usdJpy)`는 **micro-yen 정수**를 반환한다(¥1 = 1,000,000).
+환율은 기본 150엔/달러이며 `USD_JPY` env로 바꿀 수 있다.
+
+#### 4.16.3 마이그레이션 `server/migrations/0003_usage_cost.sql`
+
+```sql
+ALTER TABLE usage ADD COLUMN model TEXT;
+ALTER TABLE usage ADD COLUMN thinking_level TEXT;
+ALTER TABLE usage ADD COLUMN cost_micro_yen INTEGER DEFAULT 0;
+```
+
+```bash
+npx wrangler d1 execute ai-math-tutor-db --local  --file=migrations/0003_usage_cost.sql
+npx wrangler d1 execute ai-math-tutor-db --remote --file=migrations/0003_usage_cost.sql
+```
+
+> D1은 `ADD COLUMN`을 지원하지만 **재실행하면 오류**가 난다. 1회만 실행한다.
+
+#### 4.16.4 `server/src/solve.js` (전체 교체)
+
+```js
+// server/src/solve.js — Gemini 프록시 + 서버 캐시 + 쿼터/레이트리밋 + 원가 기록
+import { callGeminiModel } from '../../core/gemini.js';
+import { getUsage, periodOf, quotaSnapshot, sha256Hex } from './license.js';
+import { validateSolveBody } from './validate.js';
+import { costMicroYen, DEFAULT_MODEL } from './pricing.js';
+
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30일
+
+async function fingerprint(v, model, thinkingLevel) {
+  const payload = JSON.stringify({
+    model,
+    thinkingLevel,
+    prompt: v.prompt,
+    imageLen: v.image ? v.image.length : 0,
+    imageHead: v.image ? v.image.slice(0, 256) : '',
+    schema: v.schema || null,
+    rawText: v.rawText
+  });
+  return sha256Hex(payload);
+}
+
+export async function solveProxy(env, license, rawBody) {
+  if (!env.GEMINI_API_KEY) {
+    return { status: 500, body: { ok: false, error: 'server_misconfigured' } };
+  }
+
+  const v = validateSolveBody(rawBody);
+  if (!v.ok) return { status: 400, body: { ok: false, error: v.error } };
+
+  const now = Date.now();
+
+  // 레이트리밋: 라이선스당 60초 내 호출 수
+  const perMin = Number(env.RATE_LIMIT_PER_MIN || 8);
+  const recent = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM usage WHERE license_id = ? AND created_at > ?'
+  ).bind(license.id, now - 60000).first();
+  if (((recent && recent.n) || 0) >= perMin) {
+    return { status: 429, body: { ok: false, error: 'rate_limited' } };
+  }
+
+  // 월 쿼터
+  const used = await getUsage(env, license.id);
+  const limit = Number(license.call_limit) || 0;
+  if (used >= limit) {
+    return {
+      status: 402,
+      body: {
+        ok: false,
+        error: 'quota_exceeded',
+        quota: { used, limit, remaining: 0, period: periodOf() }
+      }
+    };
+  }
+
+  const model = env.MODEL || DEFAULT_MODEL;
+  const thinkingLevel = env.THINKING_LEVEL || 'low';
+  const usdJpy = Number(env.USD_JPY || 150);
+  const fp = await fingerprint(v, model, thinkingLevel);
+
+  // 서버 캐시 (히트 시 API 0회, 쿼터 미차감)
+  const cached = await env.DB.prepare('SELECT payload, created_at FROM cache WHERE fp = ?')
+    .bind(fp).first();
+  if (cached && now - cached.created_at < CACHE_TTL_MS) {
+    let data = null;
+    try {
+      data = JSON.parse(cached.payload);
+    } catch (e) {
+      data = null;
+    }
+    if (data !== null) {
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          cached: true,
+          data,
+          usage: { in: 0, out: 0, costYen: 0 },
+          quota: await quotaSnapshot(env, license)
+        }
+      };
+    }
+  }
+
+  let result;
+  try {
+    result = await callGeminiModel(model, env.GEMINI_API_KEY, v.prompt, v.image, {
+      schema: v.schema,
+      rawText: v.rawText,
+      temperature: v.temperature,
+      maxOutputTokens: v.maxOutputTokens,
+      timeoutMs: v.timeoutMs,
+      thinkingLevel,
+      withMeta: true
+    });
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      return { status: 504, body: { ok: false, error: 'timeout' } };
+    }
+    if (err && (err.status === 429 || /quota|rate limit|resource_exhausted/i.test(err.message || ''))) {
+      return { status: 429, body: { ok: false, error: 'upstream_quota' } };
+    }
+    return { status: 502, body: { ok: false, error: 'upstream_error' } };
+  }
+
+  const data = result.data;
+  const usage = result.usage || { in: 0, out: 0 };
+  const costMicro = costMicroYen(model, usage.in, usage.out, usdJpy);
+
+  await env.DB.prepare(
+    'INSERT INTO usage (license_id, period, route, tokens_in, tokens_out, created_at, model, thinking_level, cost_micro_yen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(license.id, periodOf(), 'solve', usage.in, usage.out, now, model, thinkingLevel, costMicro).run();
+
+  try {
+    await env.DB.prepare(
+      'INSERT INTO cache (fp, payload, created_at) VALUES (?, ?, ?) ON CONFLICT(fp) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at'
+    ).bind(fp, JSON.stringify(data), now).run();
+  } catch (e) {
+    // 캐시 저장 실패는 요청 실패로 취급하지 않는다
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      cached: false,
+      data,
+      usage: { in: usage.in, out: usage.out, costYen: Number((costMicro / 1e6).toFixed(3)) },
+      quota: await quotaSnapshot(env, license)
+    }
+  };
+}
+```
+
+변경점:
+
+- `THINKING_LEVEL`(기본 `low`)을 core에 전달하고 **캐시 fingerprint에도 포함**
+- `usage` insert에 `model`·`thinking_level`·`cost_micro_yen` 기록
+- 응답 `usage.costYen`에 **회당 원가(엔)** 노출(운영 확인용)
+- 7-3에서 남은 미사용 줄(`const val = ...`) 제거
+
+#### 4.16.5 `server/wrangler.jsonc` vars
+
+```jsonc
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8765,https://g4pjo75-gif.github.io",
+    "MODEL": "gemini-3.8-flash",
+    "THINKING_LEVEL": "low",
+    "RATE_LIMIT_PER_MIN": "8",
+    "USD_JPY": "150"
+  }
+```
+
+#### 4.16.6 테스트 `server/test/pricing.test.js` (신규)
+
+```js
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { costMicroYen, DEFAULT_MODEL } from '../src/pricing.js';
+
+test('3.8 Flash: 1K in + 1K out = 675000 micro-yen (¥0.675)', () => {
+  assert.equal(costMicroYen('gemini-3.8-flash', 1000, 1000, 150), 675000);
+});
+
+test('unknown model falls back to default pricing', () => {
+  assert.equal(costMicroYen('nope', 1000, 1000, 150), costMicroYen(DEFAULT_MODEL, 1000, 1000, 150));
+});
+
+test('zero tokens = 0', () => {
+  assert.equal(costMicroYen('gemini-3.8-flash', 0, 0, 150), 0);
+});
+
+test('Flash-Lite is cheaper than Flash', () => {
+  assert.ok(costMicroYen('gemini-3.5-flash-lite', 1000, 1000, 150) < costMicroYen('gemini-3.8-flash', 1000, 1000, 150));
+});
+```
+
+#### 4.16.7 검증
+
+```bash
+# 단위
+npm test                 # L1 18 + L2 24 = 42 pass
+cd server && npm test    # 20 pass (health 4 + license 4 + validate 8 + pricing 4)
+
+# 로컬: thinking / 원가 기록 확인
+npx wrangler dev --port 8787 &
+# solve 1회 (maxOutputTokens 64)
+npx wrangler d1 execute ai-math-tutor-db --local --command \
+  "SELECT model, thinking_level, tokens_in, tokens_out, cost_micro_yen FROM usage ORDER BY id DESC LIMIT 1"
+
+# 프로덕션
+npx wrangler deploy
+# solve 1회 → 원격 D1에서 동일 SELECT
+```
+
+**기대**: `usage` 행에 `model=gemini-3.8-flash`, `thinking_level=low`, `cost_micro_yen > 0`.
+
+#### 4.16.8 게이트
+
+- [ ] 클라이언트 `npm test` **42 pass**
+- [ ] 서버 `npm test` **20 pass**
+- [ ] `/health` version `0.4.0`
+- [ ] 로컬·프로덕션 `usage` 행에 model/thinking/cost 기록
+- [ ] `thinkingLevel` 미지정 시 기존과 동일 payload (하위 호환)
+- [ ] 실호출은 `maxOutputTokens 64`로 최소화
+
+#### 4.16.9 7-3에서 발견된 사소한 차이 (정리 완료)
+
+| 항목 | 7-3 상태 | 7-4-A |
+|---|---|---|
+| `LIMITS.timeoutMs` | 120000 (명세 60000) | **120000으로 문서 통일** |
+| `validateSolveBody` 반환 | `{ok, ...fields, value}` | 유지(호환) |
+| `solve.js`의 `const val = ...` | 미사용 | **제거** |
+
+---
+
+### 4.17 Phase 7-4-B (사이트 + Stripe) — 개요
+
+7-4-A 이후 진행한다. 상세 코드는 착수 시 7-4-B 명세로 작성한다.
+
+| 단계 | 내용 |
+|---|---|
+| 7-4-B-1 | `site/` 정적 페이지: 랜딩 · 가격 · FAQ · 약관 · 特定商取引法 · プライバシー |
+| 7-4-B-2 | Stripe Payment Link(구독) + 성공/취소 페이지 |
+| 7-4-B-3 | Worker webhook: `checkout.session.completed` → 라이선스 발급 → Resend 메일 |
+| 7-4-B-4 | `/v1/portal` (Stripe Customer Portal) + 구독 상태 동기화 |
+| 7-4-B-5 | 배포: Cloudflare Pages + (도메인 취득 시) 커스텀 도메인 |
+
+**선행 조건**: 도메인(Resend 발신 인증), Stripe 계정/세금 설정, 약관 문안.
+
 ---
 
 ## 5. 리스크와 대응
