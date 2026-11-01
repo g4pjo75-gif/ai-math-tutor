@@ -32,6 +32,7 @@ writeFileSync(file, sql, 'utf8');
 
 const args = ['wrangler', 'd1', 'execute', 'ai-math-tutor-db', '--file', file];
 args.push(local ? '--local' : '--remote');
+if (!local) args.push('-y');
 execFileSync('npx', args, { stdio: 'inherit' });
 
 console.log('\n==============================');

@@ -46,21 +46,24 @@ export async function callGeminiModel(arg1, apiKey, promptText, imageBase64, opt
   const useJson = !effectiveOpts.rawText && Boolean(schema);
   const timeoutMs = effectiveOpts.timeoutMs || 30000;
 
-  const buildPayload = (useStructured) => ({
-    contents: [{ role: 'user', parts }],
-    generationConfig: useStructured && useJson
-      ? { temperature, maxOutputTokens, responseMimeType: 'application/json', responseSchema: schema }
-      : { temperature: useStructured ? temperature : 0.3, maxOutputTokens }
-  });
+  const thinkingLevel = effectiveOpts.thinkingLevel || null;
 
-  const send = async (useStructured) => {
+  const buildPayload = (useStructured, useThinking) => {
+    const cfg = useStructured && useJson
+      ? { temperature, maxOutputTokens, responseMimeType: 'application/json', responseSchema: schema }
+      : { temperature: useStructured ? temperature : 0.3, maxOutputTokens };
+    if (useThinking && thinkingLevel) cfg.thinkingConfig = { thinkingLevel };
+    return { contents: [{ role: 'user', parts }], generationConfig: cfg };
+  };
+
+  const send = async (useStructured, useThinking) => {
     const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-goog-api-key': effectiveApiKey
       },
-      body: JSON.stringify(buildPayload(useStructured))
+      body: JSON.stringify(buildPayload(useStructured, useThinking))
     }, timeoutMs);
 
     const data = await res.json().catch(() => ({}));
@@ -74,11 +77,15 @@ export async function callGeminiModel(arg1, apiKey, promptText, imageBase64, opt
 
   let data;
   try {
-    data = await send(true);
+    data = await send(true, true);
   } catch (err) {
-    // 구조화 출력(responseSchema) 미지원 모델 폴백
-    if (err.status === 400 && /response|schema|mime/i.test(err.message)) {
-      data = await send(false);
+    const msg = (err && err.message) || '';
+    if (err.status === 400 && /thinking/i.test(msg)) {
+      // thinkingLevel 미지원 모델: 스키마는 유지하고 thinking만 끈다
+      data = await send(true, false);
+    } else if (err.status === 400 && /response|schema|mime/i.test(msg)) {
+      // 구조화 출력(responseSchema) 미지원 모델 폴백
+      data = await send(false, true);
     } else {
       throw err;
     }

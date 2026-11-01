@@ -6,7 +6,9 @@
   "vars": {
     "ALLOWED_ORIGINS": "http://localhost:8765,https://g4pjo75-gif.github.io",
     "MODEL": "gemini-3.8-flash",
-    "RATE_LIMIT_PER_MIN": "8"
+    "THINKING_LEVEL": "low",
+    "RATE_LIMIT_PER_MIN": "8",
+    "USD_JPY": "150"
   },
   "d1_databases": [
     {

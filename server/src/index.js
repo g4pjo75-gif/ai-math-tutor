@@ -1,4 +1,4 @@
-// server/src/index.js — API 라우터 (7-3)
+// server/src/index.js — API 라우터 (7-4-A)
 import { corsHeaders } from './cors.js';
 import {
   bindDevice,
@@ -10,7 +10,7 @@ import {
 } from './license.js';
 import { solveProxy } from './solve.js';
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const MAX_JSON_BYTES = 8 * 1024;
 const MAX_SOLVE_BYTES = 8 * 1024 * 1024;
 

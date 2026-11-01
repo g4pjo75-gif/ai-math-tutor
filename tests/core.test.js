@@ -289,3 +289,29 @@ test('callGeminiModel: withMeta 옵션이 usage를 함께 반환한다', async (
   }
 });
 
+test('callGeminiModel: thinkingLevel을 payload에 넣고, 400이면 thinking 없이 재시도', async () => {
+  const { callGeminiModel } = await load();
+  const prev = globalThis.fetch;
+  const bodies = [];
+  globalThis.fetch = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    if (bodies.length === 1) {
+      return new Response(JSON.stringify({ error: { message: 'thinkingLevel is not supported' } }), { status: 400 });
+    }
+    return new Response(JSON.stringify({
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"ok":1}' }] } }]
+    }), { status: 200 });
+  };
+  try {
+    const out = await callGeminiModel('m', 'K', 'p', null, { schema: { type: 'object' }, thinkingLevel: 'low' });
+    assert.deepEqual(out, { ok: 1 });
+    assert.equal(bodies[0].generationConfig.thinkingConfig.thinkingLevel, 'low');
+    assert.equal(bodies[1].generationConfig.thinkingConfig, undefined);
+    assert.deepEqual(bodies[1].generationConfig.responseSchema, { type: 'object' });
+    assert.equal(bodies.length, 2);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+

@@ -1,13 +1,15 @@
-// server/src/solve.js — Gemini 프록시 + 서버 캐시 + 쿼터/레이트리밋
+// server/src/solve.js — Gemini 프록시 + 서버 캐시 + 쿼터/레이트리밋 + 원가 기록
 import { callGeminiModel } from '../../core/gemini.js';
 import { getUsage, periodOf, quotaSnapshot, sha256Hex } from './license.js';
 import { validateSolveBody } from './validate.js';
+import { costMicroYen, DEFAULT_MODEL } from './pricing.js';
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30일
 
-async function fingerprint(v, model) {
+async function fingerprint(v, model, thinkingLevel) {
   const payload = JSON.stringify({
     model,
+    thinkingLevel,
     prompt: v.prompt,
     imageLen: v.image ? v.image.length : 0,
     imageHead: v.image ? v.image.slice(0, 256) : '',
@@ -24,7 +26,6 @@ export async function solveProxy(env, license, rawBody) {
 
   const v = validateSolveBody(rawBody);
   if (!v.ok) return { status: 400, body: { ok: false, error: v.error } };
-  const val = v.value || v;
 
   const now = Date.now();
 
@@ -51,8 +52,10 @@ export async function solveProxy(env, license, rawBody) {
     };
   }
 
-  const model = env.MODEL || 'gemini-3.8-flash';
-  const fp = await fingerprint(v, model);
+  const model = env.MODEL || DEFAULT_MODEL;
+  const thinkingLevel = env.THINKING_LEVEL || 'low';
+  const usdJpy = Number(env.USD_JPY || 150);
+  const fp = await fingerprint(v, model, thinkingLevel);
 
   // 서버 캐시 (히트 시 API 0회, 쿼터 미차감)
   const cached = await env.DB.prepare('SELECT payload, created_at FROM cache WHERE fp = ?')
@@ -71,7 +74,7 @@ export async function solveProxy(env, license, rawBody) {
           ok: true,
           cached: true,
           data,
-          usage: { in: 0, out: 0 },
+          usage: { in: 0, out: 0, costYen: 0 },
           quota: await quotaSnapshot(env, license)
         }
       };
@@ -86,6 +89,7 @@ export async function solveProxy(env, license, rawBody) {
       temperature: v.temperature,
       maxOutputTokens: v.maxOutputTokens,
       timeoutMs: v.timeoutMs,
+      thinkingLevel,
       withMeta: true
     });
   } catch (err) {
@@ -100,10 +104,11 @@ export async function solveProxy(env, license, rawBody) {
 
   const data = result.data;
   const usage = result.usage || { in: 0, out: 0 };
+  const costMicro = costMicroYen(model, usage.in, usage.out, usdJpy);
 
   await env.DB.prepare(
-    'INSERT INTO usage (license_id, period, route, tokens_in, tokens_out, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(license.id, periodOf(), 'solve', usage.in, usage.out, now).run();
+    'INSERT INTO usage (license_id, period, route, tokens_in, tokens_out, created_at, model, thinking_level, cost_micro_yen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(license.id, periodOf(), 'solve', usage.in, usage.out, now, model, thinkingLevel, costMicro).run();
 
   try {
     await env.DB.prepare(
@@ -119,7 +124,7 @@ export async function solveProxy(env, license, rawBody) {
       ok: true,
       cached: false,
       data,
-      usage,
+      usage: { in: usage.in, out: usage.out, costYen: Number((costMicro / 1e6).toFixed(3)) },
       quota: await quotaSnapshot(env, license)
     }
   };
