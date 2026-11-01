@@ -5362,6 +5362,332 @@ fix(math): prevent iOS focus zoom in step chat
 2. **select 글자 크기**: iOS 피커 가독성을 위해 14px 정도로만 올리는 별도 조정 가능.
 3. **전체 화면 입력**(overall chat)도 동일 규칙으로 자동 해결됨 — 별도 수정 불필요.
 
+### 4.13 Phase 7-0 (수익화 서버·사이트 설계)
+
+**전제**: 클라이언트 구조·테스트는 동결(Phase 0~6). 이 트랙은 **병행**하며 클라이언트 앱 동작을 바꾸지 않는다.
+**목표**: ① 브라우저에서 API 키를 없앤다(서버 프록시) ② 구독 결제 ③ 랜딩/약관 사이트.
+
+#### 4.13.1 확정 사항
+
+| 항목 | 결정 |
+|---|---|
+| 저장소 | **같은 repo**: `server/` (Worker) + `site/` (Pages) |
+| 결제 | **Stripe Japan** (JPY, 구독) |
+| 인증 | **라이선스 키 + 기기 바인딩** (계정/비밀번호 없음) |
+| 도메인 | **없음** → `*.workers.dev` / `*.pages.dev`로 시작, 추후 연결 |
+| 호스팅 | Cloudflare Workers + D1 + Pages. 기존 앱은 GitHub Pages 유지 |
+| 무료 티어 | **BYOK 그대로** (서버 비용 0) |
+| 유료 티어 | 서버 키로 호출, 라이선스당 월 쿼터 |
+
+> 가격·쿼터 숫자는 7-4에서 확정한다(초안: 월 ¥980 / 300회).
+
+#### 4.13.2 아키텍처
+
+```
+[math/ · english/ PWA]  ──(라이선스 키)──▶  api.<workers.dev>
+        │                                      │
+        │(키 없음)                              ├─ D1: licenses / devices / usage / cache
+        ▼                                      ├─ Gemini API (서버 키)
+   Gemini 직접 호출 (BYOK)                      └─ Stripe webhook
+                                                    ▲
+[site/ Pages]  랜딩·가격·약관 ── Stripe Payment Link ─┘
+```
+
+- **클라이언트는 Gemini 키를 서버로 보내지 않는다.** 구독 모드에서는 `Authorization: Bearer <license>`만 보낸다.
+- `core/`는 순수 로직이라 Worker에서 그대로 import 가능(프롬프트·스키마는 클라이언트가 만들어 보낸다).
+- 서버는 **모델·프롬프트를 저장하지 않는다**. 토큰 수·성공 여부만 기록.
+
+#### 4.13.3 라이선스 흐름
+
+```
+1. Stripe Payment Link(구독) → Checkout (이메일 수집)
+2. webhook checkout.session.completed
+   → 라이선스 생성: AMT-XXXX-XXXX-XXXX-XXXX
+   → DB에는 SHA-256 해시만 저장
+   → Resend로 키 메일 발송
+3. 앱 설정에서 키 입력 → POST /v1/redeem {key, deviceId}
+   → 기기 1대 바인딩(최대 2대)
+4. 이후 모든 호출: Authorization: Bearer <key>, X-Device-Id: <uuid>
+5. 해지/카드변경: Stripe Customer Portal (webhook으로 상태 동기화)
+```
+
+- `deviceId`는 앱이 최초 실행 시 만드는 UUID(localStorage). 서버에는 해시만 저장.
+- 키를 잃어버리면 이메일로 재발송(`POST /v1/resend`, rate limit).
+
+#### 4.13.4 D1 스키마 (7-2)
+
+```sql
+CREATE TABLE licenses (
+  id TEXT PRIMARY KEY,                 -- lic_...
+  key_hash TEXT NOT NULL UNIQUE,       -- sha256(key)
+  email TEXT,
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  plan TEXT NOT NULL DEFAULT 'monthly',
+  status TEXT NOT NULL DEFAULT 'active',   -- active|past_due|canceled
+  current_period_end INTEGER,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE devices (
+  license_id TEXT NOT NULL,
+  device_hash TEXT NOT NULL,
+  first_seen INTEGER, last_seen INTEGER,
+  PRIMARY KEY (license_id, device_hash)
+);
+
+CREATE TABLE usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_id TEXT NOT NULL,
+  period TEXT NOT NULL,                -- 'YYYY-MM'
+  route TEXT NOT NULL,                 -- 'solve' | 'quiz' | ...
+  tokens_in INTEGER DEFAULT 0,
+  tokens_out INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE cache (
+  fp TEXT PRIMARY KEY,                 -- computeRequestHash()
+  payload TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+```
+
+#### 4.13.5 API 계약
+
+| Method | Path | 인증 | 설명 |
+|---|---|---|---|
+| GET | `/health` | — | 상태·버전 |
+| POST | `/v1/redeem` | 키 본문 | 기기 바인딩 |
+| GET | `/v1/me` | Bearer + Device | 플랜·쿼터·기간 |
+| POST | `/v1/solve` | Bearer + Device | Gemini 프록시(스키마·이미지 전달) |
+| POST | `/v1/portal` | Bearer | Stripe Customer Portal URL 발급 |
+| POST | `/webhook/stripe` | 서명 | 구독 생성/갱신/해지 |
+
+`/v1/solve` 요청(클라이언트가 만든 프롬프트·스키마를 그대로 전달):
+
+```json
+{
+  "prompt": "…",
+  "image": "base64 or null",
+  "schema": { "type": "object", "properties": { } },
+  "rawText": false,
+  "temperature": 0.35,
+  "maxOutputTokens": 32768,
+  "timeoutMs": 30000
+}
+```
+
+응답: `{ "ok": true, "data": …, "usage": { "in": 0, "out": 0 }, "quota": { "used": 12, "limit": 300 } }`
+
+오류: `401 invalid_license` / `403 device_limit` / `402 quota_exceeded` / `429 rate_limited` / `502 upstream`.
+
+#### 4.13.6 단계
+
+| 단계 | 내용 | 산출물 |
+|---|---|---|
+| **7-1** | Worker 골격 + `/health` + CORS + 테스트 + 배포 | `server/` |
+| 7-2 | D1 스키마 + 라이선스 발급/검증 + `/v1/redeem` `/v1/me` + 쿼터 | 마이그레이션, 관리 CLI |
+| 7-3 | `/v1/solve` 프록시 + 서버 캐시 + 레이트리밋 + 비용 로그 | 프록시 |
+| 7-4 | `site/` 랜딩·가격·약관·특정상거래법 + Stripe Link + webhook + 메일 | 사이트 |
+| 7-5 | 클라이언트 "구독 모드" (설정 UI, CSP, 401/402 처리) + 테스트 | 앱 |
+| 7-6 | 운영(알림·예산 가드·로그) + 소프트 런칭 | 운영 |
+
+#### 4.13.7 7-1 실행 지시 (오늘 착수 가능)
+
+**새 파일**
+
+| 파일 | 내용 |
+|---|---|
+| `server/package.json` | `type: module`, scripts(dev/deploy/test), devDep `wrangler` |
+| `server/wrangler.jsonc` | name, main, compatibility_date, observability, vars |
+| `server/src/index.js` | 라우터 + `/health` + 404 + 오류 JSON |
+| `server/src/cors.js` | 오리진 허용목록 |
+| `server/test/health.test.js` | `node:test` 4케이스 |
+
+**`server/package.json`**
+
+```json
+{
+  "name": "ai-math-tutor-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
+```
+
+**`server/wrangler.jsonc`**
+
+```jsonc
+{
+  "name": "ai-math-tutor-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8765,https://g4pjo75-gif.github.io"
+  }
+}
+```
+
+**`server/src/cors.js`**
+
+```js
+const DEFAULT_ORIGINS = [
+  'http://localhost:8765',
+  'http://127.0.0.1:8765',
+  'https://g4pjo75-gif.github.io'
+];
+
+export function allowedOrigins(env) {
+  const raw = (env && env.ALLOWED_ORIGINS) || '';
+  const list = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length ? list : DEFAULT_ORIGINS;
+}
+
+export function corsHeaders(origin, env) {
+  const ok = origin && allowedOrigins(env).includes(origin);
+  const h = {
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Device-Id',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin'
+  };
+  if (ok) h['Access-Control-Allow-Origin'] = origin;
+  return h;
+}
+```
+
+**`server/src/index.js`**
+
+```js
+import { corsHeaders } from './cors.js';
+
+const VERSION = '0.1.0';
+
+function json(data, status = 200, extra = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...extra }
+  });
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const origin = request.headers.get('Origin') || '';
+    const cors = corsHeaders(origin, env);
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: cors });
+    }
+
+    try {
+      if (request.method === 'GET' && url.pathname === '/health') {
+        return json({ ok: true, version: VERSION, time: Date.now() }, 200, cors);
+      }
+      return json({ ok: false, error: 'not_found' }, 404, cors);
+    } catch (err) {
+      return json({ ok: false, error: 'internal' }, 500, cors);
+    }
+  }
+};
+```
+
+**`server/test/health.test.js`**
+
+```js
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import worker from '../src/index.js';
+
+const env = { ALLOWED_ORIGINS: 'http://localhost:8765,https://g4pjo75-gif.github.io' };
+
+test('GET /health', async () => {
+  const res = await worker.fetch(new Request('https://api.test/health'), env, {});
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(typeof body.version, 'string');
+});
+
+test('OPTIONS preflight (allowed origin)', async () => {
+  const req = new Request('https://api.test/health', {
+    method: 'OPTIONS',
+    headers: { Origin: 'http://localhost:8765' }
+  });
+  const res = await worker.fetch(req, env, {});
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:8765');
+});
+
+test('CORS: unknown origin is not echoed', async () => {
+  const req = new Request('https://api.test/health', {
+    headers: { Origin: 'https://evil.example' }
+  });
+  const res = await worker.fetch(req, env, {});
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), null);
+});
+
+test('404', async () => {
+  const res = await worker.fetch(new Request('https://api.test/nope'), env, {});
+  assert.equal(res.status, 404);
+  const body = await res.json();
+  assert.equal(body.error, 'not_found');
+});
+```
+
+**`.gitignore` 추가**
+
+```
+server/node_modules/
+server/.wrangler/
+server/.dev.vars
+```
+
+**게이트**
+
+```bash
+cd server
+npm install
+npm test                      # 4 pass
+npx wrangler dev              # 로컬 확인(수동)
+curl -s localhost:8787/health # {"ok":true,...}
+npx wrangler deploy           # workers.dev URL 확보(최초 1회 login 필요)
+```
+
+- `wrangler login`은 브라우저 인증이 필요하므로 **사람이 1회 수행**한다.
+- 배포 후 URL(`https://ai-math-tutor-api.<subdomain>.workers.dev`)을 기록해 7-3/7-5에서 사용한다.
+
+**7-1 DoD**
+
+- [ ] `server/` 5파일 추가, `npm test` 4 pass
+- [ ] `/health` 200 + `{ok:true}`
+- [ ] 허용 오리진만 `Access-Control-Allow-Origin` 반환
+- [ ] 404 JSON
+- [ ] `wrangler deploy` 성공, URL 기록
+- [ ] 클라이언트 코드·테스트 **변경 0**
+
+#### 4.13.8 보안·법률 체크리스트 (7-4까지)
+
+| 항목 | 내용 |
+|---|---|
+| 비밀 | `GEMINI_API_KEY` / `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `RESEND_API_KEY`는 **wrangler secret**만 |
+| 저장 금지 | 프롬프트·이미지·해설 원문을 DB/로그에 남기지 않는다(토큰 수만) |
+| 키 저장 | 라이선스는 **SHA-256 해시만**, 앱에는 원문(사용자가 입력) |
+| 레이트리밋 | IP + 라이선스 이중 제한, 이미지 본문 4MB 상한 |
+| 결제 | Stripe webhook 서명 검증, `checkout.session.completed`만 발급 |
+| 약관 | 特定商取引法に基づく表記 / 利用規約 / プライバシーポリシー / 返金ポリシー |
+| 미성년자 | 보호자 동의 문구, 만 18세 미만 안내 |
+| 세금 | JPY 세금 포함 표시, Stripe Tax 사용 여부 결정 |
+
 ---
 
 ## 5. 리스크와 대응
