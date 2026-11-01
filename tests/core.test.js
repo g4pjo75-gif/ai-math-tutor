@@ -272,3 +272,20 @@ test('fetchAvailableModels: works through the offline stub', async () => {
     uninstall();
   }
 });
+
+test('callGeminiModel: withMeta 옵션이 usage를 함께 반환한다', async () => {
+  const { callGeminiModel } = await load();
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"ok":1}' }] } }],
+    usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7 }
+  }), { status: 200 });
+  try {
+    const r = await callGeminiModel('m', 'K', 'p', null, { schema: { type: 'object' }, withMeta: true });
+    assert.deepEqual(r.data, { ok: 1 });
+    assert.deepEqual(r.usage, { in: 11, out: 7 });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+

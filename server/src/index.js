@@ -1,4 +1,4 @@
-// server/src/index.js — API 라우터 (7-2)
+// server/src/index.js — API 라우터 (7-3)
 import { corsHeaders } from './cors.js';
 import {
   bindDevice,
@@ -8,9 +8,11 @@ import {
   requireLicense,
   sha256Hex
 } from './license.js';
+import { solveProxy } from './solve.js';
 
-const VERSION = '0.2.0';
-const MAX_BODY_BYTES = 8 * 1024;
+const VERSION = '0.3.0';
+const MAX_JSON_BYTES = 8 * 1024;
+const MAX_SOLVE_BYTES = 8 * 1024 * 1024;
 
 function json(data, status = 200, extra = {}) {
   return new Response(JSON.stringify(data), {
@@ -19,9 +21,9 @@ function json(data, status = 200, extra = {}) {
   });
 }
 
-async function readJson(request) {
+async function readJson(request, maxBytes) {
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) {
+  if (text.length > maxBytes) {
     const err = new Error('body_too_large');
     err.status = 413;
     throw err;
@@ -63,7 +65,7 @@ export default {
       }
 
       if (route === 'POST /v1/redeem') {
-        const body = await readJson(request);
+        const body = await readJson(request, MAX_JSON_BYTES);
         const key = normalizeKey(body.key);
         const deviceId = String(body.deviceId || '').trim();
         if (!key || !deviceId) {
@@ -88,6 +90,15 @@ export default {
         if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
         const quota = await quotaSnapshot(env, auth.license);
         return json(licensePayload(auth.license, quota), 200, cors);
+      }
+
+      if (route === 'POST /v1/solve') {
+        const auth = await requireLicense(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+
+        const body = await readJson(request, MAX_SOLVE_BYTES);
+        const result = await solveProxy(env, auth.license, body);
+        return json(result.body, result.status, cors);
       }
 
       return json({ ok: false, error: 'not_found' }, 404, cors);

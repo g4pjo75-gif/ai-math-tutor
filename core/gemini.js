@@ -97,12 +97,20 @@ export async function callGeminiModel(arg1, apiKey, promptText, imageBase64, opt
       : 'モデルから空の応答が返されました。');
   }
 
+  const usage = {
+    in: data.usageMetadata?.promptTokenCount || 0,
+    out: data.usageMetadata?.candidatesTokenCount || 0
+  };
+  const withMeta = Boolean(effectiveOpts.withMeta);
+
   if (effectiveOpts.rawText) {
-    return text.trim();
+    const outText = text.trim();
+    return withMeta ? { data: outText, usage } : outText;
   }
 
   try {
-    return parseJson(text);
+    const parsed = parseJson(text);
+    return withMeta ? { data: parsed, usage } : parsed;
   } catch (parseErr) {
     if (finishReason === 'MAX_TOKENS') {
       throw new Error('問題数が多いためAIの回答が途中で切れました（思考・出力トークン上限）。入力内容を小さく分割して試してください。');
