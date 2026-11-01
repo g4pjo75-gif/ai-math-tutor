@@ -5,6 +5,15 @@ export { parseJson } from './json.js';
 export { isQuotaError } from './errors.js';
 export { callGeminiModel, fetchAvailableModels } from './gemini.js';
 export {
+  DEFAULT_API_BASE,
+  callProxied,
+  configureTransport,
+  getOrCreateDeviceId,
+  getTransport,
+  isLicenseMode,
+  resetTransport
+} from './transport.js';
+export {
   CACHE_SCHEMA_VERSION,
   DEFAULT_CACHE_MAX_AGE_MS,
   computeRequestHash,

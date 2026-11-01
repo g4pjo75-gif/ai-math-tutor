@@ -1,8 +1,29 @@
 // core/gemini.js — Gemini 전송 계층 (DOM 비의존)
 import { fetchWithTimeout } from './http.js';
 import { parseJson } from './json.js';
+import { callProxied, isLicenseMode } from './transport.js';
 
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// 구독 모드: 모델/키는 서버가 결정하고, 클라이언트는 프록시에만 요청한다.
+async function callViaProxy(prompt, image, opts = {}) {
+  const useJson = !opts.rawText && Boolean(opts.schema);
+  const payload = {
+    prompt: prompt || '',
+    schema: opts.schema || null,
+    rawText: Boolean(opts.rawText),
+    temperature: opts.temperature ?? (useJson ? 0.35 : 0.3),
+    maxOutputTokens: opts.maxOutputTokens ?? 32768,
+    timeoutMs: opts.timeoutMs || 30000
+  };
+  if (image) payload.image = image;
+
+  const res = await callProxied(payload);
+  const data = res.data;
+  const usage = res.usage || { in: 0, out: 0 };
+  if (!opts.withMeta) return data;
+  return { data, usage, cached: res.cached === true, quota: res.quota || null };
+}
 
 /**
  * 호출 형식 두 가지를 모두 받는다.
@@ -24,6 +45,10 @@ export async function callGeminiModel(arg1, apiKey, promptText, imageBase64, opt
     effectivePrompt = promptText;
     effectiveImage = imageBase64;
     effectiveOpts = options || {};
+  }
+
+  if (isLicenseMode()) {
+    return callViaProxy(effectivePrompt, effectiveImage, effectiveOpts);
   }
 
   if (!effectiveApiKey) {
@@ -126,6 +151,7 @@ export async function callGeminiModel(arg1, apiKey, promptText, imageBase64, opt
   }
 }
 
+// 모델 목록은 BYOK 전용이다(프록시 모드는 서버가 모델을 고정한다).
 export async function fetchAvailableModels(arg = {}) {
   const apiKey = typeof arg === 'string' ? arg : arg.apiKey;
   const timeoutMs = typeof arg === 'object' && arg.timeoutMs ? arg.timeoutMs : 15000;
