@@ -9,7 +9,12 @@
     "THINKING_LEVEL": "low",
     "RATE_LIMIT_PER_MIN": "8",
     "USD_JPY": "150",
-    "PLAN_LIMIT": "300"
+    "PLAN_LIMIT": "300",
+    "CHECKOUT_SUCCESS_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/thanks.html?session_id={CHECKOUT_SESSION_ID}",
+    "CHECKOUT_CANCEL_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/pricing.html",
+    "PORTAL_RETURN_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/portal.html",
+    "PLAN_PRICE_JPY": "980",
+    "PLAN_NAME": "AI家庭教師 スタンダード"
   },
   "d1_databases": [
     {

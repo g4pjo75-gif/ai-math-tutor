@@ -1,4 +1,4 @@
-// server/src/index.js — API 라우터 (7-4-B)
+// server/src/index.js — API 라우터 (7-4-B-3)
 import { corsHeaders } from './cors.js';
 import {
   bindDevice,
@@ -10,8 +10,9 @@ import {
 } from './license.js';
 import { solveProxy } from './solve.js';
 import { deriveLicenseKey, handleStripeWebhook } from './stripe.js';
+import { createCheckoutSession, createPortalSession, findLicenseByRequest } from './billing.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.6.0';
 const MAX_JSON_BYTES = 8 * 1024;
 const MAX_SOLVE_BYTES = 8 * 1024 * 1024;
 
@@ -68,6 +69,18 @@ export default {
       if (route === 'POST /webhook/stripe') {
         const result = await handleStripeWebhook(request, env);
         return json(result.body, result.status);
+      }
+
+      if (route === 'POST /v1/checkout') {
+        const result = await createCheckoutSession(env);
+        return json(result.body, result.status, cors);
+      }
+
+      if (route === 'POST /v1/portal') {
+        const auth = await findLicenseByRequest(request, env);
+        if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
+        const result = await createPortalSession(env, auth.license);
+        return json(result.body, result.status, cors);
       }
 
       if (route === 'GET /v1/license') {
