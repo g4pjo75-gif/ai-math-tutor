@@ -9454,10 +9454,11 @@ chore: precache transport module and run all l1 tests
 6. **오류 코드별 문구 매핑**:
    - `device_not_bound`: "この端末はライセンスに登録されていません。設定からキーを再登録してください。"
    - `device_limit`: "登録できる端末数（2台）の上限に達しました。"
-   - `license_canceled`: "ライセンスが解約されています。ポータルから再開してください。"
-   - `license_past_due`: "お支払いに問題があります。ポータルからカード情報をご確認ください。"
+   - `license_canceled`: "サブスクリプションが終了しています。"
+   - `license_past_due`: "お支払いに問題があります。契約管理ページをご確認ください。"
    - `quota_exceeded`: "今月の利用上限に達しました。"
    - `rate_limited`: "リクエストが多すぎます。少し待ってからお試しください。"
+   - 참고: `isQuotaError()`가 `rate_limited`도 quota 계열로 분류하므로, 라이선스 모드 화면에서 quota/rate-limit 문구를 분기하는 UX는 7-5-C에서 다듬는다.
 7. **서버 포털 상태 체크 완화 및 오타 수정**:
    - `server/src/billing.js`: 해지(`canceled`) 또는 결제 지연(`past_due`) 상태의 라이선스 소유자도 카드 변경 및 결제 재개를 위해 `/v1/portal` 세션 발급을 허용 (`findLicenseByRequest`).
    - 주석 내 `バイン딩` 오타를 한국어 `바인딩`으로 수정.
