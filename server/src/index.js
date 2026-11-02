@@ -12,7 +12,7 @@ import { solveProxy } from './solve.js';
 import { deriveLicenseKey, handleStripeWebhook } from './stripe.js';
 import { createCheckoutSession, createPortalSession, findLicenseByRequest } from './billing.js';
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 const MAX_JSON_BYTES = 8 * 1024;
 const MAX_SOLVE_BYTES = 8 * 1024 * 1024;
 

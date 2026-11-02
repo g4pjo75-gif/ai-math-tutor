@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {
   buildCheckoutParams,
   createCheckoutSession,
-  createPortalSession
+  createPortalSession,
+  findLicenseByRequest
 } from '../src/billing.js';
 
 const env = {
@@ -97,4 +98,56 @@ test('createPortalSession: Stripe 성공 → url 반환', async () => {
   } finally {
     globalThis.fetch = prev;
   }
+});
+
+function fakeDb(row = null) {
+  return {
+    prepare: () => ({
+      bind: () => ({
+        first: async () => row
+      })
+    })
+  };
+}
+
+test('findLicenseByRequest: active 라이선스는 정상 반환', async () => {
+  const licenseRow = { id: 1, status: 'active', stripe_customer_id: 'cus_1' };
+  const req = new Request('https://api.test/v1/portal', {
+    headers: { Authorization: 'Bearer AMT-AAAA-BBBB-CCCC-DDDD' }
+  });
+  const res = await findLicenseByRequest(req, { DB: fakeDb(licenseRow) });
+  assert.equal(res.error, undefined);
+  assert.deepEqual(res.license, licenseRow);
+});
+
+test('findLicenseByRequest: canceled 또는 past_due 상태여도 포털 접근 허용', async () => {
+  const canceledRow = { id: 2, status: 'canceled', stripe_customer_id: 'cus_2' };
+  const req1 = new Request('https://api.test/v1/portal', {
+    headers: { Authorization: 'Bearer AMT-AAAA-BBBB-CCCC-DDDD' }
+  });
+  const res1 = await findLicenseByRequest(req1, { DB: fakeDb(canceledRow) });
+  assert.equal(res1.error, undefined);
+  assert.equal(res1.license.status, 'canceled');
+
+  const pastDueRow = { id: 3, status: 'past_due', stripe_customer_id: 'cus_3' };
+  const req2 = new Request('https://api.test/v1/portal', {
+    headers: { Authorization: 'Bearer AMT-AAAA-BBBB-CCCC-DDDD' }
+  });
+  const res2 = await findLicenseByRequest(req2, { DB: fakeDb(pastDueRow) });
+  assert.equal(res2.error, undefined);
+  assert.equal(res2.license.status, 'past_due');
+});
+
+test('findLicenseByRequest: 키 누락 또는 잘못된 키는 401 반환', async () => {
+  const noAuthReq = new Request('https://api.test/v1/portal');
+  const resNoAuth = await findLicenseByRequest(noAuthReq, { DB: fakeDb(null) });
+  assert.equal(resNoAuth.status, 401);
+  assert.equal(resNoAuth.error, 'missing_license');
+
+  const notFoundReq = new Request('https://api.test/v1/portal', {
+    headers: { Authorization: 'Bearer AMT-9999-9999-9999-9999' }
+  });
+  const resNotFound = await findLicenseByRequest(notFoundReq, { DB: fakeDb(null) });
+  assert.equal(resNotFound.status, 401);
+  assert.equal(resNotFound.error, 'invalid_license');
 });
