@@ -2,7 +2,7 @@
 
 export { fetchWithTimeout } from './http.js';
 export { parseJson } from './json.js';
-export { isQuotaError } from './errors.js';
+export { isQuotaError, classifyApiError } from './errors.js';
 export { callGeminiModel, fetchAvailableModels } from './gemini.js';
 export {
   DEFAULT_API_BASE,
