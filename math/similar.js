@@ -6,7 +6,7 @@ import { TUTOR_RESPONSE_SCHEMA, buildSystemPrompt } from './schema.js';
 import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
 import { renderTutorResult, sanitizeMathString } from './render.js';
 import { stopSpeech } from './voice.js';
-import { hideStatus, showQuotaError, showStatus } from './ui-status.js';
+import { hideStatus, showQuotaError, showStatus, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
     // 類題（数字を変えた問題）生成 & 自分で解く「類題チャレンジ」AI自動採点システム
@@ -76,15 +76,10 @@ export async function generateSimilarProblem() {
           hideStatus();
         }
       } catch (err) {
-        if (isQuotaError(err)) {
-          showQuotaError(selectedModel);
-        } else {
-          const isTimeout = err.name === 'AbortError';
-          const errMsg = isTimeout
-            ? '⏱️ 類題生成がタイムアウトしました。もう一度お試しください。'
-            : `❌ 類題生成エラー: ${escapeHtml(err.message)}`;
-          showStatus(errMsg, 'red');
-        }
+        showApiError(err, {
+          selectedModel,
+          retryAction: 'generate-similar'
+        });
       } finally {
         if (btn) {
           btn.disabled = false;

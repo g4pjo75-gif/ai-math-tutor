@@ -1,7 +1,8 @@
 import { escapeAttr } from '../shared/actions.js';
 import { state } from './state.js';
 import { escapeHtml } from './chat-overall.js';
-import { isLicenseMode } from '../core/index.js';
+import { isLicenseMode, isQuotaError } from '../core/index.js';
+import { buildApiErrorView } from '../shared/api-error-ui.js';
 
     // ユーティリティ関数（上部ステータスボックス + 画面下部トースト通知で常時視認可能）
 export function showToast(text, color = 'blue') {
@@ -91,4 +92,15 @@ export function showQuotaError(selectedModel) {
         </div>
       `, 'red');
     }
+
+export function showApiError(err, options = {}) {
+      // BYOK는 기존 quota 모델 전환 UX를 유지한다.
+      if (!isLicenseMode() && isQuotaError(err)) {
+        showQuotaError(options.selectedModel);
+        return;
+      }
+      const { html } = buildApiErrorView(err, options);
+      showStatus(html, 'red');
+    }
+
 

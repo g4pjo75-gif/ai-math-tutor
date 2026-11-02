@@ -7,7 +7,7 @@ import { clearImage } from './upload.js';
 import { solveProblem } from './api-solve.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese } from './voice.js';
-import { showQuotaError, showStatus } from './ui-status.js';
+import { showQuotaError, showStatus, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
 export function toggleQuizHint() {
@@ -112,11 +112,10 @@ ${studentAns}
 
         renderQuizResult(judge, studentAns);
       } catch (err) {
-        if (isQuotaError(err)) {
-          showQuotaError(selectedModel);
-        } else {
-          showStatus(`❌ 採点エラー: ${escapeHtml(err.message)}`, 'red');
-        }
+        showApiError(err, {
+          selectedModel,
+          retryAction: 'submit-student'
+        });
       } finally {
         if (btn) {
           btn.disabled = false;

@@ -6,7 +6,7 @@ import { openSettings } from './settings.js';
 import { TUTOR_RESPONSE_SCHEMA, buildSystemPrompt } from './schema.js';
 import { renderTutorResult } from './render.js';
 import { stopSpeech } from './voice.js';
-import { hideStatus, showQuotaError, showStatus } from './ui-status.js';
+import { hideStatus, showQuotaError, showStatus, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
 export async function solveProblem(overrideModelId = null, forceRefresh = false) {
@@ -107,45 +107,37 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
           hideStatus();
         }
       } catch (err) {
-        if (isQuotaError(err)) {
-          showQuotaError(selectedModel);
-        } else {
+        if (!isLicenseMode() && !isQuotaError(err)) {
           const isTimeout = err.name === 'AbortError' || err.code === 'timeout';
           const errMsg = isTimeout
             ? '⏱️ 時間内に応答がありませんでした（サーバー混雑）。もう一度お試しください。'
             : `❌ エラー: ${escapeHtml(err.message)}`;
 
-          if (isLicenseMode()) {
-            showStatus(`
-              <div class="space-y-2">
-                <div class="font-bold text-red-700 dark:text-red-300">${errMsg}</div>
-                <div class="pt-1">
-                  <button data-action="solve" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 もう一度試す</button>
-                  <button data-action="open-settings" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・契約管理</button>
-                </div>
-              </div>
-            `, 'red');
-          } else {
-            const selectEl = document.getElementById('modelSelect');
-            const otherModels = selectEl ? [...selectEl.options]
-              .map(o => o.value)
-              .filter(v => v !== selectedModel)
-              .slice(0, 3) : [];
+          const selectEl = document.getElementById('modelSelect');
+          const otherModels = selectEl ? [...selectEl.options]
+            .map(o => o.value)
+            .filter(v => v !== selectedModel)
+            .slice(0, 3) : [];
 
-            const fallbackButtons = otherModels.map(m =>
-              `<button data-action="solve" data-model="${escapeAttr(m)}" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${escapeHtml(m)} で再試行</button>`
-            ).join('');
+          const fallbackButtons = otherModels.map(m =>
+            `<button data-action="solve" data-model="${escapeAttr(m)}" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${escapeHtml(m)} で再試行</button>`
+          ).join('');
 
-            showStatus(`
-              <div class="space-y-2">
-                <div class="font-bold text-red-700 dark:text-red-300">${errMsg}</div>
-                <div class="text-xs text-slate-600 dark:text-slate-300">「⚙️ 設定」の「モデル一覧を自動取得」を押すか、別のモデルに切り替えて再試行してください。</div>
-                <div class="pt-1">${fallbackButtons}
-                  <button data-action="open-settings" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
-                </div>
+          showStatus(`
+            <div class="space-y-2">
+              <div class="font-bold text-red-700 dark:text-red-300">${errMsg}</div>
+              <div class="text-xs text-slate-600 dark:text-slate-300">「⚙️ 設定」の「モデル一覧を自動取得」を押すか、別のモデルに切り替えて再試行してください。</div>
+              <div class="pt-1">${fallbackButtons}
+                <button data-action="open-settings" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
               </div>
-            `, 'red');
-          }
+            </div>
+          `, 'red');
+        } else {
+          showApiError(err, {
+            selectedModel,
+            retryAction: 'solve',
+            retryData: { key: 'force', value: '1' }
+          });
         }
       } finally {
         document.getElementById('solveBtn').disabled = false;

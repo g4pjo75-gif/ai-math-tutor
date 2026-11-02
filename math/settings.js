@@ -1,6 +1,6 @@
 import { safeStorage, sharedStore } from './state.js';
 import { checkApiKeyWarning } from './init.js';
-import { fetchAvailableModels as fetchModelsFromApi, isLicenseMode } from '../core/index.js';
+import { fetchAvailableModels as fetchModelsFromApi, isLicenseMode, classifyApiError } from '../core/index.js';
 import {
   LICENSE_KEY,
   normalizeLicenseKey,
@@ -160,7 +160,8 @@ export function renderLicenseInfo(info) {
 export function renderLicenseError(err) {
       const statusEl = document.getElementById('licenseStatus');
       if (!statusEl) return;
-      statusEl.innerHTML = `<div class="p-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 font-bold">⚠️ ${escapeHtml(err?.message || 'ライセンスエラーが発生しました。')}</div>`;
+      const info = classifyApiError(err);
+      statusEl.innerHTML = `<div class="p-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 font-bold">⚠️ ${escapeHtml(info.message)}</div>`;
     }
 
 export function clearLicenseAction() {

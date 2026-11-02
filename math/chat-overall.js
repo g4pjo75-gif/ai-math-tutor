@@ -4,7 +4,7 @@ import { openSettings } from './settings.js';
 import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese } from './voice.js';
-import { showQuotaError, showStatus, showToast } from './ui-status.js';
+import { showQuotaError, showStatus, showToast, showApiError } from './ui-status.js';
 
     // 問題全体の解法・別解についての質問チャット (Alternative Solutions & Overall Q&A)
     // =========================================================================
@@ -203,11 +203,10 @@ ${question}
           showToast('別の問題の回答が届きました。タブを切り替えると確認できます。', 'blue');
         }
       } catch (err) {
-        if (isQuotaError(err)) {
-          showQuotaError(selectedModel);
-        } else {
-          showStatus(`❌ 別解解説エラー: ${escapeHtml(err.message)}`, 'red');
-        }
+        showApiError(err, {
+          selectedModel,
+          retryAction: 'overall-send'
+        });
       } finally {
         state.overallChatBusy = false;
         const curBtn = document.getElementById('overallChatBtn');

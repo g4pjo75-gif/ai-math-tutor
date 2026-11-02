@@ -4,7 +4,7 @@ import { SIMPLIFY_RESPONSE_SCHEMA } from './schema.js';
 import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
 import { renderStepCards } from './render.js';
 import { highlightStepCard, speakJapanese, stopSpeech } from './voice.js';
-import { showQuotaError, showStatus } from './ui-status.js';
+import { showQuotaError, showStatus, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
     // 6-2. 「もっとやさしく」：そのステップだけを、よりかみくだいて再生成
@@ -101,11 +101,11 @@ export async function simplifyStep(idx) {
           speakJapanese(simplified.speech_ja || simplified.title || '', () => highlightStepCard(-1));
         }, 350);
       } catch (err) {
-        if (isQuotaError(err)) {
-          showQuotaError(model);
-        } else {
-          showStatus(`❌ やさしい説明の生成に失敗しました: ${escapeHtml(err.message)}`, 'red');
-        }
+        showApiError(err, {
+          selectedModel: model,
+          retryAction: 'simplify-step',
+          retryData: { key: 'idx', value: String(idx) }
+        });
         if (btn) {
           btn.disabled = false;
           btn.textContent = '🪄 もっとやさしく';

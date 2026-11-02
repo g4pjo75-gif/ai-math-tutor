@@ -4,7 +4,7 @@ import { openSettings } from './settings.js';
 import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese, stopSpeech } from './voice.js';
-import { showQuotaError, showStatus, showToast } from './ui-status.js';
+import { showQuotaError, showStatus, showToast, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
     // =========================================================================
@@ -216,11 +216,11 @@ ${question}
           showToast('別の問題のステップ回答が届きました。タブを切り替えると確認できます。', 'blue');
         }
       } catch (err) {
-        if (isQuotaError(err)) {
-          showQuotaError(selectedModel);
-        } else {
-          showStatus(`❌ 質問エラー: ${escapeHtml(err.message)}`, 'red');
-        }
+        showApiError(err, {
+          selectedModel,
+          retryAction: 'step-question-send',
+          retryData: { key: 'idx', value: String(reqStepIdx) }
+        });
       } finally {
         state.stepChatBusy[chatKey] = false;
         if (reqProblemIndex === state.currentProblemIndex) {

@@ -4,7 +4,7 @@ import { openSettings } from './settings.js';
 import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese } from './voice.js';
-import { showQuotaError, showStatus } from './ui-status.js';
+import { showQuotaError, showStatus, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
 
@@ -343,11 +343,10 @@ ${keyPoint}
 
         applyAndRenderQuizData(quizRes);
       } catch (err) {
-        if (isQuotaError(err)) {
-          showQuotaError(selectedModel);
-        } else {
-          showStatus(`❌ 類題出題エラー: ${escapeHtml(err.message)}`, 'red');
-        }
+        showApiError(err, {
+          selectedModel,
+          retryAction: 'start-quiz'
+        });
       } finally {
         if (btn) {
           btn.disabled = false;
