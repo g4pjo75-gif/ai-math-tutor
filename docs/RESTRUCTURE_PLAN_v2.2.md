@@ -9408,6 +9408,54 @@ chore: precache transport module and run all l1 tests
 
 ---
 
+### 4.21 Phase 7-5-B (앱 라이선스 모드 활성화 및 기기 바인딩 연동)
+
+**목표**: Phase 7-5-A에서 비활성 상태로 추가된 transport 계층을 클라이언트 앱(수학/영어)에 연결하여, 구독 라이선스 키 입력을 통한 클라우드 프록시 호출 모드를 활성화한다.
+
+#### 4.21.1 주요 설계 원칙 및 저장소 키
+
+1. **저장소 키**:
+   - `license_key`: 정규화된 라이선스 키 (`AMT-XXXX-XXXX-XXXX-XXXX`)
+   - `license_device_id`: 바인딩 성공 시 저장된 기기 고유 식별자
+   - `device_id`: 클라이언트 기기 고유 UUID (수학/영어 앱 공용)
+   - 반드시 `sharedStore`(`tutor_` 프리픽스)를 직접 사용하여 저장한다. `safeStorage`를 통한 로컬 격리 저장은 금지한다.
+2. **자동 Redeem 금지 & `needsRebind` 플래그**:
+   - 앱 기동 시(`applyStoredLicense`)에는 절대 네트워크 호출(`/v1/redeem`)을 자동으로 실행하지 않는다.
+   - 로컬 `device_id`와 저장된 `license_device_id`가 일치하면 기존 바인딩 유효 상태로 간주하여 오프라인에서도 즉시 라이선스 모드로 기동한다.
+   - 불일치하거나 `license_device_id`가 없는 경우 라이선스 모드는 유지하되 `needsRebind = true`로 설정하고 상단 배너(`#licenseWarningBanner`)로 재인증을 유도한다.
+3. **설정 모달 저장 버튼 통합 (async)**:
+   - 라이선스 키 등록과 일반 설정(PIN 등)은 `saveSettings` 비동기 함수 하나로 처리한다.
+   - 라이선스 키가 입력된 경우 정규화 및 `redeemLicense` 성공 시에만 모달을 닫고 키를 영구 저장한다.
+   - 등록 실패 시 모달을 닫지 않고 인라인 에러(`#licenseStatus`)를 출력한다.
+   - 키 입력란이 비어있다는 이유만으로 기존 라이선스 키를 삭제하지 않는다 (해제는 별도 명시적 액션).
+4. **키 가드 11곳 및 배너 2곳**:
+   - API 호출 가드: `!geminiKey && !isLicenseMode()` (수학 7곳, 영어 4곳)
+   - 배너: API 키 미설정 배너(`#apiWarningBanner`)와 기기 재인증 안내 배너(`#licenseWarningBanner`)를 상호 배타적으로 제어
+5. **모델 선택 UI hide (DOM 삭제 금지)**:
+   - 라이선스 모드에서는 모델을 서버가 지정하므로 `#modelSelect` 및 `#byokSettingsSection`을 `hidden` 클래스로 숨기되, DOM 구조에서 삭제(`remove`)하지 않는다.
+6. **서버 포털 상태 체크 완화**:
+   - 해지(`canceled`) 또는 결제 지연(`past_due`) 상태의 라이선스 소유자도 카드 변경 및 결제 재개를 위해 `/v1/portal` 세션 발급을 허용한다.
+7. **CSP & Service Worker**:
+   - CSP `connect-src`에 `https://ai-math-tutor-api.g4pjo75.workers.dev` 허용 추가
+   - Service Worker 캐시 버전 bump (`amt-cache-v3.7`, `aet-cache-v2.7`) 및 `../shared/license.js` 프리캐시 추가
+
+#### 4.21.2 테스트 게이트 기준
+- L1 단위 테스트: **47 pass** (기존 35 + transport 확장 4 + license 8)
+- L2 E2E 테스트: **30 pass** (기존 24 + license E2E 6)
+- 서버 테스트: **35 pass** (기존 32 + billing portal 3)
+- 종합: 77 pass (클라이언트) + 35 pass (서버)
+
+#### 4.21.3 커밋 순서 (7개)
+1. `docs: add phase 7-5-b license activation spec`
+2. `feat(core): add license redeem, me and portal helpers`
+3. `feat(shared): add license storage and registration helper`
+4. `feat(app): activate license mode in math and english`
+5. `feat(server): allow portal access for inactive licenses`
+6. `test: add license e2e and update action counts`
+7. `chore: bump sw caches and precache license helper`
+
+---
+
 ## 5. 리스크와 대응
 
 | 리스크 | 영향 | 대응 |
