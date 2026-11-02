@@ -70,6 +70,7 @@ test.describe('license: E2E 활성화 및 프록시 전환', () => {
     // 설정 열고 라이선스 키 입력
     await page.click('[data-action="open-settings"]');
     await expect(page.locator('#settingsModal')).toBeVisible();
+    await expect(page.locator('#licenseKeyInput')).toHaveAttribute('type', 'password');
 
     await page.fill('#licenseKeyInput', 'amt-aaaa-bbbb-cccc-dddd');
     await page.click('[data-action="save-settings"]');
@@ -90,16 +91,18 @@ test.describe('license: E2E 활성화 및 프록시 전환', () => {
   });
 
   test('2. 저장 실패 → 모달 유지, 키 저장 안 됨', async ({ page }) => {
+    const geminiCalls = await stubGemini(page);
     stubWorker(page, {
       redeemStatus: 403,
       redeemBody: { ok: false, error: 'device_limit' }
     });
 
-    await bootApp(page, 'math', { apiKey: '' });
+    await bootApp(page, 'math', { apiKey: 'AIzaOldKey' });
 
     await page.click('[data-action="open-settings"]');
     await expect(page.locator('#settingsModal')).toBeVisible();
 
+    await page.fill('#geminiKeyInput', 'AIzaNewKey');
     await page.fill('#licenseKeyInput', TEST_KEY);
     await page.click('[data-action="save-settings"]');
 
@@ -107,9 +110,10 @@ test.describe('license: E2E 활성화 및 프록시 전환', () => {
     await expect(page.locator('#settingsModal')).toBeVisible();
     await expect(page.locator('#licenseStatus')).toContainText('上限');
 
-    // localStorage에 키가 저장되지 않음
-    const storedKey = await page.evaluate(() => localStorage.getItem('tutor_license_key'));
-    expect(storedKey).toBeNull();
+    // BYOK 수정분은 저장되고 라이선스 키는 저장되지 않음
+    expect(await page.evaluate(() => localStorage.getItem('tutor_gemini_api_key')))
+      .toBe('AIzaNewKey');
+    expect(await page.evaluate(() => localStorage.getItem('tutor_license_key'))).toBeNull();
   });
 
   test('3. 재접속 시 redeem 재호출 없음', async ({ page }) => {
@@ -164,6 +168,7 @@ test.describe('license: E2E 활성화 및 프록시 전환', () => {
   });
 
   test('5. 모델 UI hide/restore', async ({ page }) => {
+    const geminiCalls = await stubGemini(page);
     stubWorker(page);
 
     await bootApp(page, 'math', { apiKey: 'AIzaFakeKey' });
@@ -173,6 +178,7 @@ test.describe('license: E2E 활성화 및 프록시 전환', () => {
 
     // 라이선스 등록
     await page.click('[data-action="open-settings"]');
+    await expect(page.locator('#licenseKeyInput')).toHaveAttribute('type', 'password');
     await page.fill('#licenseKeyInput', TEST_KEY);
     await page.click('[data-action="save-settings"]');
     await expect(page.locator('#settingsModal')).toBeHidden();
@@ -205,15 +211,16 @@ test.describe('license: E2E 활성화 및 프록시 전환', () => {
 
     await bootApp(page, 'math', { apiKey: BYOK_KEY });
 
-    // 라이선스 키 등록
+    // 라이선스 키 등록 시 #geminiKeyInput 수정분을 함께 저장
     await page.click('[data-action="open-settings"]');
+    await page.fill('#geminiKeyInput', BYOK_KEY + '-updated');
     await page.fill('#licenseKeyInput', TEST_KEY);
     await page.click('[data-action="save-settings"]');
     await expect(page.locator('#settingsModal')).toBeHidden();
 
-    // 라이선스 모드에서도 BYOK 키가 스토리지에 유지되는지 확인
-    const retainedByokKey = await page.evaluate(() => localStorage.getItem('tutor_gemini_api_key'));
-    expect(retainedByokKey).toBe(BYOK_KEY);
+    // 라이선스 모드에서도 BYOK 수정분이 스토리지에 유지되는지 확인
+    expect(await page.evaluate(() => localStorage.getItem('tutor_gemini_api_key')))
+      .toBe(BYOK_KEY + '-updated');
 
     // 라이선스 해제 후 설정창 열기
     await page.click('[data-action="open-settings"]');
@@ -222,9 +229,9 @@ test.describe('license: E2E 활성화 및 프록시 전환', () => {
     });
     await page.click('[data-action="license-clear"]');
 
-    // BYOK 입력창에 기존 키 복원 확인
+    // BYOK 입력창에 수정된 키 복원 확인
     const inputVal = await page.inputValue('#geminiKeyInput');
-    expect(inputVal).toBe(BYOK_KEY);
+    expect(inputVal).toBe(BYOK_KEY + '-updated');
     await page.click('[data-action="close-settings"]');
 
     // 콘솔/CSP 오류 0개 검증
