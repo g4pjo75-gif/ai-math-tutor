@@ -9495,6 +9495,339 @@ chore: precache transport module and run all l1 tests
 
 ---
 
+### 4.22 Phase 7-5-C (오류 UX: 401/402/429/504)
+
+**배경**: 7-5-B에서 라이선스 모드가 활성화됐지만, 프록시 오류는 여전히
+일반 오류 경로로 흩어져 있다. 특히 `rate_limited`가 `isQuotaError()`에 의해
+quota로 분류되어 “今月の利用上限” 문구가 나가고, 라이선스 모드에서도
+모델 전환 버튼이 생성될 수 있다. 영어 앱 일부는 `err.message`를 버리고
+일반 문구만 표시한다.
+
+**범위**: 클라이언트 오류 분류·표시·CTA만 다룬다. 서버 API 계약, 결제,
+`callGeminiModel` 시그니처는 바꾸지 않는다.
+
+#### 4.22.1 기본 원칙
+
+1. **단일 분류기**: `classifyApiError(err)`를 추가하고, 라이선스 모드를 포함한
+   새 UI 분기는 이 함수를 사용한다. BYOK quota 호환만 기존 `isQuotaError()`를 예외로 쓴다.
+2. **`isQuotaError()`는 BYOK 호환용**: 기존 BYOK 코드/테스트를 위해 export는 유지하되,
+   라이선스 모드 분기에는 사용하지 않는다. 라이선스 모드에서는 `rate_limited`를
+   quota로 보지 않는다.
+3. **라이선스 모드에서 모델 전환 금지**: 모델은 서버가 고정하므로
+   `showQuotaError()`의 모델 fallback 버튼을 라이선스 모드에서 만들지 않는다.
+4. **quota 표시**: `err.quota`가 있으면 `残り X / Y 回（period）`를 함께 보여준다.
+5. **액션은 `data-action`만 사용**: 인라인 핸들러 금지. 기존 액션을 재사용한다.
+6. **실호출 금지**: 모든 L2는 `stubGemini` / `stubWorker`로 검증한다.
+
+#### 4.22.2 오류 분류표
+
+| code | HTTP | kind | 기본 문구 | actions | retry |
+|---|---|---|---|---|---|
+| `transport_not_configured` | 0 | auth | ライセンスモードが設定されていません。 | settings | no |
+| `missing_license` | 401 | auth | ライセンスキーが設定されていません。 | settings | no |
+| `invalid_license` | 401 | auth | ライセンスキーが無効です。設定を確認してください。 | settings | no |
+| `license_canceled` | 402 | billing | サブスクリプションが終了しています。 | portal | no |
+| `license_past_due` | 402 | billing | お支払いに問題があります。契約管理ページをご確認ください。 | portal | no |
+| `license_inactive` | 402 | billing | ライセンスが有効ではありません。 | portal, settings | no |
+| `missing_device` | 400 | device | 端末の認証情報がありません。アプリを再読み込みしてください。 | settings | no |
+| `device_not_bound` | 403 | device | この端末はライセンスに登録されていません。設定からキーを再登録してください。 | settings | no |
+| `device_limit` | 403 | device_limit | 登録できる端末数（2台）の上限に達しました。 | none | no |
+| `quota_exceeded` | 402 | quota | 今月の利用上限に達しました。 | portal, settings | no |
+| `rate_limited` | 429 | rate_limit | リクエストが多すぎます。少し待ってからお試しください。 | retry | yes |
+| `upstream_quota` | 429 | transient | AIの利用上限に達しました。時間をおいてお試しください。 | retry | yes |
+| `timeout` | 504 | transient | AIの応答がタイムアウトしました。もう一度お試しください。 | retry | yes |
+| `network_error` | 0 | transient | サーバーに接続できませんでした。通信環境を確認してください。 | retry | yes |
+| `upstream_error` | 502 | transient | AIの応答でエラーが発生しました。もう一度お試しください。 | retry | yes |
+| `server_misconfigured` | 500 | server | サーバー設定に問題があります。管理者にお問い合わせください。 | none | no |
+| `invalid_request` | 400 | input | リクエストが不正です。 | input | no |
+| `invalid_prompt` | 400 | input | 入力内容を確認してください。 | input | no |
+| `prompt_too_large` | 400 | input | 入力が長すぎます。内容を分けてお試しください。 | input | no |
+| `image_too_large` | 400 | input | 画像が大きすぎます。別の画像でお試しください。 | input | no |
+| `invalid_image` / `invalid_schema` / `schema_too_large` | 400 | input | 入力内容または画像を確認してください。 | input | no |
+| `body_too_large` / `invalid_json` | 413 / 400 | input | 入力内容を確認してください。 | input | no |
+| `no_customer` | 400 | billing | 契約管理を利用できません。購入時のメールをご確認ください。 | settings | no |
+| `stripe_error` | 502 | transient | 契約管理ページを開けませんでした。時間をおいてお試しください。 | retry | yes |
+| `proxy_<status>` | 기타 | unknown | 通信エラーが発生しました。もう一度お試しください。 | status >= 500이면 retry | status >= 500 |
+
+> `kind`/`actions`는 UI 힌트다. 실제 문구는 `err.message`가 있으면 그대로 우선 사용하고,
+> 없을 때만 표의 기본 문구를 쓴다.
+
+#### 4.22.3 `core/errors.js` — `classifyApiError()`
+
+```js
+export function classifyApiError(err) {
+  const code = String(err?.code || 'unknown');
+  const status = Number(err?.status) || 0;
+  const quota = err?.quota || null;
+  const message = err?.message || '通信エラーが発生しました。もう一度お試しください。';
+  const base = { code, status, quota, message, retryable: false, actions: [] };
+
+  if (code === 'transport_not_configured' || code === 'missing_license' ||
+      code === 'invalid_license' || status === 401) {
+    return { ...base, kind: 'auth', actions: ['settings'] };
+  }
+  if (['license_canceled', 'license_past_due', 'license_inactive', 'no_customer'].includes(code)) {
+    const actions = code === 'no_customer'
+      ? ['settings']
+      : (code === 'license_inactive' ? ['portal', 'settings'] : ['portal']);
+    return { ...base, kind: 'billing', actions };
+  }
+  if (code === 'quota_exceeded') {
+    return { ...base, kind: 'quota', actions: ['portal', 'settings'] };
+  }
+  if (code === 'rate_limited') {
+    return { ...base, kind: 'rate_limit', retryable: true, actions: ['retry'] };
+  }
+  if (code === 'device_not_bound' || code === 'missing_device') {
+    return { ...base, kind: 'device', actions: ['settings'] };
+  }
+  if (code === 'device_limit') {
+    return { ...base, kind: 'device_limit' };
+  }
+  if (['timeout', 'network_error', 'upstream_error', 'upstream_quota', 'stripe_error'].includes(code)) {
+    return { ...base, kind: 'transient', retryable: true, actions: ['retry'] };
+  }
+  if (code === 'server_misconfigured') {
+    return { ...base, kind: 'server' };
+  }
+  if (status === 400 || status === 413 ||
+      ['invalid_request', 'invalid_prompt', 'prompt_too_large', 'image_too_large',
+       'invalid_image', 'invalid_schema', 'schema_too_large',
+       'body_too_large', 'invalid_json'].includes(code)) {
+    return { ...base, kind: 'input', actions: ['input'] };
+  }
+  return {
+    ...base,
+    kind: 'unknown',
+    retryable: status >= 500,
+    actions: status >= 500 ? ['retry'] : []
+  };
+}
+```
+
+- `core/index.js`에서 `classifyApiError` export.
+- `isQuotaError()`는 기존 BYOK 호환용으로만 남긴다. 라이선스 모드 분기에는 사용하지 않는다.
+
+#### 4.22.4 공용 오류 뷰 — `shared/api-error-ui.js` 신규
+
+```js
+// shared/api-error-ui.js — 오류 분류 결과를 UI HTML로 변환 (DOM 비의존)
+import { classifyApiError } from '../core/index.js';
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[m]));
+}
+
+export function buildApiErrorView(err, { retryAction = '', retryData = '' } = {}) {
+  const info = classifyApiError(err);
+  const quota = info.quota && Number.isFinite(info.quota.remaining)
+    ? `<div class="text-xs">残り <strong>${info.quota.remaining}</strong> / ${info.quota.limit} 回${info.quota.period ? `（${escapeHtml(info.quota.period)}）` : ''}</div>`
+    : '';
+
+  const actions = [];
+  if (info.actions.includes('settings')) {
+    actions.push('<button data-action="open-settings" class="...">⚙️ 設定を開く</button>');
+  }
+  if (info.actions.includes('portal')) {
+    actions.push('<button data-action="license-portal" class="...">💳 契約管理</button>');
+  }
+  if (info.actions.includes('retry') && retryAction) {
+    const data = retryData ? ` data-${retryData.key}="${escapeHtml(retryData.value)}"` : '';
+    actions.push(`<button data-action="${escapeHtml(retryAction)}"${data} class="...">🔄 もう一度試す</button>`);
+  }
+
+  const html = `
+    <div class="space-y-2">
+      <div class="font-bold text-red-700 dark:text-red-300">${escapeHtml(info.message)}</div>
+      ${quota}
+      ${actions.length ? `<div class="pt-1">${actions.join('')}</div>` : ''}
+    </div>
+  `;
+  return { info, html };
+}
+```
+
+- 버튼 클래스는 기존 `showStatus` 스타일을 따른다.
+- `retryData`는 `{ key: 'model', value: '...' }` 또는 `{ key: 'idx', value: '0' }` 형태.
+- `input` 액션은 별도 버튼 없이 입력란 focus/amber 안내로 처리한다.
+
+#### 4.22.5 앱 UI 연결
+
+**수학 `math/ui-status.js`**
+
+```js
+import { buildApiErrorView } from '../shared/api-error-ui.js';
+import { isQuotaError, isLicenseMode } from '../core/index.js';
+
+export function showApiError(err, options = {}) {
+  // BYOK는 기존 quota 모델 전환 UX를 유지한다.
+  if (!isLicenseMode() && isQuotaError(err)) {
+    showQuotaError(options.selectedModel);
+    return;
+  }
+  const { html } = buildApiErrorView(err, options);
+  showStatus(html, 'red');
+}
+```
+
+- `showQuotaError()`는 BYOK 호환용으로 유지한다.
+- 라이선스 모드에서는 `showApiError()`가 quota/billing/device/rate_limit을 모두 처리한다.
+- `api-solve`의 기존 모델 fallback 분기는 BYOK일 때만 유지한다.
+
+**영어 `english/mode.js`**
+
+`english/mode.js`에 기존 `showStatus()`를 그대로 사용하는 `showApiError()`를 추가한다.
+
+```js
+import { buildApiErrorView } from '../shared/api-error-ui.js';
+
+// english/mode.js 내부에 추가
+export function showApiError(err, options = {}) {
+  const { html } = buildApiErrorView(err, options);
+  showStatus(html, 'red');
+}
+```
+
+- 영어는 모델 전환 UI가 없으므로 항상 `showApiError()`를 사용한다.
+
+#### 4.22.6 호출부 변경
+
+**수학 7곳**
+- `math/api-solve.js`
+- `math/similar.js`
+- `math/simplify.js`
+- `math/quiz.js`
+- `math/quiz-result.js`
+- `math/chat-step.js`
+- `math/chat-overall.js`
+
+기존:
+```js
+if (isQuotaError(err)) {
+  showQuotaError(selectedModel);
+} else {
+  showStatus(`❌ ... ${escapeHtml(err.message)}`, 'red');
+}
+```
+
+변경:
+```js
+showApiError(err, {
+  selectedModel,
+  retryAction: 'solve',       // 문맥에 맞는 기존 액션
+  retryData: { key: 'force', value: '1' }
+});
+```
+
+- `retryAction`은 문맥별 기존 액션을 사용한다.
+  - `api-solve`: `solve`
+  - `similar`: `generate-similar`
+  - `simplify`: `simplify-step` + `data-idx`
+  - `quiz`: `start-quiz`
+  - `quiz-result`: `submit-student`
+  - `chat-step`: `step-question-send` + `data-idx`
+  - `chat-overall`: `overall-send`
+- 재시도가 안전하지 않은 문맥은 `retryAction`을 생략한다.
+- `isQuotaError` import는 제거하거나 호환용으로만 남긴다.
+
+**영어 4곳**
+- `english/reading.js` catch → `showApiError(err, { retryAction: 'analyze' })`
+- `english/quiz.js` catch → `showApiError(err, { retryAction: 'generate-quiz' })`
+- `english/writing.js` `generateWritingPrompt` catch → `showApiError(e, { retryAction: 'writing-prompt' })`
+- `english/writing.js` `submitWritingForCorrection` catch → `showApiError(err, { retryAction: 'submit-writing' })`
+
+기존 `TutorUI.showToast('❌ 課題の作成に失敗しました。', 'red')`처럼
+`err.message`를 버리는 경로를 없앤다.
+
+#### 4.22.7 설정 모달 오류
+
+- `math/settings.js` / `english/init.js`의 `renderLicenseError()`도
+  `classifyApiError(err)` 결과를 사용해 문구를 통일한다.
+- 401/403/402는 `#licenseStatus` 인라인에 표시하고, 포털/설정 CTA는 기존
+  `licenseActions` 버튼을 사용한다.
+- 등록 실패 시 모달 유지 규칙은 7-5-B와 동일하다.
+
+#### 4.22.8 CSP / Service Worker
+
+- `shared/api-error-ui.js`를 두 SW ASSETS에 추가.
+- 캐시 bump:
+  - `math/sw.js`: `amt-cache-v3.7` → `amt-cache-v3.8`
+  - `english/sw.js`: `aet-cache-v2.7` → `aet-cache-v2.8`
+- CSP 변경은 없음.
+
+#### 4.22.9 테스트
+
+**L1 `tests/api-errors.test.js` 신규 8**
+1. auth codes (`transport_not_configured`, `missing_license`, `invalid_license`, 401)
+2. billing codes (`license_canceled`, `license_past_due`, `license_inactive`)
+3. quota (`quota_exceeded`, `upstream_quota`)
+4. rate limit (`rate_limited`가 quota가 아님)
+5. device (`device_not_bound`, `missing_device`, `device_limit`)
+6. transient (`timeout`, `network_error`, `upstream_error`, `stripe_error`)
+7. input/server (`invalid_prompt`, `prompt_too_large`, `image_too_large`, `server_misconfigured`)
+8. unknown fallback (`proxy_503`는 retry, `proxy_404`는 no retry)
+
+예상: **L1 55 pass** (기존 47 + 8)
+
+**L2 `tests/e2e/errors.spec.js` 신규 6**
+1. 수학 라이선스 + 402 `license_canceled` → 포털 CTA, 모델 버튼 0
+2. 수학 라이선스 + 429 `rate_limited` → 재시도 CTA, quota 문구/모델 버튼 0
+3. 수학 라이선스 + 403 `device_not_bound` → 설정 CTA
+4. 수학 라이선스 + 504 `timeout` → 재시도 CTA
+5. 수학 BYOK + quota → 기존 모델 전환 버튼 유지 (regression)
+6. 영어 라이선스 + 402 `license_past_due` → 포털 CTA
+
+예상: **L2 36 pass** (기존 30 + 6)
+
+**기존 테스트**
+- `getRecommendedModels`/`showQuotaError` BYOK 동작 유지.
+- 액션 개수는 기존 액션 재사용으로 **math 46 / english 47 유지**.
+- `offline.spec.js` 액션 카운트 변경 없음.
+
+#### 4.22.10 게이트 / DoD
+
+```bash
+npm run test:l1          # 55 pass
+npx playwright test      # 36 pass
+npm test                 # 91 pass
+cd server && npm test    # 35 pass
+```
+
+DoD:
+- [ ] `classifyApiError()` 추가, `core/index.js` export
+- [ ] `shared/api-error-ui.js` 추가 및 SW 프리캐시
+- [ ] 수학/영어 모든 API catch가 `showApiError()` 사용
+- [ ] 라이선스 모드에서 모델 전환 버튼 0
+- [ ] `rate_limited`가 quota 문구로 표시되지 않음
+- [ ] `err.quota` 잔여 횟수 표시
+- [ ] 401/403 → 설정 CTA, 402 → 포털 CTA, 429/504/네트워크 → 재시도 CTA
+- [ ] 영어에서 `err.message`를 버리는 catch 제거
+- [ ] L1 55 / L2 36 / server 35
+- [ ] 실제 Gemini/Worker 실호출 없음
+- [ ] 시크릿 없음
+
+#### 4.22.11 커밋 순서
+
+1. `docs: add phase 7-5-c error ux spec`
+2. `feat(core): add api error classifier`
+3. `feat(shared): add api error view builder`
+4. `feat(math): add license-aware error ui`
+5. `feat(english): add license-aware error ui`
+6. `test: add api error unit and e2e coverage`
+7. `chore: bump sw caches and precache api error helper`
+
+#### 4.22.12 백로그
+
+- 기기 해제 API / 관리 화면 (`device_limit` 복구)
+- 지원 문의 URL/페이지
+- 자동 재시도/백오프 정책
+- 화면별 문구 세밀 조정
+- Tailwind CDN self-host 또는 SRI
+
+---
+
 ## 5. 리스크와 대응
 
 | 리스크 | 영향 | 대응 |
