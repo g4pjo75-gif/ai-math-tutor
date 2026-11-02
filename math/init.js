@@ -1,9 +1,10 @@
-import { EMBEDDED_GEMINI_API_KEY, safeStorage } from './state.js';
+import { EMBEDDED_GEMINI_API_KEY, safeStorage, sharedStore } from './state.js';
 import { initDarkMode, initTheme, updateSafeArea } from './theme-ui.js';
 import { initTutorHistory } from './history.js';
-import { addOrSelectModelOption, fetchAvailableModels, populateModelSelect } from './settings.js';
+import { addOrSelectModelOption, fetchAvailableModels, populateModelSelect, applyLicenseModeUi } from './settings.js';
 import { initVoiceSelect } from './voice.js';
-
+import { applyStoredLicense, licenseNeedsRebind } from '../shared/license.js';
+import { isLicenseMode } from '../core/index.js';
 
     // =========================================================================
     // 2. 初期化 及び PINロック解除
@@ -13,8 +14,12 @@ import { initVoiceSelect } from './voice.js';
       initTheme();
       initTutorHistory();
 
-      // 埋め込み API キー（設定がある場合のみ）
-      if (!safeStorage.getItem('gemini_api_key') && EMBEDDED_GEMINI_API_KEY) {
+      // ライセンス状態の復元とUI同期
+      applyStoredLicense(sharedStore);
+      applyLicenseModeUi();
+
+      // 埋め込み API キー（BYOKモードかつ設定がある場合のみ）
+      if (!isLicenseMode() && !safeStorage.getItem('gemini_api_key') && EMBEDDED_GEMINI_API_KEY) {
         safeStorage.setItem('gemini_api_key', EMBEDDED_GEMINI_API_KEY);
       }
 
@@ -44,9 +49,9 @@ import { initVoiceSelect } from './voice.js';
       initVoiceSelect();
       populateModelSelect();
 
-      // モデルが未取得かつAPIキーがある場合、自動取得を試行
+      // モデルが未取得かつBYOKでAPIキーがある場合、自動取得を試行
       const hasModels = safeStorage.getItem('available_gemini_models');
-      if (!hasModels && safeStorage.getItem('gemini_api_key')) {
+      if (!isLicenseMode() && !hasModels && safeStorage.getItem('gemini_api_key')) {
         fetchAvailableModels().catch(() => {});
       }
 
@@ -69,7 +74,20 @@ export function unlockApp() {
 export function checkApiKeyWarning() {
       const key = safeStorage.getItem('gemini_api_key');
       const banner = document.getElementById('apiWarningBanner');
-      if (!key) banner.classList.remove('hidden');
-      else banner.classList.add('hidden');
-    }
+      const licenseBanner = document.getElementById('licenseWarningBanner');
+      const needsRebind = licenseNeedsRebind();
 
+      if (isLicenseMode()) {
+        if (banner) banner.classList.add('hidden');
+        if (licenseBanner) {
+          if (needsRebind) licenseBanner.classList.remove('hidden');
+          else licenseBanner.classList.add('hidden');
+        }
+      } else {
+        if (licenseBanner) licenseBanner.classList.add('hidden');
+        if (banner) {
+          if (!key) banner.classList.remove('hidden');
+          else banner.classList.add('hidden');
+        }
+      }
+    }

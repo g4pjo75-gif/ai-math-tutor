@@ -3,7 +3,7 @@ import { closeQuizSection } from './quiz-result.js';
 import { openSettings } from './settings.js';
 import { clearImage } from './upload.js';
 import { TUTOR_RESPONSE_SCHEMA, buildSystemPrompt } from './schema.js';
-import { callGeminiModel, isQuotaError } from '../core/index.js';
+import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
 import { renderTutorResult, sanitizeMathString } from './render.js';
 import { stopSpeech } from './voice.js';
 import { hideStatus, showQuotaError, showStatus } from './ui-status.js';
@@ -43,7 +43,7 @@ export async function generateSimilarProblem() {
       const geminiKey = safeStorage.getItem('gemini_api_key');
       const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
 
-      if (!geminiKey) {
+      if (!geminiKey && !isLicenseMode()) {
         openSettings();
         showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
         if (btn) {

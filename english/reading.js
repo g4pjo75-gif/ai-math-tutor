@@ -1,4 +1,4 @@
-import { callGeminiModel, computeRequestHash, getCachedResponse, setCachedResponse } from '../core/index.js';
+import { callGeminiModel, computeRequestHash, getCachedResponse, setCachedResponse, isLicenseMode } from '../core/index.js';
 import { TutorUI } from '../shared/ui.js';
 import { escapeAttr } from '../shared/actions.js';
 import { engStore, state } from './state.js';
@@ -97,7 +97,7 @@ export async function analyzeEnglishProblem() {
       }
 
       const apiKey = getApiKey();
-      if (!apiKey) {
+      if (!apiKey && !isLicenseMode()) {
         openSettings();
         TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
         return;

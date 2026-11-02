@@ -1,5 +1,5 @@
 import { register } from '../shared/actions.js';
-import { changeTheme, closeSettings, onModelChange, openSettings, saveSettings, toggleDarkMode, unlockApp } from './init.js';
+import { changeTheme, closeSettings, onModelChange, openSettings, saveSettings, toggleDarkMode, unlockApp, clearLicenseAction, openLicensePortalAction, refreshLicenseStatus } from './init.js';
 import { switchMode } from './mode.js';
 import { analyzeEnglishProblem, clearImage, handleImageUpload } from './reading.js';
 import { generateEnglishQuiz, selectEnglishQuizChoice, speakQuizFullSentence, speakQuizQuestion, submitEnglishQuizAnswer, toggleQuizHint } from './quiz.js';
@@ -40,6 +40,9 @@ register({
   'clear-history-tab': () => clearCurrentHistoryTab(),
   'close-settings': () => closeSettings(),
   'save-settings': () => saveSettings(),
+  'license-clear': () => clearLicenseAction(),
+  'license-portal': () => openLicensePortalAction(),
+  'license-refresh': () => refreshLicenseStatus(),
   'speak-en': (el) => speakEnglishText(el.dataset.text),
   'save-all-words': () => saveAllLessonWords(),
   'add-word-index': (el) => addWordToWordbook(Number(el.dataset.idx)),

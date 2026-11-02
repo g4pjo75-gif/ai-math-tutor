@@ -1,4 +1,4 @@
-import { callGeminiModel } from '../core/index.js';
+import { callGeminiModel, isLicenseMode } from '../core/index.js';
 import { TutorUI } from '../shared/ui.js';
 import { escapeAttr } from '../shared/actions.js';
 import { state } from './state.js';
@@ -78,7 +78,7 @@ export async function generateEnglishQuiz(useCurrentLesson = false) {
       }
 
       const apiKey = getApiKey();
-      if (!apiKey) {
+      if (!apiKey && !isLicenseMode()) {
         openSettings();
         TutorUI.showToast('🔑 先に設定からGemini APIキーを入力してください。', 'amber');
         return;

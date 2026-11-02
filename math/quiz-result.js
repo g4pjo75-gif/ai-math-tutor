@@ -1,4 +1,4 @@
-import { callGeminiModel, isLocalMathMatch, isQuotaError } from '../core/index.js';
+import { callGeminiModel, isLocalMathMatch, isQuotaError, isLicenseMode } from '../core/index.js';
 import { safeStorage, state } from './state.js';
 import { saveTutorHistory } from './history.js';
 import { formatChoiceMath } from './quiz.js';
@@ -59,7 +59,7 @@ export async function submitStudentAnswer() {
       const geminiKey = safeStorage.getItem('gemini_api_key');
       const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
 
-      if (!geminiKey) {
+      if (!geminiKey && !isLicenseMode()) {
         openSettings();
         showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
         return;

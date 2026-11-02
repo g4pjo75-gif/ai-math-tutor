@@ -1,7 +1,7 @@
 import { safeStorage, state } from './state.js';
 import { openSettings } from './settings.js';
 import { SIMPLIFY_RESPONSE_SCHEMA } from './schema.js';
-import { callGeminiModel, isQuotaError } from '../core/index.js';
+import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
 import { renderStepCards } from './render.js';
 import { highlightStepCard, speakJapanese, stopSpeech } from './voice.js';
 import { showQuotaError, showStatus } from './ui-status.js';
@@ -44,7 +44,7 @@ export async function simplifyStep(idx) {
       if (!step) return;
 
       const key = safeStorage.getItem('gemini_api_key');
-      if (!key) {
+      if (!key && !isLicenseMode()) {
         openSettings();
         showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
         return;

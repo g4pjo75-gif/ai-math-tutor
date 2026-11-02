@@ -1,6 +1,7 @@
 import { escapeAttr } from '../shared/actions.js';
 import { state } from './state.js';
 import { escapeHtml } from './chat-overall.js';
+import { isLicenseMode } from '../core/index.js';
 
     // ユーティリティ関数（上部ステータスボックス + 画面下部トースト通知で常時視認可能）
 export function showToast(text, color = 'blue') {
@@ -59,6 +60,19 @@ export function getRecommendedModels() {
 
     // クォータ超過エラー表示（モデル切り替えボタン付き）
 export function showQuotaError(selectedModel) {
+      if (isLicenseMode()) {
+        showStatus(`
+          <div class="space-y-2">
+            <div class="font-bold text-red-700 dark:text-red-300">⚠️ 今月の利用上限に達しました。</div>
+            <div class="text-xs text-slate-600 dark:text-slate-300">プランの利用回数上限に達したか、アクセスが集中しています。設定から契約状況をご確認ください。</div>
+            <div class="pt-1">
+              <button data-action="open-settings" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・契約管理</button>
+            </div>
+          </div>
+        `, 'red');
+        return;
+      }
+
       const otherModels = getRecommendedModels()
         .filter(v => v !== selectedModel)
         .slice(0, 4);

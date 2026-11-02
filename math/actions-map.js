@@ -5,7 +5,7 @@ import { generateSimilarProblem } from './similar.js';
 import { insertMathSymbol, selectQuizChoice, setQuizInputMode, startQuizChallenge, submitChoiceAnswer } from './quiz.js';
 import { closeQuizSection, saveQuizToHistory, showQuizFullSolution, submitStudentAnswer, toggleQuizHint } from './quiz-result.js';
 import { unlockApp } from './init.js';
-import { closeSettings, fetchAvailableModels, onModelDropdownChange, openSettings, saveSettings } from './settings.js';
+import { closeSettings, fetchAvailableModels, onModelDropdownChange, openSettings, saveSettings, clearLicenseAction, openLicensePortalAction, refreshLicenseStatus } from './settings.js';
 import { clearImage, handleImageUpload } from './upload.js';
 import { solveProblem } from './api-solve.js';
 import { simplifyStep } from './simplify.js';
@@ -44,6 +44,9 @@ register({
   'close-settings': () => closeSettings(),
   'fetch-models': () => fetchAvailableModels(),
   'save-settings': () => saveSettings(),
+  'license-clear': () => clearLicenseAction(),
+  'license-portal': () => openLicensePortalAction(),
+  'license-refresh': () => refreshLicenseStatus(),
   'close-tutor-history': () => closeTutorHistoryModal(),
   'restore-history': (el) => restoreFromHistory(el.dataset.id),
   'delete-tutor-history': (el) => deleteFromTutorHistory(el.dataset.id),

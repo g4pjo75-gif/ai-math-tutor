@@ -1,7 +1,7 @@
 import { escapeAttr } from '../shared/actions.js';
 import { safeStorage, state } from './state.js';
 import { openSettings } from './settings.js';
-import { callGeminiModel, isQuotaError } from '../core/index.js';
+import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese } from './voice.js';
 import { showQuotaError, showStatus, showToast } from './ui-status.js';
@@ -92,7 +92,7 @@ export async function sendOverallQuestion(directQuestion = null) {
       const geminiKey = safeStorage.getItem('gemini_api_key');
       const selectedModel = safeStorage.getItem('custom_model_id') || document.getElementById('modelSelect').value;
 
-      if (!geminiKey) {
+      if (!geminiKey && !isLicenseMode()) {
         openSettings();
         showStatus('🔑 先に「⚙️ 設定」からGemini APIキーを登録してください。', 'amber');
         return;

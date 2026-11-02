@@ -1,7 +1,17 @@
 import { TutorUI } from '../shared/ui.js';
 import { engStore, sharedStore } from './state.js';
 import { loadWordbookAndHistory } from './wordbook.js';
-
+import {
+  applyStoredLicense,
+  licenseNeedsRebind,
+  LICENSE_KEY,
+  normalizeLicenseKey,
+  registerLicense,
+  clearLicense,
+  refreshLicenseInfo,
+  openLicensePortal
+} from '../shared/license.js';
+import { isLicenseMode } from '../core/index.js';
 
     // =========================================================================
     // 3. 初期化 & 共通設定
@@ -14,6 +24,10 @@ import { loadWordbookAndHistory } from './wordbook.js';
         TutorUI.bindBackdropClose('settingsModal', 'settingsModalContent');
         TutorUI.bindBackdropClose('historyModal', 'historyModalContent');
       }
+
+      // ライセンス状態の復元とUI同期
+      applyStoredLicense(sharedStore);
+      applyLicenseModeUi();
 
       // セッションでPIN解錠済みならスキップ
       if (sessionStorage.getItem('aet_unlocked') === '1') {
@@ -72,9 +86,22 @@ export function getApiKey() {
 
 export function checkApiKeyBanner() {
       const banner = document.getElementById('apiWarningBanner');
-      if (!banner) return;
-      if (!getApiKey()) banner.classList.remove('hidden');
-      else banner.classList.add('hidden');
+      const licenseBanner = document.getElementById('licenseWarningBanner');
+      const needsRebind = licenseNeedsRebind();
+
+      if (isLicenseMode()) {
+        if (banner) banner.classList.add('hidden');
+        if (licenseBanner) {
+          if (needsRebind) licenseBanner.classList.remove('hidden');
+          else licenseBanner.classList.add('hidden');
+        }
+      } else {
+        if (licenseBanner) licenseBanner.classList.add('hidden');
+        if (banner) {
+          if (!getApiKey()) banner.classList.remove('hidden');
+          else banner.classList.add('hidden');
+        }
+      }
     }
 
 export function unlockApp() {
@@ -104,6 +131,14 @@ export function openSettings() {
       document.getElementById('geminiKeyInput').value = getApiKey();
       document.getElementById('customModelInput').value = (engStore && engStore.getItem('custom_model_id')) || '';
       document.getElementById('newPinInput').value = (sharedStore && (sharedStore.getItem('app_pin') || sharedStore.getItem('pin'))) || '1234';
+
+      const licenseInput = document.getElementById('licenseKeyInput');
+      if (licenseInput) {
+        licenseInput.value = sharedStore ? (sharedStore.getItem(LICENSE_KEY) || '') : '';
+      }
+
+      applyLicenseModeUi();
+      refreshLicenseStatus();
       TutorUI.openModal('settingsModal');
     }
 
@@ -111,25 +146,159 @@ export function closeSettings() {
       TutorUI.closeModal('settingsModal');
     }
 
-export function saveSettings() {
+export async function saveSettings() {
       const key = document.getElementById('geminiKeyInput').value.trim();
       const customModel = document.getElementById('customModelInput').value.trim();
       const pin = document.getElementById('newPinInput').value.trim() || '1234';
       const rate = document.getElementById('speechRateSelect').value;
+      const rawLicense = document.getElementById('licenseKeyInput')?.value?.trim() || '';
 
+      // PIN・音声速度は常に保存
       if (sharedStore) {
-        sharedStore.setItem('gemini_api_key', key);
         sharedStore.setItem('app_pin', pin);
         sharedStore.setItem('pin', pin);
       }
       if (engStore) {
-        engStore.setItem('custom_model_id', customModel);
         engStore.setItem('speech_rate', rate);
       }
 
-      initModelDropdown();
+      const savedLicense = sharedStore ? (sharedStore.getItem(LICENSE_KEY) || '') : '';
+      const normalizedLicense = normalizeLicenseKey(rawLicense);
+
+      // 1. ライセンスキーが入力された場合
+      if (rawLicense) {
+        if (!normalizedLicense) {
+          renderLicenseError(new Error('ライセンスキーが無効です。設定を確認してください。'));
+          return;
+        }
+
+        if (normalizedLicense !== savedLicense || licenseNeedsRebind()) {
+          try {
+            await registerLicense(sharedStore, normalizedLicense);
+          } catch (err) {
+            renderLicenseError(err);
+            return; // 失敗時はモーダルを閉じない
+          }
+        }
+      }
+
+      // 2. ライセンスモードでない場合は BYOK 情報を保存
+      if (!isLicenseMode()) {
+        if (sharedStore) {
+          sharedStore.setItem('gemini_api_key', key);
+        }
+        if (engStore) {
+          engStore.setItem('custom_model_id', customModel);
+        }
+        initModelDropdown();
+      }
+
+      applyLicenseModeUi();
       checkApiKeyBanner();
       closeSettings();
       TutorUI.showToast('✅ 設定を保存しました。', 'green');
     }
 
+export function applyLicenseModeUi() {
+      const licenseMode = isLicenseMode();
+
+      const modelSelect = document.getElementById('modelSelect');
+      if (modelSelect) {
+        if (licenseMode) modelSelect.classList.add('hidden');
+        else modelSelect.classList.remove('hidden');
+      }
+
+      const byokSection = document.getElementById('byokSettingsSection');
+      if (byokSection) {
+        if (licenseMode) byokSection.classList.add('hidden');
+        else byokSection.classList.remove('hidden');
+      }
+
+      const licenseActions = document.getElementById('licenseActions');
+      if (licenseActions) {
+        if (licenseMode) licenseActions.classList.remove('hidden');
+        else licenseActions.classList.add('hidden');
+      }
+    }
+
+export async function refreshLicenseStatus() {
+      const statusEl = document.getElementById('licenseStatus');
+      if (!statusEl) return;
+
+      if (!isLicenseMode()) {
+        statusEl.innerHTML = '';
+        return;
+      }
+
+      if (licenseNeedsRebind()) {
+        renderLicenseError({ message: 'この端末はライセンスに登録されていません。設定を保存して再認証してください。' });
+        return;
+      }
+
+      statusEl.innerHTML = '<span class="text-blue-600 dark:text-blue-400">🔄 ライセンス状態を確認中...</span>';
+
+      try {
+        const info = await refreshLicenseInfo();
+        if (info) {
+          renderLicenseInfo(info);
+        }
+      } catch (err) {
+        renderLicenseError(err);
+      }
+    }
+
+function escapeText(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+export function renderLicenseInfo(info) {
+      const statusEl = document.getElementById('licenseStatus');
+      if (!statusEl) return;
+
+      const quota = info.quota || {};
+      const used = quota.used ?? 0;
+      const limit = quota.limit ?? 300;
+      const remaining = quota.remaining ?? Math.max(0, limit - used);
+      const planName = info.plan === 'standard' ? 'スタンダードプラン' : (info.plan || '登録中');
+      const statusText = info.status === 'active' ? '有効' : (info.status || '不明');
+
+      statusEl.innerHTML = `
+        <div class="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg space-y-1">
+          <div class="font-bold text-emerald-800 dark:text-emerald-200">✅ ライセンス適用中 (${escapeText(planName)} / ${escapeText(statusText)})</div>
+          <div class="text-[11px] text-emerald-700 dark:text-emerald-300">今月の利用: <strong>${used}</strong> / ${limit} 回 (残り <strong>${remaining}</strong> 回)</div>
+        </div>
+      `;
+    }
+
+export function renderLicenseError(err) {
+      const statusEl = document.getElementById('licenseStatus');
+      if (!statusEl) return;
+      statusEl.innerHTML = `<div class="p-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 font-bold">⚠️ ${escapeText(err?.message || 'ライセンスエラーが発生しました。')}</div>`;
+    }
+
+export function clearLicenseAction() {
+      if (confirm('ライセンスの登録を解除しますか？\n解除後はご自身のGemini APIキーを使用するモードに戻ります。')) {
+        clearLicense(sharedStore);
+        applyLicenseModeUi();
+        checkApiKeyBanner();
+        const input = document.getElementById('licenseKeyInput');
+        if (input) input.value = '';
+        const status = document.getElementById('licenseStatus');
+        if (status) status.innerHTML = '';
+        TutorUI.showToast('ライセンスを解除しました。', 'blue');
+      }
+    }
+
+export async function openLicensePortalAction() {
+      try {
+        const res = await openLicensePortal();
+        if (res && res.url) {
+          window.location.href = res.url;
+        }
+      } catch (err) {
+        renderLicenseError(err);
+      }
+    }
