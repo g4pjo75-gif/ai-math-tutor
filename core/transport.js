@@ -42,6 +42,56 @@ function proxyError(code, status, extra = {}) {
   return err;
 }
 
+export function apiUrl(path = '', baseUrl = '') {
+  const base = (baseUrl || state.baseUrl || DEFAULT_API_BASE).replace(/\/+$/, '');
+  const cleanPath = String(path || '').replace(/^\/+/, '');
+  return `${base}/${cleanPath}`;
+}
+
+async function requestApi(path, options = {}) {
+  const url = apiUrl(path, options.baseUrl);
+  const timeoutMs = Number(options.timeoutMs) || 30000;
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
+
+  const key = options.licenseKey !== undefined ? options.licenseKey : state.licenseKey;
+  if (key && !headers.Authorization) {
+    headers.Authorization = 'Bearer ' + key;
+  }
+  const deviceId = options.deviceId !== undefined ? options.deviceId : state.deviceId;
+  if (deviceId && !headers['X-Device-Id']) {
+    headers['X-Device-Id'] = deviceId;
+  }
+
+  let res;
+  try {
+    res = await fetchWithTimeout(url, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined
+    }, timeoutMs + 5000);
+  } catch (err) {
+    if (err && err.name === 'AbortError') throw proxyError('timeout', 504);
+    throw proxyError('network_error', 0);
+  }
+
+  let body = null;
+  try {
+    body = await res.json();
+  } catch (err) {
+    body = null;
+  }
+
+  if (!res.ok || !body || body.ok !== true) {
+    const code = (body && body.error) || 'proxy_' + res.status;
+    throw proxyError(code, res.status, { quota: (body && body.quota) || null });
+  }
+
+  return body;
+}
+
 export function configureTransport(next = {}) {
   if (next.mode === 'byok' || next.mode === 'license') state.mode = next.mode;
   if (typeof next.baseUrl === 'string') state.baseUrl = next.baseUrl.trim();
@@ -84,38 +134,47 @@ export async function callProxied(payload = {}) {
   if (!isLicenseMode()) {
     throw proxyError('transport_not_configured', 0);
   }
+  return requestApi('/v1/solve', {
+    method: 'POST',
+    body: payload,
+    timeoutMs: Number(payload.timeoutMs) || 30000
+  });
+}
 
-  const timeoutMs = Number(payload.timeoutMs) || 30000;
-  const url = state.baseUrl.replace(/\/+$/, '') + '/v1/solve';
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: 'Bearer ' + state.licenseKey
-  };
-  if (state.deviceId) headers['X-Device-Id'] = state.deviceId;
-
-  let res;
-  try {
-    res = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    }, timeoutMs + 5000);
-  } catch (err) {
-    if (err && err.name === 'AbortError') throw proxyError('timeout', 504);
-    throw proxyError('network_error', 0);
+export async function redeemLicense({ licenseKey, deviceId, baseUrl, timeoutMs } = {}) {
+  const key = String(licenseKey || '').trim();
+  const devId = String(deviceId || '').trim();
+  if (!key || !devId) {
+    throw proxyError('invalid_request', 400);
   }
+  return requestApi('/v1/redeem', {
+    method: 'POST',
+    baseUrl,
+    licenseKey: '',
+    deviceId: '',
+    body: { key, deviceId: devId },
+    timeoutMs: timeoutMs || 15000
+  });
+}
 
-  let body = null;
-  try {
-    body = await res.json();
-  } catch (err) {
-    body = null;
+export async function fetchLicenseInfo(options = {}) {
+  if (!isLicenseMode()) {
+    throw proxyError('transport_not_configured', 0);
   }
+  return requestApi('/v1/me', {
+    method: 'GET',
+    baseUrl: options.baseUrl,
+    timeoutMs: options.timeoutMs || 15000
+  });
+}
 
-  if (!res.ok || !body || body.ok !== true) {
-    const code = (body && body.error) || 'proxy_' + res.status;
-    throw proxyError(code, res.status, { quota: (body && body.quota) || null });
+export async function createPortalSession(options = {}) {
+  if (!isLicenseMode()) {
+    throw proxyError('transport_not_configured', 0);
   }
-
-  return body;
+  return requestApi('/v1/portal', {
+    method: 'POST',
+    baseUrl: options.baseUrl,
+    timeoutMs: options.timeoutMs || 15000
+  });
 }

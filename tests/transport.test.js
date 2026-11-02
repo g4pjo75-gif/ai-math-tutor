@@ -338,3 +338,134 @@ test('callGeminiModel: BYOK는 기존처럼 apiKey가 필요하다', async () =>
     /Gemini APIキーが設定されていません/
   );
 });
+
+test('redeemLicense: URL/body/headers를 규격대로 보낸다', async () => {
+  const { redeemLicense, resetTransport } = await load();
+  resetTransport();
+  const prev = globalThis.fetch;
+  let seen = null;
+  globalThis.fetch = async (url, init) => {
+    seen = { url, init };
+    return jsonResponse({ ok: true, status: 'active', plan: 'standard', quota: { used: 0, limit: 300 } });
+  };
+  try {
+    const res = await redeemLicense({
+      licenseKey: ' AMT-AAAA-BBBB-CCCC-DDDD ',
+      deviceId: 'dev-99',
+      baseUrl: 'https://api.test'
+    });
+    assert.equal(seen.url, 'https://api.test/v1/redeem');
+    assert.equal(seen.init.method, 'POST');
+    assert.equal(seen.init.headers.Authorization, undefined);
+    assert.equal(seen.init.headers['X-Device-Id'], undefined);
+    assert.deepEqual(JSON.parse(seen.init.body), {
+      key: 'AMT-AAAA-BBBB-CCCC-DDDD',
+      deviceId: 'dev-99'
+    });
+    assert.equal(res.ok, true);
+    assert.equal(res.status, 'active');
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('fetchLicenseInfo: GET /v1/me 에 Authorization과 X-Device-Id를 보낸다', async () => {
+  const { configureTransport, resetTransport, fetchLicenseInfo } = await load();
+  resetTransport();
+  configureTransport({
+    mode: 'license',
+    licenseKey: 'AMT-AAAA-BBBB-CCCC-DDDD',
+    deviceId: 'dev-1',
+    baseUrl: 'https://api.test'
+  });
+  const prev = globalThis.fetch;
+  let seen = null;
+  globalThis.fetch = async (url, init) => {
+    seen = { url, init };
+    return jsonResponse({ ok: true, status: 'active', quota: { used: 5, limit: 300 } });
+  };
+  try {
+    const res = await fetchLicenseInfo();
+    assert.equal(seen.url, 'https://api.test/v1/me');
+    assert.equal(seen.init.method, 'GET');
+    assert.equal(seen.init.headers.Authorization, 'Bearer AMT-AAAA-BBBB-CCCC-DDDD');
+    assert.equal(seen.init.headers['X-Device-Id'], 'dev-1');
+    assert.equal(res.ok, true);
+    assert.equal(res.quota.used, 5);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('createPortalSession: POST /v1/portal 에 Authorization을 보낸다', async () => {
+  const { configureTransport, resetTransport, createPortalSession } = await load();
+  resetTransport();
+  configureTransport({
+    mode: 'license',
+    licenseKey: 'AMT-AAAA-BBBB-CCCC-DDDD',
+    baseUrl: 'https://api.test'
+  });
+  const prev = globalThis.fetch;
+  let seen = null;
+  globalThis.fetch = async (url, init) => {
+    seen = { url, init };
+    return jsonResponse({ ok: true, url: 'https://billing.stripe.com/p/session_123' });
+  };
+  try {
+    const res = await createPortalSession();
+    assert.equal(seen.url, 'https://api.test/v1/portal');
+    assert.equal(seen.init.method, 'POST');
+    assert.equal(seen.init.headers.Authorization, 'Bearer AMT-AAAA-BBBB-CCCC-DDDD');
+    assert.equal(res.ok, true);
+    assert.equal(res.url, 'https://billing.stripe.com/p/session_123');
+  } finally {
+    globalThis.fetch = prev;
+  }
+});
+
+test('license 헬퍼 오류: code/status/quota가 적절히 전달된다', async () => {
+  const { configureTransport, resetTransport, redeemLicense, fetchLicenseInfo, createPortalSession } = await load();
+  resetTransport();
+
+  // 1. 미설정 시 fetchLicenseInfo / createPortalSession 거부
+  await assert.rejects(fetchLicenseInfo(), (err) => {
+    assert.equal(err.code, 'transport_not_configured');
+    assert.equal(err.status, 0);
+    return true;
+  });
+  await assert.rejects(createPortalSession(), (err) => {
+    assert.equal(err.code, 'transport_not_configured');
+    assert.equal(err.status, 0);
+    return true;
+  });
+
+  // 2. redeemLicense 파라미터 누락
+  await assert.rejects(redeemLicense({}), (err) => {
+    assert.equal(err.code, 'invalid_request');
+    assert.equal(err.status, 400);
+    return true;
+  });
+
+  // 3. 서버 오류 (redeem: 403 device_limit)
+  const prev = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => jsonResponse({ ok: false, error: 'device_limit' }, 403);
+    await assert.rejects(redeemLicense({ licenseKey: 'K', deviceId: 'D', baseUrl: 'https://api.test' }), (err) => {
+      assert.equal(err.code, 'device_limit');
+      assert.equal(err.status, 403);
+      return true;
+    });
+
+    // 4. 서버 오류 (fetchLicenseInfo: 402 quota_exceeded)
+    configureTransport({ mode: 'license', licenseKey: 'K', baseUrl: 'https://api.test' });
+    globalThis.fetch = async () => jsonResponse({ ok: false, error: 'quota_exceeded', quota: { used: 300, limit: 300 } }, 402);
+    await assert.rejects(fetchLicenseInfo(), (err) => {
+      assert.equal(err.code, 'quota_exceeded');
+      assert.equal(err.status, 402);
+      assert.deepEqual(err.quota, { used: 300, limit: 300 });
+      return true;
+    });
+  } finally {
+    globalThis.fetch = prev;
+  }
+});

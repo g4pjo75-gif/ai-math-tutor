@@ -6,11 +6,15 @@ export { isQuotaError } from './errors.js';
 export { callGeminiModel, fetchAvailableModels } from './gemini.js';
 export {
   DEFAULT_API_BASE,
+  apiUrl,
   callProxied,
   configureTransport,
+  createPortalSession,
+  fetchLicenseInfo,
   getOrCreateDeviceId,
   getTransport,
   isLicenseMode,
+  redeemLicense,
   resetTransport
 } from './transport.js';
 export {
