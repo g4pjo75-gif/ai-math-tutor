@@ -1,4 +1,4 @@
-const CACHE_NAME = 'amt-cache-v3.6';
+const CACHE_NAME = 'amt-cache-v3.7';
 const ASSETS = [
   './',
   './index.html',
@@ -40,6 +40,7 @@ const ASSETS = [
   '../shared/actions.js',
   '../shared/storage.js',
   '../shared/speech.js',
+  '../shared/license.js',
   '../shared/ui.js',
   '../shared/ui.css'
 ];
