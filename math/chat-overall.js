@@ -1,10 +1,10 @@
 import { escapeAttr } from '../shared/actions.js';
 import { safeStorage, state } from './state.js';
 import { openSettings } from './settings.js';
-import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
+import { callGeminiModel, isLicenseMode } from '../core/index.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese } from './voice.js';
-import { showQuotaError, showStatus, showToast, showApiError } from './ui-status.js';
+import { showStatus, showToast, showApiError } from './ui-status.js';
 
     // 問題全体の解法・別解についての質問チャット (Alternative Solutions & Overall Q&A)
     // =========================================================================

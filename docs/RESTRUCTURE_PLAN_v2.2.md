@@ -9556,10 +9556,13 @@ quota로 분류되어 “今月の利用上限” 문구가 나가고, 라이선
 
 ```js
 export function classifyApiError(err) {
-  const code = String(err?.code || 'unknown');
-  const status = Number(err?.status) || 0;
+  const isAbort = err?.name === 'AbortError';
+  const code = String((isAbort ? 'timeout' : err?.code) || 'unknown');
+  const status = Number(err?.status) || (isAbort ? 504 : 0);
   const quota = err?.quota || null;
-  const message = err?.message || '通信エラーが発生しました。もう一度お試しください。';
+  const message = isAbort
+    ? 'AIの応答がタイムアウトしました。もう一度お試しください。'
+    : (err?.message || '通信エラーが発生しました。もう一度お試しください。');
   const base = { code, status, quota, message, retryable: false, actions: [] };
 
   if (code === 'transport_not_configured' || code === 'missing_license' ||
@@ -9584,7 +9587,7 @@ export function classifyApiError(err) {
   if (code === 'device_limit') {
     return { ...base, kind: 'device_limit' };
   }
-  if (['timeout', 'network_error', 'upstream_error', 'upstream_quota', 'stripe_error'].includes(code)) {
+  if (isAbort || ['timeout', 'network_error', 'upstream_error', 'upstream_quota', 'stripe_error'].includes(code)) {
     return { ...base, kind: 'transient', retryable: true, actions: ['retry'] };
   }
   if (code === 'server_misconfigured') {
@@ -9759,7 +9762,7 @@ showApiError(err, {
 
 #### 4.22.9 테스트
 
-**L1 `tests/api-errors.test.js` 신규 8**
+**L1 `tests/api-errors.test.js` 신규 9**
 1. auth codes (`transport_not_configured`, `missing_license`, `invalid_license`, 401)
 2. billing codes (`license_canceled`, `license_past_due`, `license_inactive`)
 3. quota (`quota_exceeded`, `upstream_quota`)
@@ -9768,8 +9771,9 @@ showApiError(err, {
 6. transient (`timeout`, `network_error`, `upstream_error`, `stripe_error`)
 7. input/server (`invalid_prompt`, `prompt_too_large`, `image_too_large`, `server_misconfigured`)
 8. unknown fallback (`proxy_503`는 retry, `proxy_404`는 no retry)
+9. AbortError maps to timeout transient
 
-예상: **L1 55 pass** (기존 47 + 8)
+예상: **L1 56 pass** (기존 47 + 9)
 
 **L2 `tests/e2e/errors.spec.js` 신규 6**
 1. 수학 라이선스 + 402 `license_canceled` → 포털 CTA, 모델 버튼 0
@@ -9789,9 +9793,9 @@ showApiError(err, {
 #### 4.22.10 게이트 / DoD
 
 ```bash
-npm run test:l1          # 55 pass
+npm run test:l1          # 56 pass
 npx playwright test      # 36 pass
-npm test                 # 91 pass
+npm test                 # 92 pass
 cd server && npm test    # 35 pass
 ```
 
@@ -9804,7 +9808,7 @@ DoD:
 - [ ] `err.quota` 잔여 횟수 표시
 - [ ] 401/403 → 설정 CTA, 402 → 포털 CTA, 429/504/네트워크 → 재시도 CTA
 - [ ] 영어에서 `err.message`를 버리는 catch 제거
-- [ ] L1 55 / L2 36 / server 35
+- [ ] L1 56 / L2 36 / server 35
 - [ ] 실제 Gemini/Worker 실호출 없음
 - [ ] 시크릿 없음
 

@@ -3,10 +3,10 @@ import { closeQuizSection } from './quiz-result.js';
 import { openSettings } from './settings.js';
 import { clearImage } from './upload.js';
 import { TUTOR_RESPONSE_SCHEMA, buildSystemPrompt } from './schema.js';
-import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
+import { callGeminiModel, isLicenseMode } from '../core/index.js';
 import { renderTutorResult, sanitizeMathString } from './render.js';
 import { stopSpeech } from './voice.js';
-import { hideStatus, showQuotaError, showStatus, showApiError } from './ui-status.js';
+import { hideStatus, showStatus, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
     // 類題（数字を変えた問題）生成 & 自分で解く「類題チャレンジ」AI自動採点システム

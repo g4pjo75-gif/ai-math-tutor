@@ -1,4 +1,4 @@
-import { callGeminiModel, isLocalMathMatch, isQuotaError, isLicenseMode } from '../core/index.js';
+import { callGeminiModel, isLocalMathMatch, isLicenseMode } from '../core/index.js';
 import { safeStorage, state } from './state.js';
 import { saveTutorHistory } from './history.js';
 import { formatChoiceMath } from './quiz.js';
@@ -7,7 +7,7 @@ import { clearImage } from './upload.js';
 import { solveProblem } from './api-solve.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese } from './voice.js';
-import { showQuotaError, showStatus, showApiError } from './ui-status.js';
+import { showStatus, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
 export function toggleQuizHint() {

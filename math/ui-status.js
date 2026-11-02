@@ -102,5 +102,3 @@ export function showApiError(err, options = {}) {
       const { html } = buildApiErrorView(err, options);
       showStatus(html, 'red');
     }
-
-

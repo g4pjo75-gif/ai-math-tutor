@@ -6,7 +6,7 @@ import { openSettings } from './settings.js';
 import { TUTOR_RESPONSE_SCHEMA, buildSystemPrompt } from './schema.js';
 import { renderTutorResult } from './render.js';
 import { stopSpeech } from './voice.js';
-import { hideStatus, showQuotaError, showStatus, showApiError } from './ui-status.js';
+import { hideStatus, showStatus, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
 export async function solveProblem(overrideModelId = null, forceRefresh = false) {

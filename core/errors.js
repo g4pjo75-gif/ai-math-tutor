@@ -14,10 +14,13 @@ export function isQuotaError(err) {
 }
 
 export function classifyApiError(err) {
-  const code = String(err?.code || 'unknown');
-  const status = Number(err?.status) || 0;
+  const isAbort = err?.name === 'AbortError';
+  const code = String((isAbort ? 'timeout' : err?.code) || 'unknown');
+  const status = Number(err?.status) || (isAbort ? 504 : 0);
   const quota = err?.quota || null;
-  const message = err?.message || '通信エラーが発生しました。もう一度お試しください。';
+  const message = isAbort
+    ? 'AIの応答がタイムアウトしました。もう一度お試しください。'
+    : (err?.message || '通信エラーが発生しました。もう一度お試しください。');
   const base = { code, status, quota, message, retryable: false, actions: [] };
 
   if (code === 'transport_not_configured' || code === 'missing_license' ||
@@ -42,7 +45,7 @@ export function classifyApiError(err) {
   if (code === 'device_limit') {
     return { ...base, kind: 'device_limit' };
   }
-  if (['timeout', 'network_error', 'upstream_error', 'upstream_quota', 'stripe_error'].includes(code)) {
+  if (isAbort || ['timeout', 'network_error', 'upstream_error', 'upstream_quota', 'stripe_error'].includes(code)) {
     return { ...base, kind: 'transient', retryable: true, actions: ['retry'] };
   }
   if (code === 'server_misconfigured') {
@@ -61,4 +64,3 @@ export function classifyApiError(err) {
     actions: status >= 500 ? ['retry'] : []
   };
 }
-

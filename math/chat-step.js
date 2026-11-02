@@ -1,10 +1,10 @@
 import { escapeAttr } from '../shared/actions.js';
 import { safeStorage, state } from './state.js';
 import { openSettings } from './settings.js';
-import { callGeminiModel, isQuotaError, isLicenseMode } from '../core/index.js';
+import { callGeminiModel, isLicenseMode } from '../core/index.js';
 import { renderMathIn, sanitizeMathString } from './render.js';
 import { speakJapanese, stopSpeech } from './voice.js';
-import { showQuotaError, showStatus, showToast, showApiError } from './ui-status.js';
+import { showStatus, showToast, showApiError } from './ui-status.js';
 import { escapeHtml } from './chat-overall.js';
 
     // =========================================================================

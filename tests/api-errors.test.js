@@ -98,7 +98,11 @@ test('classifyApiError: transient codes (timeout, network_error, upstream_error,
 
 test('classifyApiError: input and server codes', async () => {
   const { classifyApiError } = await load();
-  const inputCodes = ['invalid_prompt', 'prompt_too_large', 'image_too_large', 'invalid_request'];
+  const inputCodes = [
+    'invalid_request', 'invalid_prompt', 'prompt_too_large', 'image_too_large',
+    'invalid_image', 'invalid_schema', 'schema_too_large',
+    'body_too_large', 'invalid_json'
+  ];
   for (const code of inputCodes) {
     const c = classifyApiError({ code });
     assert.equal(c.kind, 'input');
@@ -110,6 +114,17 @@ test('classifyApiError: input and server codes', async () => {
   assert.equal(s.kind, 'server');
   assert.equal(s.retryable, false);
   assert.deepEqual(s.actions, []);
+});
+
+test('classifyApiError: AbortError maps to timeout transient', async () => {
+  const { classifyApiError } = await load();
+  const c = classifyApiError({ name: 'AbortError', message: 'This operation was aborted' });
+  assert.equal(c.kind, 'transient');
+  assert.equal(c.code, 'timeout');
+  assert.equal(c.status, 504);
+  assert.equal(c.retryable, true);
+  assert.deepEqual(c.actions, ['retry']);
+  assert.equal(c.message, 'AIの応答がタイムアウトしました。もう一度お試しください。');
 });
 
 test('classifyApiError: unknown fallback (proxy_503 retry, proxy_404 no retry)', async () => {
