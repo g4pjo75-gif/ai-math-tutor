@@ -9423,29 +9423,64 @@ chore: precache transport module and run all l1 tests
    - 앱 기동 시(`applyStoredLicense`)에는 절대 네트워크 호출(`/v1/redeem`)을 자동으로 실행하지 않는다.
    - 로컬 `device_id`와 저장된 `license_device_id`가 일치하면 기존 바인딩 유효 상태로 간주하여 오프라인에서도 즉시 라이선스 모드로 기동한다.
    - 불일치하거나 `license_device_id`가 없는 경우 라이선스 모드는 유지하되 `needsRebind = true`로 설정하고 상단 배너(`#licenseWarningBanner`)로 재인증을 유도한다.
-3. **설정 모달 저장 버튼 통합 (async)**:
-   - 라이선스 키 등록과 일반 설정(PIN 등)은 `saveSettings` 비동기 함수 하나로 처리한다.
-   - 라이선스 키가 입력된 경우 정규화 및 `redeemLicense` 성공 시에만 모달을 닫고 키를 영구 저장한다.
-   - 등록 실패 시 모달을 닫지 않고 인라인 에러(`#licenseStatus`)를 출력한다.
-   - 키 입력란이 비어있다는 이유만으로 기존 라이선스 키를 삭제하지 않는다 (해제는 별도 명시적 액션).
-4. **키 가드 11곳 및 배너 2곳**:
-   - API 호출 가드: `!geminiKey && !isLicenseMode()` (수학 7곳, 영어 4곳)
-   - 배너: API 키 미설정 배너(`#apiWarningBanner`)와 기기 재인증 안내 배너(`#licenseWarningBanner`)를 상호 배타적으로 제어
+3. **설정 모달 저장 버튼 통합 및 UI 동작 규칙 (async)**:
+   - **저장 통합(async)**: 라이선스 키 등록과 일반 설정(PIN, 음성 속도, BYOK 정보)은 `saveSettings()` 비동기 단일 함수로 처리한다.
+   - **BYOK 선저장**: 함수 진입 시 `wasLicenseMode = isLicenseMode()`를 캡처하여, 라이선스 모드로의 전환 또는 redeem 실패 시에도 입력된 Gemini API 키 및 커스텀 모델 수정분이 유실되지 않고 우선 저장된다.
+   - **성공 후에만 라이선스 저장**: 라이선스 키가 입력된 경우 정규화 및 `registerLicense` (서버 `/v1/redeem`) 성공 시에만 모달을 닫고 키와 기기 ID를 영구 저장한다.
+   - **실패 시 모달 유지**: 등록 실패 시 모달을 닫지 않고 인라인 에러(`#licenseStatus`)에 오류 메시지를 출력한다.
+   - **빈 입력은 삭제 아님**: 입력란을 비워두었다고 해서 기존 저장된 라이선스 키가 지워지지 않는다.
+   - **라이선스 해제는 별도 분리**: `license-clear` 액션 버튼으로 confirm 대화상자 확인을 거쳐 명시적으로만 해제하며, 해제 시 `resetTransport()`로 즉시 BYOK 모드로 복귀한다.
+   - **새로고침/포털**: `license-refresh`로 `/v1/me` 호출하여 최신 쿼터 상태를 갱신하며, `license-portal`로 Stripe Customer Portal 세션을 생성하여 브라우저로 이동한다.
+   - **입력란 마스킹**: 라이선스 키 입력란 `#licenseKeyInput`은 화면에 평문 노출을 방지하기 위해 `type="password" autocomplete="off" spellcheck="false"`를 적용한다.
+4. **키 가드 전수 목록 11곳 및 배너 2곳**:
+   - **API 호출 키 가드 11곳**: BYOK 키가 없더라도 라이선스 모드인 경우 통과하도록 `if (!geminiKey && !isLicenseMode())` 적용.
+     - 수학 앱 (7곳):
+       - `math/api-solve.js` (문제 풀이)
+       - `math/similar.js` (유사 문제 생성)
+       - `math/simplify.js` (더 알기 쉽게 해설 재작성)
+       - `math/quiz.js` (연습 문제 퀴즈 생성)
+       - `math/quiz-result.js` (퀴즈 채점 및 복습 해설)
+       - `math/chat-step.js` (단계별 질문 질의응답)
+       - `math/chat-overall.js` (전체 내용 심화 질문)
+     - 영어 앱 (4곳):
+       - `english/reading.js` (독해 본문 분석)
+       - `english/quiz.js` (독해 퀴즈 생성)
+       - `english/writing.js` (영작 첨삭 및 힌트 생성 - 2개 함수)
+   - **경고 배너 2곳**: API 키 미설정 배너와 기기 재인증 안내 배너를 상호 배타적으로 제어
+     - `math/init.js checkApiKeyWarning()`: 라이선스 모드(정상 바인딩)이면 배너 숨김, 재인증 필요 시 `#licenseWarningBanner` 노출, BYOK 키 누락 시 `#apiWarningBanner` 노출
+     - `english/init.js checkApiKeyBanner()`: 동일하게 상호 배타적 배너 상태 제어
 5. **모델 선택 UI hide (DOM 삭제 금지)**:
    - 라이선스 모드에서는 모델을 서버가 지정하므로 `#modelSelect` 및 `#byokSettingsSection`을 `hidden` 클래스로 숨기되, DOM 구조에서 삭제(`remove`)하지 않는다.
-6. **서버 포털 상태 체크 완화**:
-   - 해지(`canceled`) 또는 결제 지연(`past_due`) 상태의 라이선스 소유자도 카드 변경 및 결제 재개를 위해 `/v1/portal` 세션 발급을 허용한다.
-7. **CSP & Service Worker**:
+6. **오류 코드별 문구 매핑**:
+   - `device_not_bound`: "この端末はライセンスに登録されていません。設定からキーを再登録してください。"
+   - `device_limit`: "登録できる端末数（2台）の上限に達しました。"
+   - `license_canceled`: "ライセンスが解約されています。ポータルから再開してください。"
+   - `license_past_due`: "お支払いに問題があります。ポータルからカード情報をご確認ください。"
+   - `quota_exceeded`: "今月の利用上限に達しました。"
+   - `rate_limited`: "リクエストが多すぎます。少し待ってからお試しください。"
+7. **서버 포털 상태 체크 완화 및 오타 수정**:
+   - `server/src/billing.js`: 해지(`canceled`) 또는 결제 지연(`past_due`) 상태의 라이선스 소유자도 카드 변경 및 결제 재개를 위해 `/v1/portal` 세션 발급을 허용 (`findLicenseByRequest`).
+   - 주석 내 `バイン딩` 오타를 한국어 `바인딩`으로 수정.
+8. **shared/package.json 추가 이유**:
+   - 루트 `package.json`이 CommonJS(`"type": "commonjs"`)인 반면, `shared/license.js`는 ESM 모듈로 작성되어 브라우저에서 직접 로드된다. Node.js 네이티브 테스트 러너(`node --test`)에서 `shared/license.js`를 테스트(`tests/license.test.js`)할 때 ESM 모듈로 인식할 수 있도록 `shared/package.json` (`{"type": "module"}`)을 추가하였다.
+9. **CSP & Service Worker**:
    - CSP `connect-src`에 `https://ai-math-tutor-api.g4pjo75.workers.dev` 허용 추가
    - Service Worker 캐시 버전 bump (`amt-cache-v3.7`, `aet-cache-v2.7`) 및 `../shared/license.js` 프리캐시 추가
 
 #### 4.21.2 테스트 게이트 기준
 - L1 단위 테스트: **47 pass** (기존 35 + transport 확장 4 + license 8)
 - L2 E2E 테스트: **30 pass** (기존 24 + license E2E 6)
+  - **L2 license E2E 6개 시나리오**:
+    1. `1. 저장 → redeem 성공 → solve가 /v1/solve로 감, Gemini 직접 호출 0`
+    2. `2. 저장 실패 → 모달 유지, 키 저장 안 됨` (BYOK 수정분 보존 검증 포함)
+    3. `3. 재접속 시 redeem 재호출 없음` (오프라인 캐시 및 일치 바인딩 검증)
+    4. `4. 기기 미등록 → 배너/CTA + solve 403 device_not_bound` (미바인딩 시 배너 노출 및 에러 핸들링)
+    5. `5. 모델 UI hide/restore` (라이선스 활성화 시 숨김, 해제 시 복원 및 마스킹 검증)
+    6. `6. CSP 위반/콘솔 에러 0 + BYOK 데이터 보존` (CSP 위반 0, BYOK 키 유지 및 동시 수정 보존)
 - 서버 테스트: **35 pass** (기존 32 + billing portal 3)
 - 종합: 77 pass (클라이언트) + 35 pass (서버)
 
-#### 4.21.3 커밋 순서 (7개)
+#### 4.21.3 커밋 순서
 1. `docs: add phase 7-5-b license activation spec`
 2. `feat(core): add license redeem, me and portal helpers`
 3. `feat(shared): add license storage and registration helper`
@@ -9453,6 +9488,9 @@ chore: precache transport module and run all l1 tests
 5. `feat(server): allow portal access for inactive licenses`
 6. `test: add license e2e and update action counts`
 7. `chore: bump sw caches and precache license helper`
+8. `fix(app): mask license key and preserve byok settings on save` (보완)
+9. `test(e2e): stub gemini in license mode tests` (보완)
+10. `docs: expand phase 7-5-b guard and test details` (보완)
 
 ---
 
