@@ -20,7 +20,7 @@ const MESSAGES = {
   license_inactive: 'ライセンスが有効ではありません。',
   missing_device: '端末の認証情報がありません。アプリを再読み込みしてください。',
   device_not_bound: 'この端末はライセンスに登録されていません。設定からキーを再登録してください。',
-  device_limit: '登録できる端末数の上限に達しました。',
+  device_limit: '登録できる端末数（2台）の上限に達しました。',
   quota_exceeded: '今月の利用上限に達しました。',
   rate_limited: 'リクエストが多すぎます。少し待ってからお試しください。',
   timeout: 'AIの応答がタイムアウトしました。もう一度お試しください。',

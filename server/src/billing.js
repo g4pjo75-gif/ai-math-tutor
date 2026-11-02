@@ -56,7 +56,7 @@ export async function createCheckoutSession(env) {
   }
 }
 
-// 포털은 기기 바イン딩 없이 라이선스 키만 확인한다(새 기기에서도 구독 관리 가능).
+// 포털은 기기 바인딩 없이 라이선스 키만 확인한다(새 기기에서도 구독 관리 가능).
 export async function findLicenseByRequest(request, env) {
   const m = (request.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
   if (!m) return { error: 'missing_license', status: 401 };

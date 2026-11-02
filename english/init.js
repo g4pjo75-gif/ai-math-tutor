@@ -152,6 +152,8 @@ export async function saveSettings() {
       const pin = document.getElementById('newPinInput').value.trim() || '1234';
       const rate = document.getElementById('speechRateSelect').value;
       const rawLicense = document.getElementById('licenseKeyInput')?.value?.trim() || '';
+      const normalizedLicense = normalizeLicenseKey(rawLicense);
+      const wasLicenseMode = isLicenseMode();
 
       // PIN・音声速度は常に保存
       if (sharedStore) {
@@ -162,35 +164,29 @@ export async function saveSettings() {
         engStore.setItem('speech_rate', rate);
       }
 
-      const savedLicense = sharedStore ? (sharedStore.getItem(LICENSE_KEY) || '') : '';
-      const normalizedLicense = normalizeLicenseKey(rawLicense);
+      // 1. BYOK 저장을 먼저 수행
+      if (!wasLicenseMode) {
+        if (sharedStore) sharedStore.setItem('gemini_api_key', key);
+        if (engStore) engStore.setItem('custom_model_id', customModel);
+        initModelDropdown();
+      }
 
-      // 1. ライセンスキーが入力された場合
+      // 2. ライセンス登録
       if (rawLicense) {
         if (!normalizedLicense) {
           renderLicenseError(new Error('ライセンスキーが無効です。設定を確認してください。'));
           return;
         }
 
+        const savedLicense = sharedStore ? (sharedStore.getItem(LICENSE_KEY) || '') : '';
         if (normalizedLicense !== savedLicense || licenseNeedsRebind()) {
           try {
             await registerLicense(sharedStore, normalizedLicense);
           } catch (err) {
             renderLicenseError(err);
-            return; // 失敗時はモーダルを閉じない
+            return;
           }
         }
-      }
-
-      // 2. ライセンスモードでない場合は BYOK 情報を保存
-      if (!isLicenseMode()) {
-        if (sharedStore) {
-          sharedStore.setItem('gemini_api_key', key);
-        }
-        if (engStore) {
-          engStore.setItem('custom_model_id', customModel);
-        }
-        initModelDropdown();
       }
 
       applyLicenseModeUi();
@@ -226,7 +222,7 @@ export async function refreshLicenseStatus() {
       if (!statusEl) return;
 
       if (!isLicenseMode()) {
-        statusEl.innerHTML = '';
+        statusEl.innerHTML = '<span class="text-slate-500 dark:text-slate-400">未登録（BYOK）</span>';
         return;
       }
 
@@ -287,7 +283,7 @@ export function clearLicenseAction() {
         const input = document.getElementById('licenseKeyInput');
         if (input) input.value = '';
         const status = document.getElementById('licenseStatus');
-        if (status) status.innerHTML = '';
+        if (status) status.innerHTML = '<span class="text-slate-500 dark:text-slate-400">未登録（BYOK）</span>';
         TutorUI.showToast('ライセンスを解除しました。', 'blue');
       }
     }

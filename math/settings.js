@@ -45,32 +45,13 @@ export async function saveSettings() {
       const customModel = document.getElementById('customModelInput').value.trim();
       const newPin = document.getElementById('newPinInput').value.trim() || '1234';
       const rawLicense = document.getElementById('licenseKeyInput')?.value?.trim() || '';
+      const normalizedLicense = normalizeLicenseKey(rawLicense);
+      const wasLicenseMode = isLicenseMode();
 
-      // PINは常に保存
       safeStorage.setItem('app_pin', newPin);
 
-      const savedLicense = sharedStore ? (sharedStore.getItem(LICENSE_KEY) || '') : '';
-      const normalizedLicense = normalizeLicenseKey(rawLicense);
-
-      // 1. ライセンスキーが入力された場合: 検証および登録
-      if (rawLicense) {
-        if (!normalizedLicense) {
-          renderLicenseError(new Error('ライセンスキーが無効です。設定を確認してください。'));
-          return;
-        }
-
-        if (normalizedLicense !== savedLicense || licenseNeedsRebind()) {
-          try {
-            await registerLicense(sharedStore, normalizedLicense);
-          } catch (err) {
-            renderLicenseError(err);
-            return; // 失敗時はモーダルを閉じない
-          }
-        }
-      }
-
-      // 2. ライセンスモードでなければ BYOK 情報を保存
-      if (!isLicenseMode()) {
+      // 1. BYOK 저장을 먼저 수행
+      if (!wasLicenseMode) {
         const prevKey = safeStorage.getItem('gemini_api_key');
         safeStorage.setItem('gemini_api_key', geminiKey);
         safeStorage.setItem('custom_model_id', customModel);
@@ -79,8 +60,27 @@ export async function saveSettings() {
           addOrSelectModelOption(customModel, `${customModel} (カスタム指定)`);
         }
 
-        if (geminiKey && geminiKey !== prevKey) {
+        // ライセンス登録を同時に行う場合はモデル取得しない
+        if (geminiKey && geminiKey !== prevKey && !normalizedLicense) {
           fetchAvailableModels().catch(() => {});
+        }
+      }
+
+      // 2. 라이선스 등록
+      if (rawLicense) {
+        if (!normalizedLicense) {
+          renderLicenseError(new Error('ライセンスキーが無効です。設定を確認してください。'));
+          return;
+        }
+
+        const savedLicense = sharedStore ? (sharedStore.getItem(LICENSE_KEY) || '') : '';
+        if (normalizedLicense !== savedLicense || licenseNeedsRebind()) {
+          try {
+            await registerLicense(sharedStore, normalizedLicense);
+          } catch (err) {
+            renderLicenseError(err);
+            return;
+          }
         }
       }
 
@@ -117,7 +117,7 @@ export async function refreshLicenseStatus() {
       if (!statusEl) return;
 
       if (!isLicenseMode()) {
-        statusEl.innerHTML = '';
+        statusEl.innerHTML = '<span class="text-slate-500 dark:text-slate-400">未登録（BYOK）</span>';
         return;
       }
 
@@ -171,7 +171,7 @@ export function clearLicenseAction() {
         const input = document.getElementById('licenseKeyInput');
         if (input) input.value = '';
         const status = document.getElementById('licenseStatus');
-        if (status) status.innerHTML = '';
+        if (status) status.innerHTML = '<span class="text-slate-500 dark:text-slate-400">未登録（BYOK）</span>';
         showStatus('ライセンスを解除しました。', 'blue');
       }
     }
