@@ -4,7 +4,7 @@ import { escapeAttr } from '../shared/actions.js';
 import { engStore, state } from './state.js';
 import { ENGLISH_READING_SCHEMA } from './schema.js';
 import { getActiveModel, getApiKey, openSettings } from './init.js';
-import { hideStatus, showStatus } from './mode.js';
+import { hideStatus, showStatus, showApiError } from './mode.js';
 import { escapeHtml } from './voice.js';
 
     // =========================================================================
@@ -145,7 +145,7 @@ export async function analyzeEnglishProblem() {
         TutorUI.showToast('✨ 英語の解説が完成しました！', 'green');
       } catch (err) {
         console.error(err);
-        showStatus(`❌ エラーが発生しました: ${err.message || '通信エラー'}`, 'red');
+        showApiError(err, { retryAction: 'analyze' });
       } finally {
         solveBtn.disabled = false;
         solveBtnText.textContent = 'AI先生に英語を解説してもらう';

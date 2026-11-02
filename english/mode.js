@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { stopAllSpeech } from './voice.js';
+import { buildApiErrorView } from '../shared/api-error-ui.js';
 
     // =========================================================================
     // 4. モード切替 (長文読解 / 4択クイズ / 英作文添削)
@@ -57,8 +58,17 @@ export function showStatus(msg, color = 'blue') {
         red: 'bg-rose-50 border-rose-300 text-rose-900 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-100'
       };
       box.className = `rounded-2xl p-4 text-xs sm:text-sm font-bold border transition ${styles[color] || styles.blue}`;
-      box.textContent = msg;
+      if (typeof msg === 'string' && msg.includes('<')) {
+        box.innerHTML = msg;
+      } else {
+        box.textContent = msg;
+      }
       box.classList.remove('hidden');
+    }
+
+export function showApiError(err, options = {}) {
+      const { html } = buildApiErrorView(err, options);
+      showStatus(html, 'red');
     }
 
 export function hideStatus() {

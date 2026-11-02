@@ -4,7 +4,7 @@ import { escapeAttr } from '../shared/actions.js';
 import { engStore, state } from './state.js';
 import { WRITING_CORRECTION_SCHEMA } from './schema.js';
 import { getActiveModel, getApiKey, openSettings } from './init.js';
-import { hideStatus, showStatus } from './mode.js';
+import { hideStatus, showStatus, showApiError } from './mode.js';
 import { escapeHtml } from './voice.js';
 
     // =========================================================================
@@ -51,7 +51,8 @@ export async function generateWritingPrompt() {
         }
         TutorUI.showToast('🎲 練習課題を作成しました！英文を書いてみましょう。', 'blue');
       } catch (e) {
-        TutorUI.showToast('❌ 課題の作成に失敗しました。', 'red');
+        console.error(e);
+        showApiError(e, { retryAction: 'writing-prompt' });
       } finally {
         if (btn) btn.disabled = false;
       }
@@ -123,7 +124,7 @@ export async function submitWritingForCorrection() {
         TutorUI.showToast('✨ 英作文の添削が完了しました！', 'green');
       } catch (err) {
         console.error(err);
-        showStatus(`❌ 添削エラー: ${err.message}`, 'red');
+        showApiError(err, { retryAction: 'submit-writing' });
       } finally {
         if (btn) btn.disabled = false;
       }

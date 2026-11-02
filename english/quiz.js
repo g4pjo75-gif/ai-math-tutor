@@ -4,7 +4,7 @@ import { escapeAttr } from '../shared/actions.js';
 import { state } from './state.js';
 import { ENGLISH_QUIZ_SCHEMA } from './schema.js';
 import { getActiveModel, getApiKey, openSettings } from './init.js';
-import { hideStatus, showStatus } from './mode.js';
+import { hideStatus, showStatus, showApiError } from './mode.js';
 import { escapeHtml, speakEnglishText } from './voice.js';
 
     // =========================================================================
@@ -132,7 +132,7 @@ ${contextText}
         applyAndRenderEnglishQuiz(res, unitHint);
       } catch (err) {
         console.error(err);
-        showStatus(`❌ クイズ作成エラー: ${err.message}`, 'red');
+        showApiError(err, { retryAction: 'generate-quiz' });
       } finally {
         if (btn) btn.disabled = false;
         if (btnText) btnText.textContent = '新しい問題を出題';

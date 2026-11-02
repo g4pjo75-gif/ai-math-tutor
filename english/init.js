@@ -11,7 +11,7 @@ import {
   refreshLicenseInfo,
   openLicensePortal
 } from '../shared/license.js';
-import { isLicenseMode } from '../core/index.js';
+import { isLicenseMode, classifyApiError } from '../core/index.js';
 
     // =========================================================================
     // 3. 初期化 & 共通設定
@@ -272,7 +272,8 @@ export function renderLicenseInfo(info) {
 export function renderLicenseError(err) {
       const statusEl = document.getElementById('licenseStatus');
       if (!statusEl) return;
-      statusEl.innerHTML = `<div class="p-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 font-bold">⚠️ ${escapeText(err?.message || 'ライセンスエラーが発生しました。')}</div>`;
+      const info = classifyApiError(err);
+      statusEl.innerHTML = `<div class="p-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 font-bold">⚠️ ${escapeText(info.message)}</div>`;
     }
 
 export function clearLicenseAction() {
