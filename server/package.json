@@ -9,6 +9,10 @@
     "d1:migrate:staging": "wrangler d1 migrations apply ai-math-tutor-db-staging --remote --config wrangler.staging.jsonc",
     "d1:backup:prod": "wrangler d1 export ai-math-tutor-db --remote --output backups/prod.sql",
     "d1:backup:staging": "wrangler d1 export ai-math-tutor-db-staging --remote --output backups/staging.sql --config wrangler.staging.jsonc",
+    "d1:migrate:prod": "wrangler d1 migrations apply ai-math-tutor-db --remote",
+    "d1:list:prod": "wrangler d1 migrations list ai-math-tutor-db --remote",
+    "preflight:staging": "node scripts/preflight.mjs --staging",
+    "preflight:prod": "node scripts/preflight.mjs --prod",
     "test": "node --test test/*.test.js"
   },
   "devDependencies": {
