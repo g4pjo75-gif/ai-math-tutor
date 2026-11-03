@@ -1,9 +1,9 @@
 # Launch Checklist — Phase 7-6
 
-> **最終更新**: 2026-11-03  
-> **現在の状態**: **NOT READY FOR LIVE SALES**  
-> **Production**: `0.6.0` / live Stripe 未接続  
-> **Staging**: `0.7.0` / Stripe test mode  
+> **最終更新**: 2026-11-03
+> **現在の状態**: **NOT READY FOR LIVE SALES**
+> **Production**: `0.6.0` / live Stripe 未接続
+> **Staging**: `0.7.0` / Stripe test mode
 > **目的**: 有料販売を開始する前に、コード・Staging・運用・法務・決済の全項目を確認する。
 
 ---
@@ -23,7 +23,7 @@
 |---|---|---|
 | L1 unit | ✅ 61 pass | 2026-11-03 |
 | L2 E2E | ✅ 38 pass | 2026-11-03 |
-| Server test | ✅ 55 pass | 2026-11-03 |
+| Server test | ✅ 56 pass | 2026-11-03 |
 | Staging checkout → thanks → key | ✅ 完了 | Stripe test mode |
 | Staging redeem / simple solve / quota | ✅ 完了 | 1回実呼び出し |
 | Staging Customer Portal | ✅ 完了 | sandbox portal 画面確認 |
@@ -39,24 +39,23 @@
 | デバイス解除 UI | ⚠️ CLI のみ | 手動サポート手順は必要 |
 | auto-retry / backoff | ❌ 未実装 | P1 |
 
-> **注意**: staging の standard ライセンスは `unlink-device` テストで device を1件削除済み。  
-> 追加テスト前に、アプリ設定で「解除 → キー再入力 → 保存」して再バインドする。
+> **注意**: staging の standard ライセンスは `unlink-device` テストで device を1件削除後、アプリ設定での再バインド（`/v1/redeem`）および `/v1/solve` の正常動作検証が完了済み。
 
 ---
 
 ## 2. P0 — コード / テスト / Staging
 
-### 2.1 コードゲート
+### 2.1 코드게이트
 
-- [ ] `npm run test:l1` → 61 pass
-- [ ] `npx playwright test` → 38 pass
-- [ ] `npm test` → 99 pass
-- [ ] `cd server && npm test` → 55 pass
-- [ ] `node tests/check-actions.js` → math 46 / english 47
-- [ ] `node tests/check-imports.js` → missing 0
-- [ ] `git diff --check` → エラー 0
-- [ ] secret / ライセンスキーが diff にない
-- [ ] `test.only` / `skip` がない
+- [x] `npm run test:l1` → 61 pass
+- [x] `npx playwright test` → 38 pass
+- [x] `npm test` → 99 pass
+- [x] `cd server && npm test` → 56 pass
+- [x] `node tests/check-actions.js` → math 46 / english 47
+- [x] `node tests/check-imports.js` → missing 0
+- [x] `git diff --check` → 에러 0
+- [x] secret / 라이선스 키가 diff에 없음
+- [x] `test.only` / `skip` 없음
 
 ### 2.2 Staging E2E
 
@@ -68,17 +67,18 @@
 - [x] Customer Portal 進入
 - [ ] 実メール送信（Resend）
 - [ ] メール再送 / recover 実メール
-- [ ] 実デバイス解除 → 再バインド
+- [x] 実デバイス解除 → 再バインド（`unlink-device.mjs` 解除後の `/v1/redeem` & `/v1/solve` 成功確認済み）
 - [ ] 大型問題（6問画像）の扱いを確認（P1でも可）
 
-### 2.3 環境分離
+### 2.3 환경 분리
 
-- [ ] staging Worker / D1 / Stripe test / secret が production と分離
-- [ ] production `/health` が `0.6.0` のまま
-- [ ] staging テストデータが production D1 にない
-- [ ] staging site に `X-Robots-Tag: noindex, nofollow`
-- [ ] staging `/docs`, `/package.json` などが 404
-- [ ] Stripe webhook の `APP_ENV` 分離が有効
+- [x] staging Worker / D1 / Stripe test / secret 가 production 과 분리
+- [x] production `/health` 가 `0.6.0` 으로 유지
+- [x] staging 테스트 데이터가 production D1 에 없음
+- [x] staging site 에 `X-Robots-Tag: noindex, nofollow`
+- [x] staging `/docs`, `/package.json` 등이 404
+- [x] Stripe webhook 의 `APP_ENV` 분리 유효
+
 
 ---
 
@@ -170,16 +170,16 @@
 
 ## 4. P0 — セキュリティ
 
-- [ ] `tutor_license_key` は password input
-- [ ] license key / secret をログに出さない
-- [ ] `recovery_log` の古い行 cleanup
-- [ ] recover rate limit（IP 10/h, email+IP 3/h）
-- [ ] staging site `noindex` / Access
-- [ ] `.assetsignore` で docs / package / config を除外
+- [x] `tutor_license_key` は password input
+- [x] license key / secret をログに出さない
+- [x] `recovery_log` 의 오래된 행 cleanup (7일 경과 자동 삭제 구현 및 테스트)
+- [x] recover rate limit（IP 10/h, email+IP 3/h）
+- [x] staging site `noindex` / Access
+- [x] `.assetsignore` で docs / package / config を除外
 - [ ] Tailwind CDN / 外部 script のリスク確認
-- [ ] CSP の `connect-src` が必要最小限
-- [ ] Stripe webhook 署名検証
-- [ ] `LICENSE_SECRET` 不変
+- [x] CSP の `connect-src` が必要最小限
+- [x] Stripe webhook 署名検証
+- [x] `LICENSE_SECRET` 不変
 
 ---
 

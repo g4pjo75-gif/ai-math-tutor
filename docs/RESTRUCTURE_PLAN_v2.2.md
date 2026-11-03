@@ -10136,12 +10136,12 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
   - `tests/config.test.js` +4 → **L1 60 / npm 96**
   - staging smoke 수동 체크리스트
   - action count math 46 / english 47 유지
-- 7-6-2:
-  - email/recovery(active/past_due/canceled/rate-limit), device unlink, budget guard 서버 테스트 추가 (+20) → **server 55 pass**
+- 7-6-2 (7-6-2A 및 7-6-2B-1A 코드 완료):
+  - email/recovery(active/past_due/canceled/rate-limit), device unlink, budget guard, recovery_log cleanup 서버 테스트 추가 (+21) → **server 56 pass**
   - budget_exceeded 에러 분류 테스트 추가 (+1) → **L1 61 pass**
   - recover 페이지 e2e 테스트 추가 (+2) → **L2 38 pass**
-  - workspace 전체: **npm test 99 pass**
-  - recovery_log 보존 정책: 오래된 행(7일 초과)은 주기적 cleanup 대상
+  - workspace 전체: **npm test 99 pass** (L1 61 + L2 38)
+  - recovery_log 보존 정책: 7일 초과된 오래된 행은 `/v1/recover` 처리 시 자동 cleanup
   - 7-6-2B 진입 전 체크리스트:
     - Production D1 migration 0005 적용 (`npx wrangler d1 migrations apply ai-math-tutor-db --remote`)
     - Resend API Key 주입 (`RESEND_API_KEY`) 및 `MAIL_FROM` 도메인 검증
@@ -10246,47 +10246,59 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
 ## 8. 전체 체크리스트
 
 **Phase 0**
-- [ ] `v1.8-baseline` 태그 생성·푸시
-- [ ] 픽스처 8종 + `tests/stub-gemini.js`
-- [ ] `docs/SMOKE.md` 8항목
-- [ ] 앱 코드 diff 0 확인
+- [x] `v1.8-baseline` 태그 생성·푸시
+- [x] 픽스처 8종 + `tests/stub-gemini.js`
+- [x] `docs/SMOKE.md` 8항목
+- [x] 앱 코드 diff 0 확인
 
 **Phase 1**
-- [ ] `math/` 이동 + 경로 치환(24·224·248·685~688행)
-- [ ] `manifest.json` `start_url: "./"`, `id`/`scope` 유지
-- [ ] 루트 허브 + cleanup SW
-- [ ] `english/index.html` 90·116행 → `../math/`
-- [ ] 수학·영어 스모크, localStorage 유지
-- [ ] SW 스코프(`/math/`, `/english/`) 확인
+- [x] `math/` 이동 + 경로 치환(24·224·248·685~688행)
+- [x] `manifest.json` `start_url: "./"`, `id`/`scope` 유지
+- [x] 루트 허브 + cleanup SW
+- [x] `english/index.html` 90·116행 → `../math/`
+- [x] 수학·영어 스모크, localStorage 유지
+- [x] SW 스코프(`/math/`, `/english/`) 확인
 
 **Phase 2**
-- [ ] `math/app.js`, `english/app.js` 추출
-- [ ] SW 자산/캐시명 갱신
-- [ ] `node --check` + 스모크
+- [x] `math/app.js`, `english/app.js` 추출
+- [x] SW 자산/캐시명 갱신
+- [x] `node --check` + 스모크
 
 **Phase 3**
-- [ ] 2.5~2.7 표대로 파일 분해
-- [ ] 함수 인벤토리 일치(97/60)
-- [ ] 파일 500줄 이하
+- [x] 2.5~2.7 표대로 파일 분해
+- [x] 함수 인벤토리 일치(97/60)
+- [x] 파일 500줄 이하
 
 **Phase 4**
-- [ ] `onclick=` 0
-- [ ] `escapeJsString` 0
-- [ ] ESM + 위임 + CSP
+- [x] `onclick=` 0
+- [x] `escapeJsString` 0
+- [x] ESM + 위임 + CSP
 
 **Phase 5**
-- [ ] `core/` DOM 의존 0
-- [ ] 프롬프트 문자열 diff 0
-- [ ] API 클라이언트 단일화
+- [x] `core/` DOM 의존 0
+- [x] 프롬프트 문자열 diff 0
+- [x] API 클라이언트 단일화
 
 **Phase 6**
-- [ ] L1/L2/L3 통과
-- [ ] 회귀 12 시나리오
+- [x] L1/L2/L3 통과
+- [x] 회귀 12 시나리오
 
-**Phase 7**
-- [ ] 서버 프록시 설계
-- [ ] 키 노출 제거
-- [ ] 쿼터/캐시
+**Phase 7 (Phase 7-0 ~ Phase 7-6-2A / 7-6-2B-1A 코드 구현 완료)**
+- [x] 서버 프록시 설계 및 구현 (Cloudflare Workers, `server/src/solve.js`)
+- [x] 키 노출 제거 및 BYOK / License 듀얼 모드 (`core/transport.js`, `shared/license.js`)
+- [x] 쿼터/캐시/레이트리밋/비용 추적/예산 가드 (`server/src/budget.js`, `pricing.js`)
+- [x] D1 마이그레이션 (0001~0005) 및 기기 관리 (`devices.js`, `unlink-device.mjs`)
+- [x] Staging 환경 격리 (`server/wrangler.staging.jsonc`, `shared/config.js`)
+- [x] Stripe 결제 연동 및 Thanks / Customer Portal / Recover 페이지
+- [x] Resend 이메일 발송 (`server/src/email.js`) 및 recovery_log 7일 자동 정리
+- [x] 에러 분류기 및 UI 고도화 (`core/errors.js`, `shared/api-error-ui.js`)
+- [x] 기기 언링크 운영 절차 수립 (`docs/SUPPORT.md`)
+- [x] 아키텍처 v2.2 현행화 (`docs/ARCHITECTURE.md`)
+- [ ] [운영자] Production Resend API Key 주입 (`RESEND_API_KEY`) 및 발신 도메인 검증 (7-6-2B-2)
+- [ ] [운영자] Production D1 0005 마이그레이션 적용 (7-6-2B-2)
+- [ ] [운영자] Production 예산 한도 및 실 지원 이메일 확정 (7-6-2B-2)
+- [ ] [운영자] Live Stripe 키 교체 및 실 결제 테스트 (7-6-2B-2)
+- [ ] [운영자] 커스텀 도메인 / DNS 연결 (7-6-2B-2 / 7-6-3)
 
 ---
 
