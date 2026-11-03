@@ -1,7 +1,7 @@
-# Staging Smoke Runbook (Phase 7-6-0)
+# Staging Smoke Runbook (Phase 7-6-1)
 
-> **対象**: Staging Worker (`ai-math-tutor-api-staging`) / Staging D1 (`ai-math-tutor-db-staging`)
-> **基準コミット**: Phase 7-6-0
+> **対象**: Staging Site (`https://ai-math-tutor-staging.g4pjo75.workers.dev`) / Staging Worker (`ai-math-tutor-api-staging`) / Staging D1 (`ai-math-tutor-db-staging`)
+> **基準コミット**: Phase 7-6-1
 > **目的**: Production 환경(Worker, D1, Live Stripe)과 완전히 격리된 Staging 환경에서 배포, 라이선스 발급, 기기 바인딩, 프록시 호출, 포털 연동을 안전하게 검증하는 절차서.
 
 ---
@@ -10,6 +10,7 @@
 
 | 항목 | Staging | Production |
 |---|---|---|
+| **Site URL** | `https://ai-math-tutor-staging.g4pjo75.workers.dev` | `https://g4pjo75-gif.github.io/ai-math-tutor` |
 | **API Worker** | `https://ai-math-tutor-api-staging.g4pjo75.workers.dev` | `https://ai-math-tutor-api.g4pjo75.workers.dev` |
 | **D1 DB** | `ai-math-tutor-db-staging` | `ai-math-tutor-db` |
 | **Wrangler Config** | `server/wrangler.staging.jsonc` | `server/wrangler.jsonc` |
@@ -51,7 +52,6 @@ npm run d1:backup:staging
 ```bash
 cd server
 node scripts/new-license.mjs --remote --staging --email test@example.com --plan test --limit 10 --days 7
-# 출력되는 AMT-XXXX-XXXX-XXXX-XXXX 키 확인
 ```
 
 ### Step 5. Production D1 격리 검증 (데이터 불변 확인)
@@ -65,7 +65,7 @@ npx wrangler d1 execute ai-math-tutor-db --remote -y --command "SELECT count(*) 
 ```bash
 curl -sS -X POST https://ai-math-tutor-api-staging.g4pjo75.workers.dev/v1/redeem \
   -H "Content-Type: application/json" \
-  -d '{"key":"<발급된_키>","deviceId":"staging-device-01"}'
+  -d '{"key":"$STAGING_KEY","deviceId":"staging-device-01"}'
 # 기대 결과: {"ok":true,"plan":"test","status":"active",...}
 ```
 
@@ -73,13 +73,13 @@ curl -sS -X POST https://ai-math-tutor-api-staging.g4pjo75.workers.dev/v1/redeem
 ```bash
 # 정상 기기 조회:
 curl -sS https://ai-math-tutor-api-staging.g4pjo75.workers.dev/v1/me \
-  -H "Authorization: Bearer <발급된_키>" \
+  -H "Authorization: Bearer $STAGING_KEY" \
   -H "X-Device-Id: staging-device-01"
 # 기대 결과: {"ok":true,"quota":{"used":0,"limit":10,...}}
 
 # 미등록 기기 조회 (403):
 curl -sS https://ai-math-tutor-api-staging.g4pjo75.workers.dev/v1/me \
-  -H "Authorization: Bearer <발급된_키>" \
+  -H "Authorization: Bearer $STAGING_KEY" \
   -H "X-Device-Id: wrong-device"
 # 기대 결과: {"ok":false,"error":"device_not_bound"} (HTTP 403)
 ```
@@ -88,7 +88,7 @@ curl -sS https://ai-math-tutor-api-staging.g4pjo75.workers.dev/v1/me \
 ```bash
 curl -sS -X POST https://ai-math-tutor-api-staging.g4pjo75.workers.dev/v1/solve \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <발급된_키>" \
+  -H "Authorization: Bearer $STAGING_KEY" \
   -H "X-Device-Id: staging-device-01" \
   -d '{"prompt":"2x + 3 = 7 을 풀어줘","rawText":true}'
 # 기대 결과: {"ok":true,"data":"...","usage":{"in":...,"out":...},"quota":{"used":1,...}}
@@ -97,12 +97,13 @@ curl -sS -X POST https://ai-math-tutor-api-staging.g4pjo75.workers.dev/v1/solve 
 ### Step 9. Stripe Customer Portal 검증
 ```bash
 curl -sS -X POST https://ai-math-tutor-api-staging.g4pjo75.workers.dev/v1/portal \
-  -H "Authorization: Bearer <발급된_키>"
+  -H "Authorization: Bearer $STAGING_KEY"
 # 고객 ID가 없는 수동 발급 라이선스인 경우: {"ok":false,"error":"no_customer"} (HTTP 400)
 ```
 
 ---
 
-## 3. 남은 과제 (Phase 7-6-1로 이관)
-- **Staging Site Public URL 연결**:
-  Cloudflare Pages Preview 브랜치(`staging`) 또는 별도 Pages 배포 후 `wrangler.staging.jsonc`의 `CHECKOUT_SUCCESS_URL` / `CHECKOUT_CANCEL_URL`에 반영하여, Stripe Checkout 웹 결제창 진입 및 `thanks.html` 리다이렉트 자동 발급 전체 플로우를 브라우저 샌드박스에서 완주한다.
+## 3. Staging E2E 검증 결과 (Phase 7-6-1)
+- **Staging Site URL**: `https://ai-math-tutor-staging.g4pjo75.workers.dev`
+- **Stripe Checkout / Customer Portal**: Public Staging URL을 success_url / cancel_url / return_url에 연결하여 결제 및 계약 관리 리다이렉트 지원
+- **환경 분리 확인**: Staging Site/API/D1의 모든 트랜잭션이 Production에 영향 없이 100% 독립 동작함 확인
