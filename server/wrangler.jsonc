@@ -5,18 +5,22 @@
   "observability": { "enabled": true },
   "vars": {
     "APP_ENV": "production",
-    "ALLOWED_ORIGINS": "http://localhost:8765,https://g4pjo75-gif.github.io",
+    "ALLOWED_ORIGINS": "https://gakushulab.com,https://g4pjo75-gif.github.io",
     "MODEL": "gemini-3.8-flash",
     "THINKING_LEVEL": "low",
     "RATE_LIMIT_PER_MIN": "8",
     "USD_JPY": "150",
     "PLAN_LIMIT": "300",
-    "CHECKOUT_SUCCESS_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/thanks.html?session_id={CHECKOUT_SESSION_ID}",
-    "CHECKOUT_CANCEL_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/pricing.html",
-    "PORTAL_RETURN_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/portal.html",
+    "CHECKOUT_SUCCESS_URL": "https://gakushulab.com/site/thanks.html?session_id={CHECKOUT_SESSION_ID}",
+    "CHECKOUT_CANCEL_URL": "https://gakushulab.com/site/pricing.html",
+    "PORTAL_RETURN_URL": "https://gakushulab.com/site/portal.html",
     "PLAN_PRICE_JPY": "980",
-    "PLAN_NAME": "AI家庭教師 スタンダード"
-    // Production budget & verified email settings to be configured in 7-6-2B upon operator input
+    "PLAN_NAME": "AI家庭教師 スタンダード",
+    "DAILY_COST_LIMIT_MICRO_YEN": "50000000",
+    "MONTHLY_COST_LIMIT_MICRO_YEN": "1000000000",
+    "SITE_BASE_URL": "https://gakushulab.com",
+    "MAIL_FROM": "AI家庭教師 <noreply@gakushulab.com>",
+    "SUPPORT_EMAIL": "support@gakushulab.com"
   },
   "d1_databases": [
     {
