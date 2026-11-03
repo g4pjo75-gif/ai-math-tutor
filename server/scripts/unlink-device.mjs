@@ -66,9 +66,13 @@ try {
   const out = execFileSync('npx', args, { cwd: serverDir, encoding: 'utf8' });
   let changes = 0;
   try {
-    const parsed = JSON.parse(out);
-    const first = Array.isArray(parsed) ? parsed[0] : parsed;
-    changes = (first && first.meta && first.meta.changes) || 0;
+    const jsonStart = out.indexOf('[');
+    const jsonEnd = out.lastIndexOf(']');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      const parsed = JSON.parse(out.slice(jsonStart, jsonEnd + 1));
+      const first = Array.isArray(parsed) ? parsed[0] : parsed;
+      changes = first?.meta?.rows_written ?? first?.results?.[0]?.['Rows written'] ?? first?.meta?.changes ?? 0;
+    }
   } catch (e) {
     changes = 0;
   }
