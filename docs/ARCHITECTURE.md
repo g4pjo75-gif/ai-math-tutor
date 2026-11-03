@@ -1,7 +1,7 @@
 # AIチューター アーキテクチャ設計書 (v2.2)
 
 > **対象リポジトリ**: `ai-math-tutor`
-> **現行バージョン**: `v2.2` (Phase 7-6-2B-1C 完了)
+> **現行バージョン**: `v2.2` (Phase 7-6-2C 完了)
 > **最終更新**: 2026-11-03
 > **目的**: 高校数学・高校英語を同一基盤で提供し、BYOK（APIキー直接入力）および有料サブスクリプション（Stripe + Cloudflare Worker + D1）のハイブリッド運用を実現するシステム構成・ディレクトリ構成・環境分離・品質管理の定義
 
@@ -132,7 +132,7 @@ ai-math-tutor/
 │   │   └── cors.js / validate.js# CORS ヘッダー・リクエスト検証
 │   ├── migrations/              # D1 SQL マイグレーション (0001〜0005)
 │   ├── scripts/                 # 管理者運用スクリプト (new-license, unlink-device)
-│   ├── test/                    # サーバー単体テスト (56 pass)
+│   ├── test/                    # サーバー単体テスト (62 pass)
 │   ├── wrangler.jsonc           # Production Worker 設定
 │   └── wrangler.staging.jsonc   # Staging Worker 設定
 ├── tests/                       # クライアントテストスイート
@@ -147,7 +147,9 @@ ai-math-tutor/
 │   ├── OPS.md                   # 運用・DBバックアップ・障害復旧ランブック
 │   └── SUPPORT.md               # カスタマーサポート対応マニュアル
 ├── _headers                     # Staging 検索インデックス拒否 (X-Robots-Tag)
-└── .assetsignore                # Staging 配備時の内部ファイル除外設定
+├── .assetsignore                # Staging/Production 配備時の内部ファイル除外設定
+├── wrangler.jsonc               # Staging 静的サイト配備設定
+└── wrangler.site.jsonc          # Production 静的サイト配備設定 (gakushulab.com)
 ```
 
 ---
@@ -158,13 +160,13 @@ ai-math-tutor/
 
 | 項目 | Staging 環境 | Production 環境 |
 |:---|:---|:---|
-| **静的サイトホスト** | Cloudflare Workers Assets (`ai-math-tutor-staging`) | GitHub Pages (`https://g4pjo75-gif.github.io/ai-math-tutor/`) |
-| **API ホスト** | `https://ai-math-tutor-api-staging.g4pjo75.workers.dev` | `https://ai-math-tutor-api.g4pjo75.workers.dev` |
-| **D1 データベース** | `ai-math-tutor-db-staging` | `ai-math-tutor-db` |
-| **Stripe** | Test Mode (`sk_test_...`) | Live Mode (`sk_live_...`) |
+| **静的サイトホスト** | Cloudflare Workers Assets (`ai-math-tutor-staging`) | Cloudflare Workers Assets (`ai-math-tutor-site` / `https://gakushulab.com/`) <br>※ 障害時切戻し用: GitHub Pages (`https://g4pjo75-gif.github.io/ai-math-tutor/`) |
+| **API ホスト** | `https://ai-math-tutor-api-staging.g4pjo75.workers.dev` | `https://ai-math-tutor-api.g4pjo75.workers.dev` (v0.7.0) |
+| **D1 データベース** | `ai-math-tutor-db-staging` | `ai-math-tutor-db` (0001〜0005 適用済み) |
+| **Stripe** | Test Mode (`sk_test_...`) | Live Mode 準備完了 (`sk_live_...` 登録待ち) |
 | **Webhook 隔離** | `APP_ENV = "staging"` (metadata一致検証) | `APP_ENV = "production"` |
-| **インデックス制御** | `X-Robots-Tag: noindex, nofollow` | インデックス許可（LP・料金）/ `noindex`（購入・管理） |
-| **内部ファイル保護** | `.assetsignore` により `docs/`, `package.json` 等を 404 除外 | GitHub公開範囲に準拠 |
+| **インデックス制御** | `X-Robots-Tag: noindex, nofollow` | プレローンチ期間: `noindex, nofollow` |
+| **内部ファイル保護** | `.assetsignore` により `docs/`, `package.json`, `tools/`, `backup/` 等を 404 除外 | 同左 |
 
 ---
 
@@ -181,7 +183,7 @@ flowchart LR
     - Playwright オフラインStub
     - 数学 / 英語 学習フロー
     - 設定・エラー・ライセンス・復旧・CSS"]
-    Server["Serverテスト (56 pass)
+    Server["Serverテスト (62 pass)
     - Stripe / Webhook / Portal
     - Resend Email / 復旧 / レート制限
     - 原価計算 / 予算ガード / 端末解除"]

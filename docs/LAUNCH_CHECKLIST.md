@@ -94,9 +94,9 @@
 - [x] `RESEND_API_KEY` を staging に secret 登録
 - [x] `MAIL_FROM` を検証済みアドレスに設定
 - [x] `SUPPORT_EMAIL` を実サポートアドレスに設定
-- [ ] `SITE_BASE_URL` を環境ごとに設定
+- [x] `SITE_BASE_URL` を環境ごとに設定
   - staging: `https://ai-math-tutor-staging.g4pjo75.workers.dev`（設定済み）
-  - production: 実際の公開 URL
+  - production: `https://gakushulab.com`（設定済み）
 - [x] staging で実メール送信 1回 — 2026-11-03
 - [ ] recover ページから再送メール 1回
 - [x] 迷惑メール/リンク/キー表示を確認
@@ -116,27 +116,27 @@
 
 ### 3.3 ドメイン
 
-- [ ] カスタムドメインを使う / 使わないを決定
-- [ ] 使う場合:
-  - [ ] DNS / Cloudflare / GitHub Pages 接続
-  - [ ] `PROD_API_BASE`
-  - [ ] CSP `connect-src`
-  - [ ] CORS `ALLOWED_ORIGINS`
-  - [ ] Stripe success / cancel / portal URL
-  - [ ] `site/config.js`
-  - [ ] メール送信ドメイン
+- [x] カスタムドメインを使う / 使わないを決定 — `gakushulab.com` (Cloudflare Registrar / Workers Assets)
+- [x] 使う場合:
+  - [x] DNS / Cloudflare / GitHub Pages 接続 (Cloudflare Workers Assets custom domain `https://gakushulab.com/`)
+  - [x] `PROD_API_BASE` (`https://ai-math-tutor-api.g4pjo75.workers.dev`)
+  - [x] CSP `connect-src` (`https://ai-math-tutor-api.g4pjo75.workers.dev`)
+  - [x] CORS `ALLOWED_ORIGINS` (`https://gakushulab.com,https://g4pjo75-gif.github.io`)
+  - [x] Stripe success / cancel / portal URL (`https://gakushulab.com/site/...`)
+  - [x] `site/config.js` (`gakushulab.com` 自動判別)
+  - [x] メール送信ドメイン (`gakushulab.com` DKIM/SPF 検証済み)
 - [ ] 使わない場合:
   - [ ] 現行 production URL 継続を文書化
   - [ ] メール用ドメインは別途必要か確認
 
 ### 3.4 予算 / 監視
 
-- [ ] production `DAILY_COST_LIMIT_MICRO_YEN` 決定
-- [ ] production `MONTHLY_COST_LIMIT_MICRO_YEN` 決定
+- [x] production `DAILY_COST_LIMIT_MICRO_YEN` 決定 (`50000000` = ¥50/日)
+- [x] production `MONTHLY_COST_LIMIT_MICRO_YEN` 決定 (`1000000000` = ¥1,000/月)
 - [ ] staging の budget guard 動作確認
 - [ ] Cloudflare / Gemini の予算アラート設定
 - [ ] Worker 5xx / webhook 失敗の監視
-- [ ] D1 バックアップ実施
+- [x] D1 バックアップ実施 (`server/backups/prod-20261103-2315-prebaseline.sql`)
 - [ ] D1 復旧手順確認
 - [ ] `LICENSE_SECRET` の安全な保管
 - [ ] Stripe / Gemini キー交換手順
@@ -159,16 +159,16 @@
 
 ### 3.6 Production 反映
 
-- [ ] `0005_email_recovery.sql` を production D1 に適用
-- [ ] production D1 バックアップ取得
-- [ ] production `RESEND_API_KEY` / email env 設定
-- [ ] production `DAILY/MONTHLY_COST_LIMIT_MICRO_YEN` 設定
-- [ ] server `0.7.0` を production deploy
-- [ ] production `/health` が `0.7.0`
-- [ ] production client 7-5-C/7-6 反映
-- [ ] production checkout → thanks → redeem → solve
-- [ ] production portal
-- [ ] production email
+- [x] `0005_email_recovery.sql` を production D1 に適用 (0001~0004 baseline 登録後 0005 適用完了)
+- [x] production D1 バックアップ取得 (`server/backups/prod-20261103-2315-prebaseline.sql`, 5.9KB)
+- [x] production `RESEND_API_KEY` / email env 設定 (`SITE_BASE_URL`, `MAIL_FROM`, `SUPPORT_EMAIL`)
+- [x] production `DAILY/MONTHLY_COST_LIMIT_MICRO_YEN` 設定 (`50000000` / `1000000000`)
+- [x] server `0.7.0` を production deploy (`5a44d9ab-07b1-465c-acaf-7582074b0540`)
+- [x] production `/health` が `0.7.0`
+- [x] production client 7-5-C/7-6 反映 (サイト Worker `ai-math-tutor-site` を `gakushulab.com` にデプロイ完了)
+- [x] production checkout → thanks → redeem → solve (テストモード E2E 疎通確認完了)
+- [x] production portal (テストモード遷移確認完了)
+- [x] production email (Resend 経由で実送信・D1 `email_sent_at` 記録確認完了)
 - [ ] production で staging test data がないこと
 
 ---

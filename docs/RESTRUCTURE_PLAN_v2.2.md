@@ -10288,7 +10288,7 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
 - [x] L1/L2/L3 통과
 - [x] 회귀 12 시나리오
 
-**Phase 7 (Phase 7-0 ~ Phase 7-6-2A / 7-6-2B-1A / 7-6-2B-1B / 7-6-2B-1C 코드 구현 완료)**
+**Phase 7 (Phase 7-0 ~ Phase 7-6-2A / 7-6-2B-1A / 7-6-2B-1B / 7-6-2B-1C / 7-6-2C 코드 구현 및 Production 컷오버 완료)**
 - [x] 서버 프록시 설계 및 구현 (Cloudflare Workers, `server/src/solve.js`)
 - [x] 키 노출 제거 및 BYOK / License 듀얼 모드 (`core/transport.js`, `shared/license.js`)
 - [x] 쿼터/캐시/레이트리밋/비용 추적/예산 가드 (`server/src/budget.js`, `pricing.js`)
@@ -10301,12 +10301,14 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
 - [x] Stripe 환불(charge.refunded) 자동 정지 및 dispute 처리 (`server/src/stripe.js`)
 - [x] 배포 사전 정합성 검사 스크립트 구현 (`server/scripts/preflight.mjs`)
 - [x] 기기 언링크 및 환불/차지백 운영 절차 수립 (`docs/SUPPORT.md`, `docs/OPERATOR_SETUP.md`, `docs/OPS.md`)
+- [x] Production D1 0001~0004 baseline 등록 및 0005 마이그레이션 적용 (`ai-math-tutor-db`)
+- [x] Production Resend API Key 주입 및 `gakushulab.com` 도메인 검증/実送信 성공
+- [x] Production Worker (v0.7.0) 배포 및 `gakushulab.com` CORS / URLs / 예산 가드 반영
+- [x] Production 사이트 Workers Assets 배포 (`ai-math-tutor-site` -> `https://gakushulab.com/`) 및 내부 파일 보호 (.assetsignore)
+- [x] Production E2E 브라우저 검증 완료 (Checkout -> Thanks -> Redeem -> Solve -> Email)
 - [x] 아키텍처 v2.2 현행화 (`docs/ARCHITECTURE.md`)
-- [ ] [운영자] Production Resend API Key 주입 (`RESEND_API_KEY`) 및 발신 도메인 검증 (7-6-2B-2)
-- [ ] [운영자] Production D1 0005 마이그레이션 적용 (7-6-2B-2)
-- [ ] [운영자] Production 예산 한도 및 실 지원 이메일 확정 (7-6-2B-2)
-- [ ] [운영자] Live Stripe 키 교체 및 실 결제 테스트 (7-6-2B-2)
-- [ ] [운영자] 커스텀 도메인 / DNS 연결 (7-6-2B-2 / 7-6-3)
+- [ ] [운영자] Live Stripe 키 교체 및 실 결제 / 실 환불 테스트 (Phase 7-6-2D)
+- [ ] [운영자] `site/legal.html` 특정상거래법 및 개인정보처리방침 최종 표기 확정 (Phase 7-6-2D)
 
 ---
 

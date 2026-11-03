@@ -195,29 +195,22 @@ cd server && npm run deploy:staging
 
 ---
 
-## 6. Step 4 — ドメイン方針
+## 6. Step 4 — ドメイン方針（確定済み）
 
-### A. 独自ドメインを使う場合
+2026-11-03 に独自ドメイン **`gakushulab.com`**（Cloudflare Registrar）の採用を確定し、Cloudflare Workers Assets カスタムドメインとして配備完了（Phase 7-6-2C）。
 
-変更が必要な箇所:
-
-| 対象 | ファイル / 設定 |
+| 対象 | 設定・確定値 |
 |---|---|
-| サイト配信 | GitHub Pages カスタムドメイン or Cloudflare Pages |
-| API | Cloudflare Worker カスタムドメイン |
-| クライアント API Base | `shared/config.js` |
-| CSP `connect-src` | `math/index.html`, `english/index.html` |
-| CORS | `ALLOWED_ORIGINS` |
-| Stripe URL | `CHECKOUT_SUCCESS_URL`, `CHECKOUT_CANCEL_URL`, `PORTAL_RETURN_URL` |
-| メール本文リンク | `SITE_BASE_URL` |
-| メール送信 | Resend の検証ドメイン |
+| サイト配信 | Cloudflare Workers Assets (`ai-math-tutor-site` / `https://gakushulab.com/`) |
+| API | `https://ai-math-tutor-api.g4pjo75.workers.dev` (v0.7.0) |
+| クライアント API Base | `shared/config.js` / `site/config.js` (gakushulab.com → PROD_API_BASE) |
+| CORS | `ALLOWED_ORIGINS`: `https://gakushulab.com,https://g4pjo75-gif.github.io` |
+| Stripe URL | `https://gakushulab.com/site/thanks.html`, `pricing.html`, `portal.html` |
+| メール本文リンク | `SITE_BASE_URL`: `https://gakushulab.com` |
+| メール送信 | `MAIL_FROM`: `AI家庭教師 <noreply@gakushulab.com>` (Resend 東京リージョン) |
+| サポート窓口 | `support@gakushulab.com` (Cloudflare Email Routing) |
 
-### B. 現行 URL を継続する場合
-
-- サイト: `https://g4pjo75-gif.github.io/ai-math-tutor/`
-- API: `https://ai-math-tutor-api.g4pjo75.workers.dev`
-- メール送信用ドメインは **別途必要**（GitHub Pages のドメインでは送信できない）
-- この判断を `docs/LAUNCH_CHECKLIST.md` に記録する
+※ GitHub Pages (`https://g4pjo75-gif.github.io/ai-math-tutor/`) は切戻し用フォールバックとして CORS 許可を維持。
 
 ---
 
@@ -265,26 +258,26 @@ npx wrangler d1 migrations list ai-math-tutor-db --remote
 
 ## 8. Step 6 — Production env 設定
 
-`server/wrangler.jsonc` の `vars` に追加・修正:
+`server/wrangler.jsonc` の `vars`（2026-11-03 Phase 7-6-2C にて設定済み）:
 
 ```jsonc
-"ALLOWED_ORIGINS": "https://<本番サイトのorigin>",
-"DAILY_COST_LIMIT_MICRO_YEN": "<運営者決定値>",
-"MONTHLY_COST_LIMIT_MICRO_YEN": "<運営者決定値>",
-"SITE_BASE_URL": "https://<本番サイトURL>",
-"MAIL_FROM": "AI家庭教師 <noreply@<検証済みドメイン>>",
-"SUPPORT_EMAIL": "<実サポートアドレス>"
+"ALLOWED_ORIGINS": "https://gakushulab.com,https://g4pjo75-gif.github.io",
+"DAILY_COST_LIMIT_MICRO_YEN": "50000000",
+"MONTHLY_COST_LIMIT_MICRO_YEN": "1000000000",
+"SITE_BASE_URL": "https://gakushulab.com",
+"MAIL_FROM": "AI家庭教師 <noreply@gakushulab.com>",
+"SUPPORT_EMAIL": "support@gakushulab.com"
 ```
 
 > **CORS設定の重要注意**:
-> production の `ALLOWED_ORIGINS` は **`https://<本番サイトのorigin>` のみ** を指定し、`http://localhost:...` や `127.0.0.1` は必ず除去してください。
+> production の `ALLOWED_ORIGINS` は **`https://gakushulab.com` およびフォールバック用 GitHub Pages のみ** を指定し、`http://localhost:...` や `127.0.0.1` は必ず除去してください。
 > これらを除去しないと、preflight #3（プレースホルダー検出）および #4 が FAIL として検出されます。
 
 secret 登録:
 
 ```bash
 cd /home/park/projects/ai-math-tutor/server
-npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put RESEND_API_KEY           # 登録済み (Phase 7-6-2C)
 npx wrangler secret put STRIPE_SECRET_KEY        # Step 8 で live キー
 npx wrangler secret put STRIPE_WEBHOOK_SECRET    # Step 8 で live 署名
 ```
@@ -295,13 +288,12 @@ npx wrangler secret put STRIPE_WEBHOOK_SECRET    # Step 8 で live 署名
 npx wrangler secret list
 ```
 
-### 予算値の目安
+### 予算値の設定実績
 
-| 値 | 意味 | 目安 |
-|---|---|---|
-| `5000000` | ¥5 / 日 | 小規模テスト向け |
-| `20000000` | ¥20 / 月 | 初期運用向け |
-| `100000000` | ¥100 / 月 | 販売本格化後 |
+| 変数名 | 設定値 | 意味 | 備考 |
+|---|---|---|---|
+| `DAILY_COST_LIMIT_MICRO_YEN` | `50000000` | ¥50 / 日 | 初期運用リミット |
+| `MONTHLY_COST_LIMIT_MICRO_YEN` | `1000000000` | ¥1,000 / 月 | 初期運用リミット |
 
 - 0 を設定すると「上限なし」になる場合があるため、**必ず正の値**を入れる
 - Cloudflare / Google 側の予算アラートも別途設定する
@@ -310,17 +302,29 @@ npx wrangler secret list
 
 ## 9. Step 7 — Production Worker デプロイ
 
+### 7.1 API Worker デプロイ実績 (Phase 7-6-2C)
+
 ```bash
 cd /home/park/projects/ai-math-tutor/server
 npx wrangler deploy
-
-# 確認
-curl -sS https://ai-math-tutor-api.g4pjo75.workers.dev/health
 ```
 
-期待: `{"ok":true,"version":"0.7.0",...}`
+- デプロイ Version ID: `5a44d9ab-07b1-465c-acaf-7582074b0540`
+- 確認:
+  ```bash
+  curl -sS https://ai-math-tutor-api.g4pjo75.workers.dev/health
+  # {"ok":true,"version":"0.7.0","env":{"gemini_configured":true,"stripe_configured":true,"stripe_webhook_configured":true,"email_configured":true,"portal_configured":true,"budget_configured":true}}
+  ```
 
-サイト側（GitHub Pages）は `main` push で自動反映済み。反映漏れがあれば Actions / Pages を確認。
+### 7.2 サイト Worker デプロイ実績 (Phase 7-6-2C)
+
+```bash
+npm run deploy:site:prod
+```
+
+- デプロイ Version ID: `c00c8a91-14c3-4eab-86c4-a43b0ec0391d`
+- カスタムドメイン: `https://gakushulab.com/` (HTTP/2 200, `x-robots-tag: noindex, nofollow`)
+- サイト側（GitHub Pages: `https://g4pjo75-gif.github.io/ai-math-tutor/`）も `main` push で自動反映。
 
 ---
 
