@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { classifyMigrations } from './migration-status.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverDir = path.resolve(__dirname, '..');
@@ -310,13 +311,13 @@ async function main() {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe']
         });
-        if (/No migrations to apply/i.test(stdout) || /No migrations found/i.test(stdout)) {
+        const status = classifyMigrations(stdout);
+        if (status === 'none-pending') {
           report('PASS', 8, 'No pending D1 migrations');
-        } else if (/pending|unapplied/i.test(stdout)) {
+        } else if (status === 'pending') {
           report('FAIL', 8, 'Pending D1 migrations exist');
         } else {
-          // If migrations list output has table with migrations
-          report('PASS', 8, 'D1 migrations verified');
+          report('WARN', 8, 'D1 migrations status unknown (manual review required)');
         }
       } catch (e) {
         report('WARN', 8, 'wrangler d1 migrations list check failed (auth/network warning)');
