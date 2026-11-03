@@ -1,4 +1,4 @@
-// server/scripts/new-license.mjs — 수동 라이선스 발급 (7-4에서 Stripe webhook으로 대체)
+// server/scripts/new-license.mjs — 수동 라이선스 발급 (7-4에서 Stripe webhook으로 대체, 7-6-0 staging 옵션 추가)
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,10 +11,13 @@ function arg(name, fallback = null) {
 }
 
 const local = process.argv.includes('--local');
+const staging = process.argv.includes('--staging');
 const email = arg('email');
 const plan = arg('plan', 'monthly');
 const limit = Number(arg('limit', '300'));
 const days = Number(arg('days', '30'));
+const config = arg('config', staging ? 'wrangler.staging.jsonc' : null);
+const dbName = arg('db', staging ? 'ai-math-tutor-db-staging' : 'ai-math-tutor-db');
 
 const key = generateLicenseKey();
 const keyHash = await hashKey(key);
@@ -30,12 +33,17 @@ const dir = mkdtempSync(join(tmpdir(), 'license-'));
 const file = join(dir, 'insert.sql');
 writeFileSync(file, sql, 'utf8');
 
-const args = ['wrangler', 'd1', 'execute', 'ai-math-tutor-db', '--file', file];
+const args = ['wrangler', 'd1', 'execute', dbName, '--file', file];
+if (config) {
+  args.push('--config', config);
+}
 args.push(local ? '--local' : '--remote');
 if (!local) args.push('-y');
+
+console.log(`[Target DB] ${dbName} (${local ? 'local' : 'remote'}${config ? `, config: ${config}` : ''})`);
 execFileSync('npx', args, { stdio: 'inherit' });
 
 console.log('\n==============================');
 console.log('LICENSE KEY (1회만 표시):', key);
 console.log('==============================');
-console.log({ id, plan, limit, email, periodEnd: new Date(periodEnd).toISOString() });
+console.log({ id, plan, limit, email, db: dbName, periodEnd: new Date(periodEnd).toISOString() });
