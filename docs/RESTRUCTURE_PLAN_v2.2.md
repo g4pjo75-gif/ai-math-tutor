@@ -10136,8 +10136,8 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
   - `tests/config.test.js` +4 → **L1 60 / npm 96**
   - staging smoke 수동 체크리스트
   - action count math 46 / english 47 유지
-- 7-6-2 (7-6-2A, 7-6-2B-1A 및 7-6-2B-1B Tailwind self-host 코드 완료):
-  - email/recovery(active/past_due/canceled/rate-limit), device unlink, budget guard, recovery_log cleanup 서버 테스트 추가 (+21) → **server 56 pass**
+- 7-6-2 (7-6-2A, 7-6-2B-1A, 7-6-2B-1B, 7-6-2B-1C 코드 완료):
+  - email/recovery, device unlink, budget guard, recovery_log cleanup, refund webhook 서버 테스트 추가 (+24) → **server 59 pass**
   - budget_exceeded 에러 분류 테스트 추가 (+1) → **L1 61 pass**
   - recover 페이지 e2e (+2) 및 local Tailwind CSS e2e (+2) 추가 → **L2 40 pass**
   - workspace 전체: **npm test 101 pass** (L1 61 + L2 40)
@@ -10145,6 +10145,8 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
   - CSP `script-src`에서 `https://cdn.tailwindcss.com` 완전 제거
   - SW 캐시 갱신: `amt-cache-v4.0`, `aet-cache-v3.0` (`shared/tailwind.css` 프리캐시)
   - recovery_log 보존 정책: 7일 초과된 오래된 행은 `/v1/recover` 처리 시 자동 cleanup
+  - Stripe 환불 자동화: `charge.refunded` 수신 시 `licenses.status`를 `refunded`로 자동 갱신 (`/v1/solve` 호출 시 402 `license_refunded`)
+  - 배포 사전 점검: `server/scripts/preflight.mjs` 구현 (`npm run preflight:staging`, `npm run preflight:prod`)
   - 7-6-2B 진입 전 체크리스트:
     - Production D1 migration 0005 적용 (`npx wrangler d1 migrations apply ai-math-tutor-db --remote`)
     - Resend API Key 주입 (`RESEND_API_KEY`) 및 `MAIL_FROM` 도메인 검증
@@ -10286,7 +10288,7 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
 - [x] L1/L2/L3 통과
 - [x] 회귀 12 시나리오
 
-**Phase 7 (Phase 7-0 ~ Phase 7-6-2A / 7-6-2B-1A / 7-6-2B-1B 코드 구현 완료)**
+**Phase 7 (Phase 7-0 ~ Phase 7-6-2A / 7-6-2B-1A / 7-6-2B-1B / 7-6-2B-1C 코드 구현 완료)**
 - [x] 서버 프록시 설계 및 구현 (Cloudflare Workers, `server/src/solve.js`)
 - [x] 키 노출 제거 및 BYOK / License 듀얼 모드 (`core/transport.js`, `shared/license.js`)
 - [x] 쿼터/캐시/레이트리밋/비용 추적/예산 가드 (`server/src/budget.js`, `pricing.js`)
@@ -10296,7 +10298,9 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
 - [x] Resend 이메일 발송 (`server/src/email.js`) 및 recovery_log 7일 자동 정리
 - [x] 에러 분류기 및 UI 고도화 (`core/errors.js`, `shared/api-error-ui.js`)
 - [x] Tailwind Play CDN 완전 제거 및 local 빌드/CSP 강화 (`shared/tailwind.css`, `tailwind.config.cjs`)
-- [x] 기기 언링크 운영 절차 수립 (`docs/SUPPORT.md`)
+- [x] Stripe 환불(charge.refunded) 자동 정지 및 dispute 처리 (`server/src/stripe.js`)
+- [x] 배포 사전 정합성 검사 스크립트 구현 (`server/scripts/preflight.mjs`)
+- [x] 기기 언링크 및 환불/차지백 운영 절차 수립 (`docs/SUPPORT.md`, `docs/OPERATOR_SETUP.md`, `docs/OPS.md`)
 - [x] 아키텍처 v2.2 현행화 (`docs/ARCHITECTURE.md`)
 - [ ] [운영자] Production Resend API Key 주입 (`RESEND_API_KEY`) 및 발신 도메인 검증 (7-6-2B-2)
 - [ ] [운영자] Production D1 0005 마이그레이션 적용 (7-6-2B-2)
