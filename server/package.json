@@ -7,6 +7,7 @@
     "deploy": "wrangler deploy",
     "deploy:staging": "wrangler deploy --config wrangler.staging.jsonc",
     "d1:migrate:staging": "wrangler d1 migrations apply ai-math-tutor-db-staging --remote --config wrangler.staging.jsonc",
+    "d1:backup:prod": "wrangler d1 export ai-math-tutor-db --remote --output backups/prod.sql",
     "d1:backup:staging": "wrangler d1 export ai-math-tutor-db-staging --remote --output backups/staging.sql --config wrangler.staging.jsonc",
     "test": "node --test test/*.test.js"
   },
