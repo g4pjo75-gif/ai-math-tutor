@@ -3,6 +3,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.cjs -i shared/tailwind.input.css -o shared/tailwind.css --minify",
     "test": "npm run test:l1 && npm run test:l2",
     "test:l1": "node --test tests/*.test.js",
     "test:l2": "playwright test",
@@ -11,6 +12,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
+    "tailwindcss": "^3.4.19",
     "wrangler": "^4.156.2"
   }
 }
