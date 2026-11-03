@@ -8,6 +8,7 @@ import {
   fetchLicenseInfo,
   createPortalSession
 } from '../core/index.js';
+import { getApiBase } from './config.js';
 
 export const LICENSE_KEY = 'license_key';
 export const LICENSE_DEVICE_ID = 'license_device_id';
@@ -30,6 +31,7 @@ export function applyStoredLicense(storage) {
   if (!storage) {
     rebindRequired = false;
     resetTransport();
+    configureTransport({ baseUrl: getApiBase() });
     return false;
   }
 
@@ -38,6 +40,7 @@ export function applyStoredLicense(storage) {
   if (!key) {
     rebindRequired = false;
     resetTransport();
+    configureTransport({ baseUrl: getApiBase() });
     return false;
   }
 
@@ -45,6 +48,7 @@ export function applyStoredLicense(storage) {
   const boundDeviceId = storage.getItem(LICENSE_DEVICE_ID);
 
   configureTransport({
+    baseUrl: getApiBase(),
     mode: 'license',
     licenseKey: key,
     deviceId: currentDeviceId
@@ -69,7 +73,7 @@ export async function registerLicense(storage, rawKey) {
   }
 
   const deviceId = getOrCreateDeviceId(storage, DEVICE_ID);
-  const res = await redeemLicense({ licenseKey: key, deviceId });
+  const res = await redeemLicense({ licenseKey: key, deviceId, baseUrl: getApiBase() });
 
   if (storage) {
     storage.setItem(LICENSE_KEY, key);
@@ -77,6 +81,7 @@ export async function registerLicense(storage, rawKey) {
   }
 
   configureTransport({
+    baseUrl: getApiBase(),
     mode: 'license',
     licenseKey: key,
     deviceId
@@ -93,13 +98,14 @@ export function clearLicense(storage) {
   }
   rebindRequired = false;
   resetTransport();
+  configureTransport({ baseUrl: getApiBase() });
 }
 
 export async function refreshLicenseInfo() {
   if (rebindRequired || !isLicenseMode()) {
     return null;
   }
-  return fetchLicenseInfo();
+  return fetchLicenseInfo({ baseUrl: getApiBase() });
 }
 
 export async function openLicensePortal() {
@@ -109,5 +115,5 @@ export async function openLicensePortal() {
     err.status = 0;
     throw err;
   }
-  return createPortalSession();
+  return createPortalSession({ baseUrl: getApiBase() });
 }

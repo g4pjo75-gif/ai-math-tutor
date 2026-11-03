@@ -41,9 +41,10 @@
         <li>いつでも解約可能</li>
       </ul>
       <button class="cta" id="subscribeBtn" type="button">サブスクをはじめる</button>
+      <script src="./config.js"></script>
       <script>
       (function () {
-        var API = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+        var API = window.API_BASE;
         var btn = document.getElementById('subscribeBtn');
         btn.addEventListener('click', function () {
           btn.disabled = true;
