@@ -96,7 +96,17 @@ export default {
                    request.headers.get('x-forwarded-for') ||
                    'unknown';
         const ipHash = await sha256Hex(ip);
-        const oneHourAgo = Date.now() - 3600000;
+        const now = Date.now();
+        const oneHourAgo = now - 3600000;
+        const cleanupCutoff = now - 7 * 24 * 60 * 60 * 1000;
+
+        try {
+          await env.DB.prepare(
+            'DELETE FROM recovery_log WHERE created_at < ?'
+          ).bind(cleanupCutoff).run();
+        } catch (e) {
+          // cleanup failure should not block recovery
+        }
 
         // 1) IP 기준: 시간당 10회
         const recentIp = await env.DB.prepare(

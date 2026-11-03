@@ -41,6 +41,11 @@ function createMockDb() {
           return null;
         },
         run: async () => {
+          if (query.includes('DELETE FROM recovery_log WHERE created_at < ?')) {
+            const [cutoff] = args;
+            state.recovery_log = state.recovery_log.filter((r) => r.created_at >= cutoff);
+            return { meta: { changes: 1 } };
+          }
           if (query.includes('INSERT INTO recovery_log')) {
             const [id, email_hash, ip_hash, created_at] = args;
             state.recovery_log.push({ id, email_hash, ip_hash, created_at });
@@ -302,4 +307,35 @@ test('recover rate limit: 동일 email + 동일 IP 시간당 3회 초과 시 429
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 429);
   assert.equal((await res.json()).error, 'rate_limited');
+});
+
+test('recover: 7일 초과된 recovery_log 항목은 자동 정리(cleanup)된다', async () => {
+  const db = createMockDb();
+  const env = {
+    LICENSE_SECRET: 'whsec_test_secret_123',
+    RESEND_API_KEY: 're_test_key',
+    DB: db
+  };
+
+  const now = Date.now();
+  const eightDaysAgo = now - 8 * 24 * 60 * 60 * 1000;
+  const twoDaysAgo = now - 2 * 24 * 60 * 60 * 1000;
+
+  db.state.recovery_log.push(
+    { id: 'old_1', email_hash: 'h1', ip_hash: 'ip1', created_at: eightDaysAgo },
+    { id: 'recent_1', email_hash: 'h2', ip_hash: 'ip2', created_at: twoDaysAgo }
+  );
+
+  const req = new Request('https://api.test/v1/recover', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'test@example.com' })
+  });
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 200);
+
+  // 8일 전 로그는 삭제되고, 2일 전 로그와 방금 추가된 로그만 남아있어야 함
+  assert.equal(db.state.recovery_log.some((r) => r.id === 'old_1'), false);
+  assert.equal(db.state.recovery_log.some((r) => r.id === 'recent_1'), true);
 });

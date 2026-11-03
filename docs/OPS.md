@@ -117,3 +117,10 @@ npx wrangler rollback [DEPLOYMENT_ID]
 ### 静的サイトのロールバック
 - Staging: 前回のコミットから `npx wrangler deploy` を再実行。
 - Production: GitHub Pages の `main` ブランチを前回安定タグ/コミットに戻して push。
+
+## 7. ログ保持ポリシー (Log Retention)
+
+### recovery_log 保持期間
+- ライセンス復旧のレートリミット（1時間あたりIP 10回 / Email+IP 3回）の判定に使用する `recovery_log` テーブルは、プライバシー保護およびDBサイズ抑制のため、**保持期間を7日間**としています。
+- `/v1/recover` リクエスト処理時に 7日（`Date.now() - 7 * 24 * 60 * 60 * 1000`）を超過したレコードは自動削除（cleanup）されます。
+- メールアドレスやキーの生データは記録せず、SHA-256ハッシュのみを保持します。
