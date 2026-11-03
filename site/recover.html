@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>ライセンスキー再送 | AI家庭教師</title>
+<link rel="stylesheet" href="./style.css">
+<style>
+.input-group { margin: 16px 0; }
+.input-text {
+  width: 100%; max-width: 420px; padding: 12px 14px; font-size: 16px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg);
+}
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a class="brand" href="./"><span class="logo">🎓</span>AI家庭教師</a>
+    <nav class="site">
+      <a href="./pricing.html">料金</a>
+      <a href="./portal.html">契約管理</a>
+    </nav>
+  </header>
+
+  <h1>ライセンスキーの再送</h1>
+  <p class="lead">ご購入時にご登録いただいたメールアドレスを入力してください。ライセンスキーをご案内するメールをお送りします。</p>
+
+  <div class="card">
+    <form id="recoverForm">
+      <div class="input-group">
+        <label for="emailInput" style="display:block; font-weight:700; margin-bottom:6px;">メールアドレス</label>
+        <input class="input-text" type="email" id="emailInput" name="email" required placeholder="name@example.com" autocomplete="email">
+      </div>
+      <button class="cta" id="submitBtn" type="submit" style="border:none; cursor:pointer;">メールを送信する</button>
+    </form>
+    <div id="statusMessage" class="notice hidden" style="margin-top:16px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>届かない場合</h2>
+    <ul class="muted" style="padding-left:20px; margin:8px 0;">
+      <li>迷惑メールフォルダやゴミ箱に振り分けられていないかご確認ください。</li>
+      <li>Stripe決済時に指定したメールアドレスと一致しているかご確認ください。</li>
+      <li>手動で発行されたライセンス（銀行振込・テストキー等）はメール自動再送の対象外です。サポートまでお問い合わせください。</li>
+    </ul>
+  </div>
+
+  <footer class="site">
+    <a href="./pricing.html">料金</a>
+    <a href="./portal.html">契約管理</a>
+    <a href="./legal.html">特定商取引法・利用規約・プライバシー</a>
+    <p>© 2026 AI家庭教師</p>
+  </footer>
+</div>
+
+<script src="./config.js"></script>
+<script>
+(function () {
+  var API = window.API_BASE;
+  var form = document.getElementById('recoverForm');
+  var emailInput = document.getElementById('emailInput');
+  var submitBtn = document.getElementById('submitBtn');
+  var statusMessage = document.getElementById('statusMessage');
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = emailInput.value.trim();
+    if (!email) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = '送信中…';
+    statusMessage.classList.add('hidden');
+    statusMessage.textContent = '';
+
+    fetch(API + '/v1/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    })
+      .then(function (res) {
+        return res.json().then(function (body) {
+          return { status: res.status, body: body };
+        });
+      })
+      .then(function (r) {
+        statusMessage.classList.remove('hidden');
+        if (r.status === 429) {
+          statusMessage.textContent = 'リクエストが多すぎます。時間をおいてから再度お試しください。';
+        } else {
+          // 항상 동일한 성공 메시지 표시 (이메일 열거 방지)
+          statusMessage.textContent = 'メールを送信しました。登録のあるメールアドレスの場合、数分以内にライセンスキーが届きます。';
+          form.reset();
+        }
+      })
+      .catch(function () {
+        statusMessage.classList.remove('hidden');
+        // 네트워크 실패 시에도 generic 문구 표시
+        statusMessage.textContent = 'メールを送信しました。登録のあるメールアドレスの場合、数分以内にライセンスキーが届きます。';
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'メールを送信する';
+      });
+  });
+})();
+</script>
+</body>
+</html>
