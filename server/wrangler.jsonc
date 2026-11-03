@@ -16,6 +16,7 @@
     "PORTAL_RETURN_URL": "https://g4pjo75-gif.github.io/ai-math-tutor/site/portal.html",
     "PLAN_PRICE_JPY": "980",
     "PLAN_NAME": "AI家庭教師 スタンダード"
+    // Production budget & verified email settings to be configured in 7-6-2B upon operator input
   },
   "d1_databases": [
     {
