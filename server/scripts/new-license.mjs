@@ -2,8 +2,11 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { generateLicenseKey, hashKey } from '../src/license.js';
+
+const serverDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf('--' + name);
@@ -41,7 +44,7 @@ args.push(local ? '--local' : '--remote');
 if (!local) args.push('-y');
 
 console.log(`[Target DB] ${dbName} (${local ? 'local' : 'remote'}${config ? `, config: ${config}` : ''})`);
-execFileSync('npx', args, { stdio: 'inherit' });
+execFileSync('npx', args, { cwd: serverDir, stdio: 'inherit' });
 
 console.log('\n==============================');
 console.log('LICENSE KEY (1회만 표시):', key);
