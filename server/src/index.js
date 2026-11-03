@@ -98,11 +98,19 @@ export default {
         const ipHash = await sha256Hex(ip);
         const oneHourAgo = Date.now() - 3600000;
 
-        const recent = await env.DB.prepare(
-          'SELECT COUNT(*) AS n FROM recovery_log WHERE (email_hash = ? OR ip_hash = ?) AND created_at > ?'
-        ).bind(emailHash, ipHash, oneHourAgo).first();
+        // 1) IP 기준: 시간당 10회
+        const recentIp = await env.DB.prepare(
+          'SELECT COUNT(*) AS n FROM recovery_log WHERE ip_hash = ? AND created_at > ?'
+        ).bind(ipHash, oneHourAgo).first();
+        if (recentIp && recentIp.n >= 10) {
+          return json({ ok: false, error: 'rate_limited' }, 429, cors);
+        }
 
-        if (recent && recent.n >= 3) {
+        // 2) 동일 email + 동일 IP 기준: 시간당 3회
+        const recentEmailIp = await env.DB.prepare(
+          'SELECT COUNT(*) AS n FROM recovery_log WHERE email_hash = ? AND ip_hash = ? AND created_at > ?'
+        ).bind(emailHash, ipHash, oneHourAgo).first();
+        if (recentEmailIp && recentEmailIp.n >= 3) {
           return json({ ok: false, error: 'rate_limited' }, 429, cors);
         }
 
