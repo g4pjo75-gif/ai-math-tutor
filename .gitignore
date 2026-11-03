@@ -11,4 +11,6 @@ blob-report/
 server/node_modules/
 server/.wrangler/
 server/.dev.vars
+server/backups/
+backups/
 
