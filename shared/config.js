@@ -5,8 +5,7 @@ export const STAGING_API_BASE = 'https://ai-math-tutor-api-staging.g4pjo75.worke
 const STAGING_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
-  'staging-site-host',
-  '<staging-site-host>'
+  'ai-math-tutor-staging.g4pjo75.workers.dev'
 ]);
 
 export function resolveApiBase(hostname) {

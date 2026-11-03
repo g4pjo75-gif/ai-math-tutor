@@ -17,8 +17,7 @@ test('resolveApiBase: 127.0.0.1 maps to staging', async () => {
 
 test('resolveApiBase: staging hosts and pages.dev map to staging', async () => {
   const { resolveApiBase, STAGING_API_BASE } = await load();
-  assert.equal(resolveApiBase('staging-site-host'), STAGING_API_BASE);
-  assert.equal(resolveApiBase('<staging-site-host>'), STAGING_API_BASE);
+  assert.equal(resolveApiBase('ai-math-tutor-staging.g4pjo75.workers.dev'), STAGING_API_BASE);
   assert.equal(resolveApiBase('preview.ai-math-tutor.pages.dev'), STAGING_API_BASE);
   assert.equal(resolveApiBase('my-branch.pages.dev'), STAGING_API_BASE);
 });

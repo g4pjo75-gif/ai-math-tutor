@@ -6,8 +6,7 @@
   var STAGING_HOSTS = {
     'localhost': true,
     '127.0.0.1': true,
-    'staging-site-host': true,
-    '<staging-site-host>': true
+    'ai-math-tutor-staging.g4pjo75.workers.dev': true
   };
 
   function resolveApiBase(hostname) {

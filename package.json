@@ -6,9 +6,11 @@
     "test": "npm run test:l1 && npm run test:l2",
     "test:l1": "node --test tests/*.test.js",
     "test:l2": "playwright test",
-    "serve": "python3 -m http.server 8765 --bind 127.0.0.1"
+    "serve": "python3 -m http.server 8765 --bind 127.0.0.1",
+    "deploy:site:staging": "wrangler deploy"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1"
+    "@playwright/test": "^1.64.1",
+    "wrangler": "^4.156.2"
   }
 }

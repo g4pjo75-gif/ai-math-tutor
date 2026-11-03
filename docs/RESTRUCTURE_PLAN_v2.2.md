@@ -9905,15 +9905,15 @@ DoD:
   "compatibility_date": "2026-10-30",
   "observability": { "enabled": true },
   "vars": {
-    "ALLOWED_ORIGINS": "http://localhost:8765,http://127.0.0.1:8765,https://<staging-site>",
+    "ALLOWED_ORIGINS": "http://localhost:8765,http://127.0.0.1:8765,https://ai-math-tutor-staging.g4pjo75.workers.dev",
     "MODEL": "gemini-3.8-flash",
     "THINKING_LEVEL": "low",
     "RATE_LIMIT_PER_MIN": "4",
     "USD_JPY": "150",
     "PLAN_LIMIT": "30",
-    "CHECKOUT_SUCCESS_URL": "https://<staging-site>/site/thanks.html?session_id={CHECKOUT_SESSION_ID}",
-    "CHECKOUT_CANCEL_URL": "https://<staging-site>/site/pricing.html",
-    "PORTAL_RETURN_URL": "https://<staging-site>/site/portal.html",
+    "CHECKOUT_SUCCESS_URL": "https://ai-math-tutor-staging.g4pjo75.workers.dev/site/thanks.html?session_id={CHECKOUT_SESSION_ID}",
+    "CHECKOUT_CANCEL_URL": "https://ai-math-tutor-staging.g4pjo75.workers.dev/site/pricing.html",
+    "PORTAL_RETURN_URL": "https://ai-math-tutor-staging.g4pjo75.workers.dev/site/portal.html",
     "PLAN_PRICE_JPY": "980",
     "PLAN_NAME": "AI家庭教師 スタンダード (Staging)"
   },
@@ -9921,7 +9921,7 @@ DoD:
     {
       "binding": "DB",
       "database_name": "ai-math-tutor-db-staging",
-      "database_id": "<wrangler d1 create 결과>"
+      "database_id": "8779ddcd-4d3a-4c7c-9a90-1b6c9f41c0c0"
     }
   ]
 }
@@ -9987,7 +9987,7 @@ export const STAGING_API_BASE = 'https://ai-math-tutor-api-staging.g4pjo75.worke
 const STAGING_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
-  '<staging-site-host>'
+  'ai-math-tutor-staging.g4pjo75.workers.dev'
 ]);
 
 export function resolveApiBase(hostname) {
