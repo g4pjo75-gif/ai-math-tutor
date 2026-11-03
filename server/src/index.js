@@ -13,7 +13,7 @@ import { deriveLicenseKey, handleStripeWebhook } from './stripe.js';
 import { createCheckoutSession, createPortalSession, findLicenseByRequest } from './billing.js';
 import { sendRecoveryEmail } from './email.js';
 
-const VERSION = '0.6.1';
+const VERSION = '0.7.0';
 const MAX_JSON_BYTES = 8 * 1024;
 const MAX_SOLVE_BYTES = 8 * 1024 * 1024;
 
@@ -125,7 +125,10 @@ export default {
         if (row && row.stripe_session_id && env.LICENSE_SECRET) {
           try {
             const key = await deriveLicenseKey(env.LICENSE_SECRET, row.stripe_session_id);
-            await sendRecoveryEmail(env, { to: email, key, sessionId: row.stripe_session_id });
+            const mail = await sendRecoveryEmail(env, { to: email, key, sessionId: row.stripe_session_id });
+            if (!mail.ok) {
+              console.error('sendRecoveryEmail failed:', mail.error);
+            }
           } catch (e) {
             console.error('sendRecoveryEmail failed:', e.message);
           }
