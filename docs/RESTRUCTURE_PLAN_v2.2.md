@@ -9832,6 +9832,349 @@ DoD:
 
 ---
 
+### 4.23 Phase 7-6 (Staging 환경 · 샌드박스 E2E · 운영 · 소프트 런칭)
+
+**배경**: 7-5-C까지 클라이언트/서버 코드와 로컬 stub 테스트는 완료됐다.
+하지만 운영 Worker는 아직 `0.6.0`이고, 저장소는 `0.6.1`이며, 별도 staging 환경이 없다.
+또한 실제 판매 전에 라이선스 키 전달·복구, 법률/지원, 라이브 Stripe, 도메인,
+예산 가드, D1 백업이 남아 있다.
+
+**확인된 현재 상태**
+
+- 운영 `/health`: `version: 0.6.0` (저장소: `0.6.1`)
+- git branch: `main`만 존재, staging workflow/URL 없음
+- Worker 1개, D1 1개, 모든 URL이 운영 URL에 결합
+- 이메일 발송 구현 없음. `site/thanks.html`은 메일 링크를 안내하지만 실제 발송 없음
+- `site/legal.html` 판매자명·주소·연락처가 placeholder
+- `devices` 테이블은 있으나 기기 해제 API/CLI 없음
+- 7-5-C 게이트: L1 56 / L2 36 / server 35
+
+**범위**: 아래 4단계로 나눈다. 이 중 **7-6-0만 먼저** 진행한다.
+
+```text
+7-6-0 Staging 환경 분리
+7-6-1 Staging 샌드박스 E2E
+7-6-2 출시 전 blocker
+7-6-3 소프트 런칭
+```
+
+#### 4.23.1 환경 분리 원칙
+
+| 항목 | Local | Staging | Production |
+|---|---|---|---|
+| Site | `localhost:8765` | staging preview URL | 실제 사이트 |
+| API | local Worker/stub | `ai-math-tutor-api-staging` | `ai-math-tutor-api` |
+| D1 | local D1 | staging D1 | prod D1 |
+| Stripe | stub/test | **test mode** | **live mode** |
+| `LICENSE_SECRET` | local 전용 | staging 전용 | prod 전용 |
+| Gemini key | stub/low budget | staging 전용 | prod 전용 |
+| Email | 비활성 | test/비활성 | 실제 발송 |
+
+원칙:
+
+1. **staging과 production은 Worker·D1·Stripe·`LICENSE_SECRET`을 공유하지 않는다.**
+2. staging 테스트 라이선스/기기/usage가 production D1에 들어가면 안 된다.
+3. production 사이트를 staging 사이트로 겸용하지 않는다.
+4. staging은 `noindex` 또는 Cloudflare Access로 보호한다.
+5. staging Gemini 호출은 low quota/staging key로 제한한다.
+6. secret 값은 채팅·로그·스크린샷·커밋에 남기지 않는다.
+
+#### 4.23.2 7-6-0 Staging 환경 구성
+
+**신규/수정 파일**
+
+- `server/wrangler.staging.jsonc` 신규
+- `server/package.json` staging scripts 추가
+- `server/scripts/new-license.mjs` staging DB/config 옵션 추가
+- `shared/config.js` 신규 — hostname 기반 API base 결정
+- `site/config.js` 신규 — `pricing.html` / `thanks.html` / `portal.html` 공통 API base
+- `shared/license.js` — `getApiBase()` 사용
+- `math/index.html`, `english/index.html` — CSP에 staging API 추가
+- `site/pricing.html`, `site/thanks.html`, `site/portal.html` — `site/config.js` 사용
+- `math/sw.js`, `english/sw.js` — `../shared/config.js` 프리캐시 + 캐시 bump
+- `tests/config.test.js` 신규
+
+**Staging Worker**
+
+`server/wrangler.staging.jsonc` 예:
+
+```jsonc
+{
+  "name": "ai-math-tutor-api-staging",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-30",
+  "observability": { "enabled": true },
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8765,http://127.0.0.1:8765,https://<staging-site>",
+    "MODEL": "gemini-3.8-flash",
+    "THINKING_LEVEL": "low",
+    "RATE_LIMIT_PER_MIN": "4",
+    "USD_JPY": "150",
+    "PLAN_LIMIT": "30",
+    "CHECKOUT_SUCCESS_URL": "https://<staging-site>/site/thanks.html?session_id={CHECKOUT_SESSION_ID}",
+    "CHECKOUT_CANCEL_URL": "https://<staging-site>/site/pricing.html",
+    "PORTAL_RETURN_URL": "https://<staging-site>/site/portal.html",
+    "PLAN_PRICE_JPY": "980",
+    "PLAN_NAME": "AI家庭教師 スタンダード (Staging)"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-math-tutor-db-staging",
+      "database_id": "<wrangler d1 create 결과>"
+    }
+  ]
+}
+```
+
+**D1**
+
+```bash
+cd server
+npx wrangler d1 create ai-math-tutor-db-staging
+# 출력된 database_id를 wrangler.staging.jsonc에 반영
+
+npx wrangler d1 migrations list ai-math-tutor-db-staging --remote --config wrangler.staging.jsonc
+npx wrangler d1 migrations apply ai-math-tutor-db-staging --remote --config wrangler.staging.jsonc
+```
+
+- 운영 D1에는 절대 실행하지 않는다.
+- migration 전후로 staging D1 export를 남긴다.
+- `0001~0004`가 이미 적용됐는지 먼저 확인한다.
+
+**Secrets**
+
+```bash
+cd server
+npx wrangler secret put GEMINI_API_KEY --config wrangler.staging.jsonc
+npx wrangler secret put STRIPE_SECRET_KEY --config wrangler.staging.jsonc
+npx wrangler secret put STRIPE_WEBHOOK_SECRET --config wrangler.staging.jsonc
+npx wrangler secret put LICENSE_SECRET --config wrangler.staging.jsonc
+```
+
+- `STRIPE_SECRET_KEY`는 **test mode** (`sk_test_...`)
+- `STRIPE_WEBHOOK_SECRET`는 staging webhook의 test secret
+- `LICENSE_SECRET`은 prod와 다른 값
+- `GEMINI_API_KEY`는 staging 전용 또는 low-budget key
+- secret 값을 출력/복사해 채팅에 남기지 않는다
+
+**Stripe test webhook**
+
+- Endpoint: `https://ai-math-tutor-api-staging.g4pjo75.workers.dev/webhook/stripe`
+- 이벤트:
+  - `checkout.session.completed`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `invoice.payment_failed`
+- `CHECKOUT_*` / `PORTAL_RETURN_URL`은 staging site URL
+- Stripe Customer Portal test 설정 확인
+
+**Staging site**
+
+권장:
+- Cloudflare Pages preview (staging branch) 또는 별도 staging repo/Pages
+- `noindex` 또는 Cloudflare Access
+- 로컬 `localhost:8765`는 UI/API smoke용. Stripe Checkout redirect는 public staging URL 사용
+
+**환경별 API base**
+
+`shared/config.js`:
+
+```js
+export const PROD_API_BASE = 'https://ai-math-tutor-api.g4pjo75.workers.dev';
+export const STAGING_API_BASE = 'https://ai-math-tutor-api-staging.g4pjo75.workers.dev';
+
+const STAGING_HOSTS = new Set([
+  'localhost',
+  '127.0.0.1',
+  '<staging-site-host>'
+]);
+
+export function resolveApiBase(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  return (STAGING_HOSTS.has(h) || h.endsWith('.pages.dev'))
+    ? STAGING_API_BASE
+    : PROD_API_BASE;
+}
+
+export function getApiBase() {
+  return resolveApiBase(globalThis.location?.hostname || '');
+}
+```
+
+- `shared/license.js`:
+  - `applyStoredLicense`: `configureTransport({ baseUrl: getApiBase(), ... })`
+  - `registerLicense`: `redeemLicense({ ..., baseUrl: getApiBase() })`, 성공 후 `configureTransport({ baseUrl: getApiBase(), ... })`
+  - 키 없음: `resetTransport()` 후 `configureTransport({ baseUrl: getApiBase() })`
+- `site/config.js`:
+  - `pricing.html` / `thanks.html` / `portal.html`의 하드코딩 `var API = ...`를 `window.API_BASE`로 교체
+  - 각 페이지에서 `site/config.js`를 먼저 로드
+- CSP:
+  - 두 앱의 `connect-src`에 staging API origin 추가
+  - production 배포 시에도 staging origin이 남아도 되지만, 가능하면 환경별 HTML로 분리한다.
+- SW:
+  - `math/sw.js`: `amt-cache-v3.9`, `'../shared/config.js'`
+  - `english/sw.js`: `aet-cache-v2.9`, `'../shared/config.js'`
+
+**테스트 라이선스 발급 스크립트**
+
+`server/scripts/new-license.mjs`에 아래 옵션 추가:
+
+- `--db <name>` (기본 `ai-math-tutor-db`)
+- `--config <path>` (예: `wrangler.staging.jsonc`)
+- `--staging` shortcut (선택)
+
+예:
+
+```bash
+node scripts/new-license.mjs --local --email test@example.com --plan test --limit 10 --days 7
+node scripts/new-license.mjs --remote --staging --email test@example.com --plan test --limit 10 --days 7
+```
+
+- staging DB에만 들어가도록 `--staging`/`--db`/`--config`를 검증
+- `--remote`는 절대 운영 DB를 기본값으로 오인하지 않도록 출력에 DB 이름을 표시
+
+**7-6-0 smoke**
+
+- `GET <staging-api>/health` → `ok:true`, staging version
+- staging D1에 테스트 라이선스 1개 발급
+- 앱(로컬 또는 staging site)에서 라이선스 저장 → `/v1/redeem` 성공
+- staging `/v1/solve` 1회 성공 (실호출 1회 허용 또는 test-mode stub)
+- `/v1/me` 잔여 횟수 표시
+- 잘못된 device ID로 `403 device_not_bound` CTA
+- staging Stripe test checkout → thanks URL → key 표시
+- staging portal 진입 (test mode)
+- production `/health`/D1에 변화 없음
+
+**7-6-0 게이트**
+
+- 기존 L1 56 / L2 36 / server 35 유지
+- `tests/config.test.js` 추가 시 **L1 60**, `npm test 96` 예상
+- `check-actions` math 46 / english 47 유지
+- `git diff --check` 통과
+- staging 테스트 데이터가 production에 없음
+- secret 노출 없음
+
+#### 4.23.3 7-6-1 Staging 샌드박스 E2E
+
+- Stripe test checkout → thanks → 라이선스 키
+- 앱에서 redeem → 기기 바인딩
+- 실제 `/v1/solve` 프록시 경유 확인
+- 잔여 횟수/모델 UI 숨김/재바인딩 배너 확인
+- 시크릿 모드에서 `device_not_bound` → 설정 CTA
+- 해지 상태에서 포털 진입
+- production 데이터가 변하지 않았는지 확인
+
+**실호출 정책**
+
+- full proxy 검증을 위해 staging에서 **1회** 실제 Gemini 호출을 허용한다.
+- 반복 테스트는 stub/test-mode를 사용한다.
+- 비용/usage 로그를 확인한다.
+
+#### 4.23.4 7-6-2 출시 전 blocker
+
+**A. 라이선스 키 이메일/복구**
+
+- `checkout.session.completed`에서 이메일 발송 (Resend/SES 등)
+- 최소: thanks URL을 메일로 발송
+- 복구: `POST /v1/recover` (email 기반, rate limit, 열거 방지)
+- `thanks.html` 문구와 실제 동작 일치
+- 발송 실패 로그/수동 재발송 절차
+
+**B. 법률·지원**
+
+- `site/legal.html`: 판매자명·주소·연락처·환불 조건 확정
+- 문의 채널/응답 템플릿
+- 개인정보 삭제 요청 절차
+- 기기 2대 제한 해제 요청 절차
+
+**C. 기기 해제**
+
+- 최소: 관리자 CLI `server/scripts/unlink-device.mjs` + runbook
+- 권장: 라이선스 소유자용 API/UI
+- `device_limit` 복구 절차 문서화
+
+**D. 도메인**
+
+- 라이브 Stripe 전에 커스텀 도메인 사용 여부 확정
+- 사용 시 `DEFAULT_API_BASE`, CSP, CORS, Stripe URL, 이메일 도메인, 사이트 링크를 모두 갱신
+- 변경 후 staging E2E 재실행
+
+**E. 예산 가드 / D1 백업**
+
+- `DAILY_COST_LIMIT_MICRO_YEN`, `MONTHLY_COST_LIMIT_MICRO_YEN`
+- `/v1/solve` 전 원가 합계 확인, 초과 시 503 `budget_exceeded`
+- 50/80/100% 알림
+- Cloudflare/Gemini 예산 알림
+- D1 export 백업 + 복구 절차
+- `LICENSE_SECRET` 불변 원칙, Stripe/Gemini 키 교체 런북
+
+**F. 라이브 Stripe**
+
+- 본인 확인·은행·세금 설정
+- live key/webhook/portal
+- 실제 카드 결제 → 환불 → 해지 확인
+- 영수증·세금·환불 정책
+
+**G. 무료 티어**
+
+- 출시는 **BYOK 무료만** 유지
+- 서버 체험 5회는 어뷰징 방지 설계 후 별도 단계
+
+#### 4.23.5 7-6-3 소프트 런칭
+
+- 소수 사용자(예: 10~20명) 공개
+- 지표: 결제 전환, 쿼터 소진율, 1인당 원가, 오류율, 해지율, 문의 부담
+- 가격/쿼터 조정
+- 롤백 기준/지원 절차
+- 안정화 후 공개 출시
+
+#### 4.23.6 테스트 / 게이트
+
+- 7-6-0:
+  - 기존 L1 56 / L2 36 / server 35 유지
+  - `tests/config.test.js` +4 → **L1 60 / npm 96**
+  - staging smoke 수동 체크리스트
+  - action count math 46 / english 47 유지
+- 7-6-2:
+  - email/recovery, device unlink, budget guard 서버 테스트 추가
+  - 최종 수치는 해당 단계에서 확정
+- 공통:
+  - `git diff --check`
+  - secret 노출 없음
+  - production 데이터 무변경
+  - 실제 Gemini 호출은 staging 1회 외 없음
+
+#### 4.23.7 DoD / 커밋
+
+**7-6-0 커밋**
+
+1. `docs: add phase 7-6 staging and launch spec`
+2. `feat(config): resolve api base per environment`
+3. `chore(staging): add worker and d1 configuration`
+4. `chore(staging): add deploy migration and license scripts`
+5. `test(config): cover api base resolution`
+6. `chore: bump sw caches and precache config`
+7. `docs: add staging smoke runbook`
+
+**7-6-2 이후**
+
+- `feat(server): send license email and recovery`
+- `feat(server): add device unlink admin path`
+- `feat(server): add budget guard and backup runbook`
+- `docs: finalize legal and support`
+- `chore: switch live stripe and domain`
+
+#### 4.23.8 백로그
+
+- Tailwind CDN self-host 또는 SRI (라이선스 키 보호)
+- 자동 재시도/백오프
+- 기기 해제 UI
+- 관리자 대시보드/지표
+- 화면별 문구 세밀 조정
+
+---
+
 ## 5. 리스크와 대응
 
 | 리스크 | 영향 | 대응 |
