@@ -124,3 +124,18 @@ npx wrangler rollback [DEPLOYMENT_ID]
 - ライセンス復旧のレートリミット（1時間あたりIP 10回 / Email+IP 3回）の判定に使用する `recovery_log` テーブルは、プライバシー保護およびDBサイズ抑制のため、**保持期間を7日間**としています。
 - `/v1/recover` リクエスト処理時に 7日（`Date.now() - 7 * 24 * 60 * 60 * 1000`）を超過したレコードは自動削除（cleanup）されます。
 - メールアドレスやキーの生データは記録せず、SHA-256ハッシュのみを保持します。
+
+## 8. Stripe 返金 Webhook とライセンス失効 (Refund Policy & Error Codes)
+
+### 返金 Webhook の動作 (`charge.refunded`)
+- **全額返金（`refunded === true`）**:
+  - Webhook 受信時、該当顧客（`stripe_customer_id`）の `licenses` テーブルを検索し、`status` を `'refunded'` に自動更新します。
+  - `status IN ('active', 'past_due', 'unpaid')` のレコードが更新対象となります。
+  - 失効後、ユーザーが `/v1/solve` API を呼び出すと、HTTP ステータス `402` とエラーコード `license_refunded` が返却され、AI利用が即座にブロックされます。
+- **部分返金（`refunded === false`）**:
+  - 一部返金時は自動停止を行わず、Webhook は `ignored: 'partial_or_no_customer'` を返して終了します（運営者判断による手動管理）。
+- **チャージバック（`charge.dispute.created`）**:
+  - 不審請求（異議申し立て）の発生時は自動停止を行わず、コンソールに警告ログを出力した上で `ignored: 'dispute_manual_review'` を返します。
+- **運用上の重要注意事項**:
+  - 返金 Webhook は D1 側のライセンス状態を無効化しますが、**Stripe の定期課金（Subscription）自体は自動キャンセルされません**。
+  - 返金実施後は、必ず Stripe ダッシュボード上で該当サブスクリプションを即時キャンセルしてください（詳細は `docs/SUPPORT.md` 参照）。
