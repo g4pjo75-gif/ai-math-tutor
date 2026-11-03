@@ -10137,10 +10137,15 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
   - staging smoke 수동 체크리스트
   - action count math 46 / english 47 유지
 - 7-6-2:
-  - email/recovery, device unlink, budget guard 서버 테스트 추가 (+15) → **server 50 pass**
+  - email/recovery(active/past_due/canceled/rate-limit), device unlink, budget guard 서버 테스트 추가 (+19) → **server 54 pass**
   - budget_exceeded 에러 분류 테스트 추가 (+1) → **L1 61 pass**
   - recover 페이지 e2e 테스트 추가 (+2) → **L2 38 pass**
   - workspace 전체: **npm test 99 pass**
+  - recovery_log 보존 정책: 오래된 행(7일 초과)은 주기적 cleanup 대상
+  - 7-6-2B 진입 전 체크리스트:
+    - Production D1 migration 0005 적용 (`npx wrangler d1 migrations apply ai-math-tutor-db --remote`)
+    - Resend API Key 주입 (`RESEND_API_KEY`) 및 `MAIL_FROM` 도메인 검증
+    - Production 예산 한도 및 실 지원 이메일 확정
 - 공통:
   - `git diff --check`
   - secret 노출 없음
