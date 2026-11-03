@@ -51,6 +51,9 @@ export function classifyApiError(err) {
   if (code === 'server_misconfigured') {
     return { ...base, kind: 'server' };
   }
+  if (code === 'budget_exceeded') {
+    return { ...base, kind: 'budget', retryable: false, actions: [] };
+  }
   if (status === 400 || status === 413 ||
       ['invalid_request', 'invalid_prompt', 'prompt_too_large', 'image_too_large',
        'invalid_image', 'invalid_schema', 'schema_too_large',

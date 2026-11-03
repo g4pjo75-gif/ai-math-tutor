@@ -31,6 +31,7 @@ const MESSAGES = {
   image_too_large: '画像が大きすぎます。別の画像でお試しください。',
   upstream_quota: 'AIの利用上限に達しました。時間をおいてお試しください。',
   upstream_error: 'AIの応答でエラーが発生しました。もう一度お試しください。',
+  budget_exceeded: 'システムの利用上限に達しました。管理者にお問い合わせください。',
   server_misconfigured: 'サーバー設定に問題があります。管理者にお問い合わせください。'
 };
 

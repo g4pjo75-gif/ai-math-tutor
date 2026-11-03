@@ -3,6 +3,7 @@ import { callGeminiModel } from '../../core/gemini.js';
 import { getUsage, periodOf, quotaSnapshot, sha256Hex } from './license.js';
 import { validateSolveBody } from './validate.js';
 import { costMicroYen, DEFAULT_MODEL } from './pricing.js';
+import { checkBudget } from './budget.js';
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30일
 
@@ -50,6 +51,12 @@ export async function solveProxy(env, license, rawBody) {
         quota: { used, limit, remaining: 0, period: periodOf() }
       }
     };
+  }
+
+  // 예산 가드 (일간/월간 시스템 원가 상한)
+  const budget = await checkBudget(env, now);
+  if (!budget.allowed) {
+    return { status: 503, body: { ok: false, error: 'budget_exceeded' } };
   }
 
   const model = env.MODEL || DEFAULT_MODEL;
