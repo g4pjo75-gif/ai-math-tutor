@@ -24,3 +24,5 @@ package-lock.json
 wrangler.jsonc
 playwright.config.js
 PROJECT_SPEC.md
+tailwind.config.cjs
+shared/tailwind.input.css

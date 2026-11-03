@@ -185,7 +185,8 @@
 
 ## 5. P1 — 販売後でもよい項目
 
-- [x] Tailwind CDN self-host / SRI
+- [x] Tailwind CDN self-host (shared/tailwind.css 自前ビルド)
+- [ ] KaTeX の self-host または SRI 適用 (現在 cdn.jsdelivr.net 依存)
 - [ ] デバイス解除 UI
 - [ ] auto-retry / backoff
 - [ ] 大型問題の分割 / timeout 改善
