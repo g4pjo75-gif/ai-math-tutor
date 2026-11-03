@@ -19,8 +19,8 @@
     "DAILY_COST_LIMIT_MICRO_YEN": "5000000",
     "MONTHLY_COST_LIMIT_MICRO_YEN": "20000000",
     "SITE_BASE_URL": "https://ai-math-tutor-staging.g4pjo75.workers.dev",
-    "MAIL_FROM": "AI Math Tutor Staging <noreply@resend.dev>",
-    "SUPPORT_EMAIL": "support-staging@example.com"
+    "MAIL_FROM": "AI家庭教師 <noreply@gakushulab.com>",
+    "SUPPORT_EMAIL": "support@gakushulab.com"
   },
   "d1_databases": [
     {

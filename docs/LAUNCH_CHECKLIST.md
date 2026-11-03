@@ -28,7 +28,7 @@
 | Staging checkout → thanks → key | ✅ 完了 | Stripe test mode |
 | Staging redeem / simple solve / quota | ✅ 完了 | 1回実呼び出し |
 | Staging Customer Portal | ✅ 完了 | sandbox portal 画面確認 |
-| Staging email 実送信 | ❌ 未完了 | Resend 未設定 / placeholder |
+| Staging email 実送信 | ✅ 完了 | 2026-11-03 `noreply@gakushulab.com` で受信・SPF/DKIM/DMARC PASS |
 | 法務・販売者情報 | ❌ 未完了 | `site/legal.html` placeholder |
 | Domain 決定 | ❌ 未決定 | 現行 URL 継続も選択肢 |
 | Production email/budget env | ❌ 未設定 | 7-6-2B で設定 |
@@ -66,7 +66,7 @@
 - [x] 簡単な text solve
 - [x] quota 減算
 - [x] Customer Portal 進入
-- [ ] 実メール送信（Resend）
+- [x] 実メール送信（Resend）— 2026-11-03 staging で `noreply@gakushulab.com` から受信確認
 - [ ] メール再送 / recover 実メール
 - [x] 実デバイス解除 → 再バインド（`unlink-device.mjs` 解除後の `/v1/redeem` & `/v1/solve` 成功確認済み）
 - [ ] 大型問題（6問画像）の扱いを確認（P1でも可）
@@ -89,17 +89,18 @@
 
 ### 3.1 メール（Resend）
 
-- [ ] Resend アカウント作成
-- [ ] 送信ドメイン取得 / 検証（DKIM, SPF）
-- [ ] `RESEND_API_KEY` を staging/production に secret 登録
-- [ ] `MAIL_FROM` を検証済みアドレスに設定
-- [ ] `SUPPORT_EMAIL` を実サポートアドレスに設定
+- [x] Resend アカウント作成
+- [x] 送信ドメイン取得 / 検証（DKIM, SPF）— `gakushulab.com`
+- [x] `RESEND_API_KEY` を staging に secret 登録
+- [x] `MAIL_FROM` を検証済みアドレスに設定
+- [x] `SUPPORT_EMAIL` を実サポートアドレスに設定
 - [ ] `SITE_BASE_URL` を環境ごとに設定
-  - staging: `https://ai-math-tutor-staging.g4pjo75.workers.dev`
+  - staging: `https://ai-math-tutor-staging.g4pjo75.workers.dev`（設定済み）
   - production: 実際の公開 URL
-- [ ] staging で実メール送信 1回
+- [x] staging で実メール送信 1回 — 2026-11-03
 - [ ] recover ページから再送メール 1回
-- [ ] 迷惑メール/リンク/キー表示を確認
+- [x] 迷惑メール/リンク/キー表示を確認
+- [x] SPF / DKIM / DMARC の PASS を確認 — 2026-11-03 staging 実送信で `spf=pass` / `dkim=pass` / `dmarc=pass`
 
 ### 3.2 法務 / サポート
 

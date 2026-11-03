@@ -7,6 +7,24 @@
 
 ---
 
+## 0.1 確定事項（2026-11-03）
+
+| 項目 | 決定内容 |
+|---|---|
+| ドメイン | `gakushulab.com`（Cloudflare Registrar、自動更新 ON） |
+| メール送信 | Resend（Tokyo / ap-northeast-1、Forge Enabled） |
+| `MAIL_FROM` | `AI家庭教師 <noreply@gakushulab.com>` |
+| `SUPPORT_EMAIL` | `support@gakushulab.com` |
+| サポート受信 | Cloudflare Email Routing → 運営者 Gmail |
+| DNS | Cloudflare（`send` CNAME / `resend._domainkey` TXT / `_dmarc` TXT） |
+| Staging 実メール送信 | ✅ 2026-11-03 確認済み（SPF/DKIM/DMARC PASS） |
+
+> `noreply@gakushulab.com` は受信用メールボックスを作らない発信専用アドレス。
+>
+> `support@` は Cloudflare Email Routing で実受信を確認済み。
+
+---
+
 ## 0. この文書の使い方
 
 - 上から順に実施する。**順序を入れ替えない**（Stripe live を最後に近づける）。
