@@ -177,5 +177,30 @@ export async function handleStripeWebhook(request, env) {
     return { status: 200, body: { ok: true, updated: subId, status } };
   }
 
+  if (type === 'charge.refunded') {
+    const customer = obj.customer || null;
+    const isFullRefund = obj.refunded === true;
+
+    // 부분 환불은 자동 정지하지 않음 (운영자 판단)
+    if (!customer || !isFullRefund) {
+      return { status: 200, body: { ok: true, ignored: 'partial_or_no_customer' } };
+    }
+
+    const res = await env.DB.prepare(
+      "UPDATE licenses SET status = 'refunded' " +
+      "WHERE stripe_customer_id = ? AND status IN ('active','past_due','unpaid')"
+    ).bind(customer).run();
+
+    return {
+      status: 200,
+      body: { ok: true, refunded: true, updated: res?.meta?.changes ?? 0 }
+    };
+  }
+
+  if (type === 'charge.dispute.created') {
+    console.warn('stripe_dispute_created:', obj.id || 'unknown');
+    return { status: 200, body: { ok: true, ignored: 'dispute_manual_review' } };
+  }
+
   return { status: 200, body: { ok: true, ignored: type } };
 }
