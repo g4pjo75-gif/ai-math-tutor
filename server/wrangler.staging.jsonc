@@ -4,6 +4,7 @@
   "compatibility_date": "2026-10-30",
   "observability": { "enabled": true },
   "vars": {
+    "APP_ENV": "staging",
     "ALLOWED_ORIGINS": "http://localhost:8765,http://127.0.0.1:8765,https://ai-math-tutor-staging.g4pjo75.workers.dev",
     "MODEL": "gemini-3.8-flash",
     "THINKING_LEVEL": "low",

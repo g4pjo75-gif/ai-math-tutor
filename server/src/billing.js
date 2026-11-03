@@ -14,6 +14,7 @@ function form(params) {
 export function buildCheckoutParams(env) {
   const price = Number(env.PLAN_PRICE_JPY || 980);
   const name = env.PLAN_NAME || 'AI家庭教師 スタンダード';
+  const appEnv = env.APP_ENV || 'production';
   return {
     mode: 'subscription',
     'line_items[0][quantity]': 1,
@@ -21,6 +22,8 @@ export function buildCheckoutParams(env) {
     'line_items[0][price_data][unit_amount]': price,
     'line_items[0][price_data][recurring][interval]': 'month',
     'line_items[0][price_data][product_data][name]': name,
+    'metadata[env]': appEnv,
+    'subscription_data[metadata][env]': appEnv,
     success_url: env.CHECKOUT_SUCCESS_URL,
     cancel_url: env.CHECKOUT_CANCEL_URL
   };

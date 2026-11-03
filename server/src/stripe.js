@@ -96,6 +96,13 @@ export async function handleStripeWebhook(request, env) {
   const obj = event.data && event.data.object ? event.data.object : null;
   if (!obj) return { status: 200, body: { ok: true, ignored: 'no_object' } };
 
+  // 환경 격리: metadata.env가 존재하고 현재 APP_ENV와 일치하지 않으면 무시
+  const currentEnv = env.APP_ENV || 'production';
+  const eventEnv = obj.metadata && obj.metadata.env;
+  if (eventEnv && eventEnv !== currentEnv) {
+    return { status: 200, body: { ok: true, ignored: 'env_mismatch' } };
+  }
+
   if (type === 'checkout.session.completed') {
     if (obj.mode !== 'subscription') {
       return { status: 200, body: { ok: true, ignored: 'not_subscription' } };

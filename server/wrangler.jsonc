@@ -4,6 +4,7 @@
   "compatibility_date": "2026-10-30",
   "observability": { "enabled": true },
   "vars": {
+    "APP_ENV": "production",
     "ALLOWED_ORIGINS": "http://localhost:8765,https://g4pjo75-gif.github.io",
     "MODEL": "gemini-3.8-flash",
     "THINKING_LEVEL": "low",
