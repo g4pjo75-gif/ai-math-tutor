@@ -1,7 +1,7 @@
 # Staging Smoke Runbook (Phase 7-6-0)
 
-> **対象**: Staging Worker (`ai-math-tutor-api-staging`) / Staging D1 (`ai-math-tutor-db-staging`)  
-> **基準コミット**: Phase 7-6-0  
+> **対象**: Staging Worker (`ai-math-tutor-api-staging`) / Staging D1 (`ai-math-tutor-db-staging`)
+> **基準コミット**: Phase 7-6-0
 > **目的**: Production 환경(Worker, D1, Live Stripe)과 완전히 격리된 Staging 환경에서 배포, 라이선스 발급, 기기 바인딩, 프록시 호출, 포털 연동을 안전하게 검증하는 절차서.
 
 ---
