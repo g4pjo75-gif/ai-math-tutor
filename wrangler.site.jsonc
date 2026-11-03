@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ai-math-tutor-site",
+  "compatibility_date": "2026-11-02",
+  "assets": { "directory": "." },
+  "routes": [
+    { "pattern": "gakushulab.com", "custom_domain": true }
+  ]
+}

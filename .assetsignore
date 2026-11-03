@@ -26,3 +26,9 @@ playwright.config.js
 PROJECT_SPEC.md
 tailwind.config.cjs
 shared/tailwind.input.css
+backup
+tools
+__pycache__
+wrangler.site.jsonc
+math/tailwind.config.js
+english/tailwind.config.js
