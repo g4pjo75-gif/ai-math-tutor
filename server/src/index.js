@@ -11,6 +11,7 @@ import {
 import { solveProxy } from './solve.js';
 import { deriveLicenseKey, handleStripeWebhook } from './stripe.js';
 import { createCheckoutSession, createPortalSession, findLicenseByRequest } from './billing.js';
+import { sendRecoveryEmail } from './email.js';
 
 const VERSION = '0.6.1';
 const MAX_JSON_BYTES = 8 * 1024;
@@ -81,6 +82,48 @@ export default {
         if (auth.error) return json({ ok: false, error: auth.error }, auth.status, cors);
         const result = await createPortalSession(env, auth.license);
         return json(result.body, result.status, cors);
+      }
+
+      if (route === 'POST /v1/recover') {
+        const body = await readJson(request, MAX_JSON_BYTES);
+        const email = String(body.email || '').trim().toLowerCase();
+        if (!email) {
+          return json({ ok: true }, 200, cors);
+        }
+
+        const emailHash = await sha256Hex(email);
+        const ip = request.headers.get('cf-connecting-ip') ||
+                   request.headers.get('x-forwarded-for') ||
+                   'unknown';
+        const ipHash = await sha256Hex(ip);
+        const oneHourAgo = Date.now() - 3600000;
+
+        const recent = await env.DB.prepare(
+          'SELECT COUNT(*) AS n FROM recovery_log WHERE (email_hash = ? OR ip_hash = ?) AND created_at > ?'
+        ).bind(emailHash, ipHash, oneHourAgo).first();
+
+        if (recent && recent.n >= 3) {
+          return json({ ok: false, error: 'rate_limited' }, 429, cors);
+        }
+
+        await env.DB.prepare(
+          'INSERT INTO recovery_log (id, email_hash, ip_hash, created_at) VALUES (?, ?, ?, ?)'
+        ).bind(crypto.randomUUID(), emailHash, ipHash, Date.now()).run();
+
+        const row = await env.DB.prepare(
+          'SELECT stripe_session_id FROM licenses WHERE LOWER(email) = ? AND stripe_session_id IS NOT NULL AND status = ? ORDER BY created_at DESC LIMIT 1'
+        ).bind(email, 'active').first();
+
+        if (row && row.stripe_session_id && env.LICENSE_SECRET) {
+          try {
+            const key = await deriveLicenseKey(env.LICENSE_SECRET, row.stripe_session_id);
+            await sendRecoveryEmail(env, { to: email, key, sessionId: row.stripe_session_id });
+          } catch (e) {
+            console.error('sendRecoveryEmail failed:', e.message);
+          }
+        }
+
+        return json({ ok: true }, 200, cors);
       }
 
       if (route === 'GET /v1/license') {

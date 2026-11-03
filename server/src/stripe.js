@@ -1,5 +1,6 @@
 // server/src/stripe.js — Stripe webhook 검증 + 라이선스 키 유도 + 이벤트 처리
 import { hashKey } from './license.js';
+import { sendLicenseEmail } from './email.js';
 
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const TOLERANCE_SEC = 300;
@@ -123,7 +124,32 @@ export async function handleStripeWebhook(request, env) {
       'standard', 'active', limit, periodEnd, now, obj.id
     ).run();
 
-    return { status: 200, body: { ok: true, created: id } };
+    let emailStatus = 'skipped';
+    if (email) {
+      try {
+        const mailRes = await sendLicenseEmail(env, { to: email, key, sessionId: obj.id });
+        if (mailRes.ok) {
+          emailStatus = 'sent';
+          await env.DB.prepare('UPDATE licenses SET email_sent_at = ? WHERE id = ?')
+            .bind(Date.now(), id).run();
+        } else {
+          emailStatus = 'failed';
+          console.error('sendLicenseEmail failed:', mailRes.error);
+        }
+      } catch (e) {
+        emailStatus = 'failed';
+        console.error('sendLicenseEmail exception:', e.message);
+      }
+    }
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        created: id,
+        ...(emailStatus === 'failed' ? { email: 'failed' } : {})
+      }
+    };
   }
 
   if (type === 'customer.subscription.updated' || type === 'customer.subscription.deleted' || type === 'invoice.payment_failed') {
