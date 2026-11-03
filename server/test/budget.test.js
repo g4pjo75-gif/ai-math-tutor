@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkBudget } from '../src/budget.js';
+import { solveProxy } from '../src/solve.js';
 
 function createMockDb(dailyTotal = 0, monthlyTotal = 0) {
   return {
@@ -65,4 +66,25 @@ test('budget: 월 한도 초과 시 거부', async () => {
   const r = await checkBudget(env);
   assert.equal(r.allowed, false);
   assert.equal(r.reason, 'monthly_budget_exceeded');
+});
+
+test('solveProxy: budget_exceeded 시 503 에러 반환', async () => {
+  const env = {
+    GEMINI_API_KEY: 'test_key',
+    DAILY_COST_LIMIT_MICRO_YEN: '1000',
+    DB: {
+      prepare: (q) => ({
+        bind: () => ({
+          first: async () => {
+            if (q.includes('COUNT(*) AS n FROM usage')) return { n: 0 };
+            if (q.includes('COALESCE(SUM(cost_micro_yen), 0) AS total FROM usage WHERE created_at >=')) return { total: 5000 };
+            return null;
+          }
+        })
+      })
+    }
+  };
+  const res = await solveProxy(env, { id: 'lic_1', call_limit: 300 }, { prompt: '1+1' });
+  assert.equal(res.status, 503);
+  assert.equal(res.body.error, 'budget_exceeded');
 });
