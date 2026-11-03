@@ -4,7 +4,7 @@ const path = require('path');
 const { stubGemini, collectErrors, bootApp } = require('./helpers');
 const stub = require(path.join(__dirname, '..', 'stub-gemini.js'));
 
-const MOCK_API_WORKER = '**/ai-math-tutor-api.g4pjo75.workers.dev/**';
+const MOCK_API_WORKER = '**/ai-math-tutor-api*.g4pjo75.workers.dev/**';
 const TEST_KEY = 'AMT-AAAA-BBBB-CCCC-DDDD';
 
 function stubWorker(page, {
