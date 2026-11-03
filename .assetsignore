@@ -18,3 +18,9 @@ tests
 test-results
 playwright-report
 blob-report
+docs
+package.json
+package-lock.json
+wrangler.jsonc
+playwright.config.js
+PROJECT_SPEC.md
