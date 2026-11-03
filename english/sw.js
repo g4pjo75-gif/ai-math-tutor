@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aet-cache-v2.9';
+const CACHE_NAME = 'aet-cache-v3.0';
 const ASSETS = [
   './',
   './index.html',
@@ -17,7 +17,6 @@ const ASSETS = [
   './voice.js',
   './actions-map.js',
   './main.js',
-  './tailwind.config.js',
   '../core/index.js',
   '../core/json.js',
   '../core/errors.js',
@@ -33,7 +32,8 @@ const ASSETS = [
   '../shared/config.js',
   '../shared/api-error-ui.js',
   '../shared/ui.js',
-  '../shared/ui.css'
+  '../shared/ui.css',
+  '../shared/tailwind.css'
 ];
 
 self.addEventListener('install', (event) => {

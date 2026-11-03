@@ -1,4 +1,4 @@
-const CACHE_NAME = 'amt-cache-v3.9';
+const CACHE_NAME = 'amt-cache-v4.0';
 const ASSETS = [
   './',
   './index.html',
@@ -28,7 +28,6 @@ const ASSETS = [
   './chat-overall.js',
   './actions-map.js',
   './main.js',
-  './tailwind.config.js',
   '../core/index.js',
   '../core/json.js',
   '../core/errors.js',
@@ -44,7 +43,8 @@ const ASSETS = [
   '../shared/config.js',
   '../shared/api-error-ui.js',
   '../shared/ui.js',
-  '../shared/ui.css'
+  '../shared/ui.css',
+  '../shared/tailwind.css'
 ];
 
 self.addEventListener('install', (event) => {
