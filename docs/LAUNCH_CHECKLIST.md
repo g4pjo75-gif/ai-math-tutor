@@ -145,6 +145,7 @@
 - [ ] Stripe 本番アカウントの本人確認 / 銀行 / 税設定
 - [ ] live `STRIPE_SECRET_KEY`
 - [ ] live webhook endpoint / `STRIPE_WEBHOOK_SECRET`
+- [ ] webhook イベントに `charge.refunded`（および `charge.dispute.created`）を含む
 - [ ] live Customer Portal 設定
 - [ ] 実際のカードで 1回決済
 - [ ] 領収書 / 請求書確認

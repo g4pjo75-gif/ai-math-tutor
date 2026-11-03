@@ -79,10 +79,14 @@ cd /home/park/projects/ai-math-tutor/server
 npm run preflight:staging -- --offline  # オフライン設定検証
 npm run preflight:staging              # リモート含む検証
 
-# Production 事前検証（Step 5/6 実施後）
+# Production 事前検証（Step 8 完了後に実行）
 npm run preflight:prod -- --offline
 npm run preflight:prod
 ```
+
+> **注意**:
+> `npm run preflight:prod`（リモート検査含む）は **Step 8（Stripe live 設定）まで完了した後に実行する**。
+> Step 5〜7 の作業途中では `STRIPE_SECRET_KEY` 等が未設定のため、#7（Secret list）が FAIL するのが正常です。
 
 ---
 
@@ -243,15 +247,20 @@ npx wrangler d1 migrations list ai-math-tutor-db --remote
 
 ## 8. Step 6 — Production env 設定
 
-`server/wrangler.jsonc` の `vars` に追加:
+`server/wrangler.jsonc` の `vars` に追加・修正:
 
 ```jsonc
+"ALLOWED_ORIGINS": "https://<本番サイトのorigin>",
 "DAILY_COST_LIMIT_MICRO_YEN": "<運営者決定値>",
 "MONTHLY_COST_LIMIT_MICRO_YEN": "<運営者決定値>",
 "SITE_BASE_URL": "https://<本番サイトURL>",
 "MAIL_FROM": "AI家庭教師 <noreply@<検証済みドメイン>>",
 "SUPPORT_EMAIL": "<実サポートアドレス>"
 ```
+
+> **CORS設定の重要注意**:
+> production の `ALLOWED_ORIGINS` は **`https://<本番サイトのorigin>` のみ** を指定し、`http://localhost:...` や `127.0.0.1` は必ず除去してください。
+> これらを除去しないと、preflight #3（プレースホルダー検出）および #4 が FAIL として検出されます。
 
 secret 登録:
 
@@ -304,7 +313,7 @@ curl -sS https://ai-math-tutor-api.g4pjo75.workers.dev/health
 3. 商品・価格を作成（test mode と同じ金額・通貨）
 4. Webhook endpoint を登録
    - URL: `https://ai-math-tutor-api.g4pjo75.workers.dev/webhook/stripe`
-   - イベント: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`（実装に合わせる）
+   - イベント: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, `charge.refunded`, `charge.dispute.created`
 5. `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` を live 値で登録
 6. Customer Portal を本番モードで設定
 7. `PLAN_PRICE_JPY` と実価格が一致していることを確認
