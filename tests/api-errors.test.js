@@ -139,3 +139,15 @@ test('classifyApiError: unknown fallback (proxy_503 retry, proxy_404 no retry)',
   assert.equal(c404.retryable, false);
   assert.deepEqual(c404.actions, []);
 });
+
+test('classifyApiError: budget_exceeded maps to non-retryable budget', async () => {
+  const { classifyApiError } = await load();
+  const c = classifyApiError({
+    code: 'budget_exceeded',
+    message: 'システムの利用上限に達しました。管理者にお問い合わせください。'
+  });
+  assert.equal(c.kind, 'budget');
+  assert.equal(c.retryable, false);
+  assert.deepEqual(c.actions, []);
+  assert.equal(c.message, 'システムの利用上限に達しました。管理者にお問い合わせください。');
+});
