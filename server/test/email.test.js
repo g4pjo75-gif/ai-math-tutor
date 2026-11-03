@@ -54,6 +54,48 @@ test('email: 메일 payload 검증 (to, subject, key 포함)', async () => {
   }
 });
 
+test('email: SITE_BASE_URL과 SUPPORT_EMAIL이 메일 본문 링크에 반영된다', async () => {
+  const prevFetch = globalThis.fetch;
+  let sentPayload = null;
+
+  globalThis.fetch = async (url, init) => {
+    sentPayload = JSON.parse(init.body);
+    return new Response(JSON.stringify({ id: 'msg_link_test' }), { status: 200 });
+  };
+
+  try {
+    const env = {
+      RESEND_API_KEY: 're_key',
+      SITE_BASE_URL: 'https://staging.custom.domain',
+      SUPPORT_EMAIL: 'support@math-custom.org'
+    };
+
+    // 1. sendLicenseEmail
+    await sendLicenseEmail(env, {
+      to: 'buyer@example.com',
+      key: 'AMT-1111-2222-3333-4444',
+      sessionId: 'cs_xyz'
+    });
+    assert.match(sentPayload.text, /https:\/\/staging\.custom\.domain\/site\/thanks\.html\?session_id=cs_xyz/);
+    assert.match(sentPayload.text, /https:\/\/staging\.custom\.domain\/site\/recover\.html/);
+    assert.match(sentPayload.text, /support@math-custom\.org/);
+    assert.match(sentPayload.html, /https:\/\/staging\.custom\.domain\/site\/thanks\.html\?session_id=cs_xyz/);
+    assert.match(sentPayload.html, /support@math-custom\.org/);
+
+    // 2. sendRecoveryEmail
+    await sendRecoveryEmail(env, {
+      to: 'buyer@example.com',
+      key: 'AMT-1111-2222-3333-4444',
+      sessionId: 'cs_xyz'
+    });
+    assert.match(sentPayload.text, /https:\/\/staging\.custom\.domain\/site\/thanks\.html\?session_id=cs_xyz/);
+    assert.match(sentPayload.text, /support@math-custom\.org/);
+    assert.match(sentPayload.html, /support@math-custom\.org/);
+  } finally {
+    globalThis.fetch = prevFetch;
+  }
+});
+
 function createMockDb() {
   const state = {
     licenses: [],

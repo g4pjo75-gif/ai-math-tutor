@@ -15,18 +15,26 @@ function createMockDb() {
     prepare: (query) => ({
       bind: (...args) => ({
         first: async () => {
-          if (query.includes('COUNT(*) AS n FROM recovery_log')) {
+          if (query.includes('COUNT(*) AS n FROM recovery_log WHERE ip_hash = ?')) {
+            const [ipHash, cutoff] = args;
+            const count = state.recovery_log.filter(
+              (r) => r.ip_hash === ipHash && r.created_at > cutoff
+            ).length;
+            return { n: count };
+          }
+          if (query.includes('COUNT(*) AS n FROM recovery_log WHERE email_hash = ? AND ip_hash = ?')) {
             const [emailHash, ipHash, cutoff] = args;
             const count = state.recovery_log.filter(
-              (r) => (r.email_hash === emailHash || r.ip_hash === ipHash) && r.created_at > cutoff
+              (r) => r.email_hash === emailHash && r.ip_hash === ipHash && r.created_at > cutoff
             ).length;
             return { n: count };
           }
           if (query.includes('SELECT stripe_session_id FROM licenses')) {
-            const [email, status] = args;
+            const [email] = args;
+            const validStatuses = ['active', 'past_due', 'canceled', 'unpaid'];
             const match = state.licenses.find(
               (l) => l.email && l.email.toLowerCase() === email.toLowerCase() &&
-                     l.status === status && l.stripe_session_id != null
+                     validStatuses.includes(l.status) && l.stripe_session_id != null
             );
             return match || null;
           }
@@ -45,7 +53,7 @@ function createMockDb() {
   };
 }
 
-test('recover: 정상 복구 (라이선스 발견 시 이메일 발송 및 {ok:true} 반환)', async () => {
+test('recover: 정상 복구 (active 라이선스)', async () => {
   const prevFetch = globalThis.fetch;
   let sentTo = null;
   globalThis.fetch = async (url, init) => {
@@ -71,10 +79,7 @@ test('recover: 정상 복구 (라이선스 발견 시 이메일 발송 및 {ok:t
 
     const req = new Request('https://api.test/v1/recover', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'cf-connecting-ip': '1.2.3.4'
-      },
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '1.2.3.4' },
       body: JSON.stringify({ email: 'USER@example.com' })
     });
 
@@ -84,6 +89,54 @@ test('recover: 정상 복구 (라이선스 발견 시 이메일 발송 및 {ok:t
     assert.equal(body.ok, true);
     assert.equal(sentTo, 'user@example.com');
     assert.equal(db.state.recovery_log.length, 1);
+  } finally {
+    globalThis.fetch = prevFetch;
+  }
+});
+
+test('recover: canceled 및 past_due 라이선스도 복구 메일 대상', async () => {
+  const prevFetch = globalThis.fetch;
+  const sentEmails = [];
+  globalThis.fetch = async (url, init) => {
+    const payload = JSON.parse(init.body);
+    sentEmails.push(payload.to[0]);
+    return new Response(JSON.stringify({ id: 'msg_rec_inactive' }), { status: 200 });
+  };
+
+  try {
+    const db = createMockDb();
+    db.state.licenses.push(
+      { id: 'lic_canceled', email: 'canceled@example.com', stripe_session_id: 'cs_canceled_123', status: 'canceled' },
+      { id: 'lic_pastdue', email: 'pastdue@example.com', stripe_session_id: 'cs_pastdue_456', status: 'past_due' }
+    );
+
+    const env = {
+      LICENSE_SECRET: 'whsec_test_secret_123',
+      RESEND_API_KEY: 're_test_key',
+      DB: db
+    };
+
+    // 1. Canceled
+    const req1 = new Request('https://api.test/v1/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '1.1.1.1' },
+      body: JSON.stringify({ email: 'canceled@example.com' })
+    });
+    const res1 = await worker.fetch(req1, env);
+    assert.equal(res1.status, 200);
+    assert.equal((await res1.json()).ok, true);
+
+    // 2. Past Due
+    const req2 = new Request('https://api.test/v1/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '1.1.1.2' },
+      body: JSON.stringify({ email: 'pastdue@example.com' })
+    });
+    const res2 = await worker.fetch(req2, env);
+    assert.equal(res2.status, 200);
+    assert.equal((await res2.json()).ok, true);
+
+    assert.deepEqual(sentEmails, ['canceled@example.com', 'pastdue@example.com']);
   } finally {
     globalThis.fetch = prevFetch;
   }
@@ -107,7 +160,7 @@ test('recover: 없는 이메일이어도 enumeration 방지를 위해 {ok:true} 
 
     const req = new Request('https://api.test/v1/recover', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '2.2.2.2' },
       body: JSON.stringify({ email: 'unknown@example.com' })
     });
 
@@ -115,46 +168,11 @@ test('recover: 없는 이메일이어도 enumeration 방지를 위해 {ok:true} 
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.ok, true);
-    assert.equal(fetchCalled, false); // 메일 발송 안 됨
+    assert.equal(fetchCalled, false);
     assert.equal(db.state.recovery_log.length, 1);
   } finally {
     globalThis.fetch = prevFetch;
   }
-});
-
-test('recover: rate limit (동일 email/IP 1시간 3회 초과 시 429)', async () => {
-  const db = createMockDb();
-  const env = {
-    LICENSE_SECRET: 'whsec_test_secret_123',
-    RESEND_API_KEY: 're_test_key',
-    DB: db
-  };
-
-  const emailHash = await sha256Hex('spam@example.com');
-  const ipHash = await sha256Hex('192.168.1.100');
-  const now = Date.now();
-
-  // 기존 3회 기록 추가
-  db.state.recovery_log.push(
-    { id: 'r1', email_hash: emailHash, ip_hash: ipHash, created_at: now - 1000 },
-    { id: 'r2', email_hash: emailHash, ip_hash: ipHash, created_at: now - 2000 },
-    { id: 'r3', email_hash: emailHash, ip_hash: ipHash, created_at: now - 3000 }
-  );
-
-  const req = new Request('https://api.test/v1/recover', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'cf-connecting-ip': '192.168.1.100'
-    },
-    body: JSON.stringify({ email: 'spam@example.com' })
-  });
-
-  const res = await worker.fetch(req, env);
-  assert.equal(res.status, 429);
-  const body = await res.json();
-  assert.equal(body.ok, false);
-  assert.equal(body.error, 'rate_limited');
 });
 
 test('recover: 수동 발급 키(stripe_session_id 없음)는 메일 발송에서 제외', async () => {
@@ -182,7 +200,7 @@ test('recover: 수동 발급 키(stripe_session_id 없음)는 메일 발송에�
 
     const req = new Request('https://api.test/v1/recover', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '3.3.3.3' },
       body: JSON.stringify({ email: 'manual@example.com' })
     });
 
@@ -194,4 +212,94 @@ test('recover: 수동 발급 키(stripe_session_id 없음)는 메일 발송에�
   } finally {
     globalThis.fetch = prevFetch;
   }
+});
+
+test('recover rate limit: 동일 email + 다른 IP는 피해자 lockout이 되지 않는다', async () => {
+  const db = createMockDb();
+  const env = {
+    LICENSE_SECRET: 'whsec_test_secret_123',
+    RESEND_API_KEY: 're_test_key',
+    DB: db
+  };
+
+  const victimEmailHash = await sha256Hex('victim@example.com');
+  const attackerIpHash = await sha256Hex('198.51.100.1');
+  const now = Date.now();
+
+  // 공격자가 victim 이메일로 3회 요청했음
+  db.state.recovery_log.push(
+    { id: 'a1', email_hash: victimEmailHash, ip_hash: attackerIpHash, created_at: now - 3000 },
+    { id: 'a2', email_hash: victimEmailHash, ip_hash: attackerIpHash, created_at: now - 2000 },
+    { id: 'a3', email_hash: victimEmailHash, ip_hash: attackerIpHash, created_at: now - 1000 }
+  );
+
+  // 피해자(다른 IP)가 자신의 이메일로 복구 요청 → 차단되지 않아야 함
+  const victimReq = new Request('https://api.test/v1/recover', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '203.0.113.50' },
+    body: JSON.stringify({ email: 'victim@example.com' })
+  });
+
+  const res = await worker.fetch(victimReq, env);
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).ok, true);
+});
+
+test('recover rate limit: 동일 IP 시간당 10회 초과 시 429 차단', async () => {
+  const db = createMockDb();
+  const env = {
+    LICENSE_SECRET: 'whsec_test_secret_123',
+    RESEND_API_KEY: 're_test_key',
+    DB: db
+  };
+
+  const ip = '203.0.113.99';
+  const ipHash = await sha256Hex(ip);
+  const now = Date.now();
+
+  // 동일 IP로 서로 다른 이메일 10회 요청 기록
+  for (let i = 0; i < 10; i++) {
+    const eHash = await sha256Hex(`random${i}@example.com`);
+    db.state.recovery_log.push({ id: `r_${i}`, email_hash: eHash, ip_hash: ipHash, created_at: now - i * 100 });
+  }
+
+  const req = new Request('https://api.test/v1/recover', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': ip },
+    body: JSON.stringify({ email: 'another@example.com' })
+  });
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 429);
+  assert.equal((await res.json()).error, 'rate_limited');
+});
+
+test('recover rate limit: 동일 email + 동일 IP 시간당 3회 초과 시 429 차단', async () => {
+  const db = createMockDb();
+  const env = {
+    LICENSE_SECRET: 'whsec_test_secret_123',
+    RESEND_API_KEY: 're_test_key',
+    DB: db
+  };
+
+  const email = 'user@example.com';
+  const ip = '192.168.1.1';
+  const emailHash = await sha256Hex(email);
+  const ipHash = await sha256Hex(ip);
+  const now = Date.now();
+
+  // 동일 email + 동일 IP로 3회 기록
+  for (let i = 0; i < 3; i++) {
+    db.state.recovery_log.push({ id: `s_${i}`, email_hash: emailHash, ip_hash: ipHash, created_at: now - i * 1000 });
+  }
+
+  const req = new Request('https://api.test/v1/recover', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': ip },
+    body: JSON.stringify({ email })
+  });
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 429);
+  assert.equal((await res.json()).error, 'rate_limited');
 });
