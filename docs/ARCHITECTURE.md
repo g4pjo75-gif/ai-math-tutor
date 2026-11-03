@@ -75,19 +75,19 @@ flowchart TD
 ai-math-tutor/
 ├── index.html                   # ルートポータルハブ（数学・英語・料金へのナビゲーション）
 ├── math/                        # 高校数学 PWA
-│   ├── index.html               # 数学アプリUI (Tailwind, KaTeX, SVG)
+│   ├── index.html               # 数学アプリUI (自前ホストTailwind CSS, KaTeX, SVG)
 │   ├── main.js / init.js        # エントリポイント・初期化
 │   ├── actions-map.js           # 宣言的アクションマップ (46 actions)
 │   ├── api-solve.js             # 解法生成・AI呼び出し
 │   ├── settings.js              # 設定モーダル (BYOK / License)
-│   ├── sw.js / manifest.json    # 数学独立 Service Worker・PWA
+│   ├── sw.js / manifest.json    # 数学独立 Service Worker (amt-cache-v4.0)・PWA
 │   └── ...                      # UI・描画・クイズモジュール
 ├── english/                     # 高校英語 PWA
 │   ├── index.html               # 英語アプリUI
 │   ├── main.js / init.js        # エントリポイント・初期化
 │   ├── actions-map.js           # 宣言的アクションマップ (47 actions)
 │   ├── reading.js / quiz.js     # 読解・4択クイズ
-│   ├── sw.js / manifest.json    # 英語独立 Service Worker・PWA
+│   ├── sw.js / manifest.json    # 英語独立 Service Worker (aet-cache-v3.0)・PWA
 │   └── ...
 ├── core/                        # 純粋 JavaScript コア（DOM非依存・Isomorphic）
 │   ├── index.js                 # Core 公開エクスポート
@@ -105,7 +105,10 @@ ai-math-tutor/
 │   ├── actions.js               # data-action 宣言的イベントディスパッチャ
 │   ├── api-error-ui.js          # エラー分類結果の HTML レンダラ
 │   ├── speech.js                # Web Speech API 音声合成
+│   ├── tailwind.input.css       # Tailwind CSS ディレクティブ定義
+│   ├── tailwind.css             # ビルド済み自前ホスト CSS (npm run build:css)
 │   └── ui.js / ui.css           # 共通トースト・ダイアログ・CSS
+├── tailwind.config.cjs          # Tailwind v3 CLI 共通設定 (数学・英語・shared統合)
 ├── site/                        # マーケティング・決済・サポート静的サイト
 │   ├── index.html               # サービス紹介 LP
 │   ├── pricing.html             # プラン比較・Stripe Checkout 誘導
@@ -134,7 +137,7 @@ ai-math-tutor/
 │   └── wrangler.staging.jsonc   # Staging Worker 設定
 ├── tests/                       # クライアントテストスイート
 │   ├── *.test.js                # L1 単体テスト (61 pass)
-│   ├── e2e/*.spec.js            # L2 Playwright E2E テスト (38 pass)
+│   ├── e2e/*.spec.js            # L2 Playwright E2E テスト (40 pass)
 │   ├── check-actions.js         # Action Map 静的解析・整合性検証
 │   └── check-imports.js         # ES モジュール依存性検証
 ├── docs/                        # プロジェクト設計・運用ドキュメント
@@ -174,10 +177,10 @@ flowchart LR
     L1["L1: 単体テスト (61 pass)
     - core/ transport / json / errors
     - shared/ license / config"]
-    L2["L2: E2Eテスト (38 pass)
+    L2["L2: E2Eテスト (40 pass)
     - Playwright オフラインStub
     - 数学 / 英語 学習フロー
-    - 設定・エラー・ライセンス・復旧"]
+    - 設定・エラー・ライセンス・復旧・CSS"]
     Server["Serverテスト (56 pass)
     - Stripe / Webhook / Portal
     - Resend Email / 復旧 / レート制限
@@ -210,3 +213,7 @@ flowchart LR
    - `/v1/recover`: IP基準で時間あたり 10 回、同一メール+同一IPで時間あたり 3 回の2段階制限。
 5. **予算ガード (Budget Guard)**:
    - Worker 内部で日次/月次の API 原価を自動監視し、上限超過時に即時 503 を返却して課金暴走を遮断。
+6. **外部 CDN 依存の排除と CSP 強化 (Phase 7-6-2B-1B)**:
+   - Tailwind Play CDN (`cdn.tailwindcss.com`) を完全排除し、Tailwind CLI (`npm run build:css`) による自前ビルド (`shared/tailwind.css`) へ移行。
+   - CSP `script-src` から `https://cdn.tailwindcss.com` を削除し、サードパーティスクリプト改変・盗聴リスクを遮断。
+   - Service Worker (`amt-cache-v4.0`, `aet-cache-v3.0`) の事前キャッシュ資産に `shared/tailwind.css` を追加し、完全オフライン PWA 動作を維持。

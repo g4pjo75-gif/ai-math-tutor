@@ -22,7 +22,7 @@
 | 項目 | 状態 | 備考 |
 |---|---|---|
 | L1 unit | ✅ 61 pass | 2026-11-03 |
-| L2 E2E | ✅ 38 pass | 2026-11-03 |
+| L2 E2E | ✅ 40 pass | 2026-11-03 |
 | Server test | ✅ 56 pass | 2026-11-03 |
 | Staging checkout → thanks → key | ✅ 完了 | Stripe test mode |
 | Staging redeem / simple solve / quota | ✅ 完了 | 1回実呼び出し |
@@ -35,7 +35,7 @@
 | Production deploy 0.7.0 | ❌ 未実施 | 現在 0.6.0 |
 | Live Stripe | ❌ 未接続 | test mode のみ |
 | 6問画像問題 timeout | ⚠️ 既知の性能課題 | 大型入力は後日改善 |
-| Tailwind CDN 除去 | ❌ 未完了 | P1 / security |
+| Tailwind CDN 除去 | ✅ 完了 | shared/tailwind.css ビルド・CSP除去完了 |
 | デバイス解除 UI | ⚠️ CLI のみ | 手動サポート手順は必要 |
 | auto-retry / backoff | ❌ 未実装 | P1 |
 
@@ -48,8 +48,8 @@
 ### 2.1 코드게이트
 
 - [x] `npm run test:l1` → 61 pass
-- [x] `npx playwright test` → 38 pass
-- [x] `npm test` → 99 pass
+- [x] `npx playwright test` → 40 pass
+- [x] `npm test` → 101 pass
 - [x] `cd server && npm test` → 56 pass
 - [x] `node tests/check-actions.js` → math 46 / english 47
 - [x] `node tests/check-imports.js` → missing 0
@@ -176,7 +176,7 @@
 - [x] recover rate limit（IP 10/h, email+IP 3/h）
 - [x] staging site `noindex` / Access
 - [x] `.assetsignore` で docs / package / config を除外
-- [ ] Tailwind CDN / 外部 script のリスク確認
+- [x] Tailwind CDN / 外部 script のリスク確認 (CDN完全除去・自前ビルド完了)
 - [x] CSP の `connect-src` が必要最小限
 - [x] Stripe webhook 署名検証
 - [x] `LICENSE_SECRET` 不変
@@ -185,7 +185,7 @@
 
 ## 5. P1 — 販売後でもよい項目
 
-- [ ] Tailwind CDN self-host / SRI
+- [x] Tailwind CDN self-host / SRI
 - [ ] デバイス解除 UI
 - [ ] auto-retry / backoff
 - [ ] 大型問題の分割 / timeout 改善
