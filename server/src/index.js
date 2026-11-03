@@ -111,8 +111,8 @@ export default {
         ).bind(crypto.randomUUID(), emailHash, ipHash, Date.now()).run();
 
         const row = await env.DB.prepare(
-          'SELECT stripe_session_id FROM licenses WHERE LOWER(email) = ? AND stripe_session_id IS NOT NULL AND status = ? ORDER BY created_at DESC LIMIT 1'
-        ).bind(email, 'active').first();
+          "SELECT stripe_session_id FROM licenses WHERE LOWER(email) = ? AND stripe_session_id IS NOT NULL AND status IN ('active', 'past_due', 'canceled', 'unpaid') ORDER BY created_at DESC LIMIT 1"
+        ).bind(email).first();
 
         if (row && row.stripe_session_id && env.LICENSE_SECRET) {
           try {
