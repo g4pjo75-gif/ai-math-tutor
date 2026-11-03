@@ -33,6 +33,21 @@ npx wrangler d1 execute ai-math-tutor-db-staging --remote --config wrangler.stag
 npx wrangler d1 execute ai-math-tutor-db --remote --file=backups/prod.sql -y
 ```
 
+### D1 Migration Baseline 運用履歴と注意事項
+- **`wrangler d1 export` の仕様注意**:
+  `npx wrangler d1 export` で出力されるダンプファイルには、Wranglerのマイグレーション管理テーブル `d1_migrations` は含まれません。
+  したがって、空のDBにバックアップSQLを流し込んだ直後は `d1_migrations` が空になるため、そのまま `wrangler d1 migrations apply` を実行すると重複適用エラーになります。
+- **Phase 7-6-2C Baseline 適用履歴 (2026-11-03)**:
+  Phase 7-4 以前に `wrangler d1 execute` で直接適用済みだった `0001_init.sql`〜`0004_stripe.sql` の4件について、`d1_migrations` テーブルに手動で適用済みレコード（Baseline）を登録した上で、`0005_email_recovery.sql` を `wrangler d1 migrations apply` で適用しました。
+- **Baseline 登録用 SQL**:
+  ```sql
+  INSERT INTO d1_migrations (name, applied_at) VALUES
+    ('0001_init.sql', CURRENT_TIMESTAMP),
+    ('0002_indexes.sql', CURRENT_TIMESTAMP),
+    ('0003_usage_cost.sql', CURRENT_TIMESTAMP),
+    ('0004_stripe.sql', CURRENT_TIMESTAMP);
+  ```
+
 ## 2. LICENSE_SECRET 不変の原則
 
 `LICENSE_SECRET` は、Stripe Checkout Session ID から決定論的（Deterministic）にライ선スキー（`AMT-XXXX-XXXX-XXXX-XXXX`）を導出するためのHMACシークレットです。
