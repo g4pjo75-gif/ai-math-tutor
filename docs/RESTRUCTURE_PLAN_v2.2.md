@@ -10137,8 +10137,10 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
   - staging smoke 수동 체크리스트
   - action count math 46 / english 47 유지
 - 7-6-2:
-  - email/recovery, device unlink, budget guard 서버 테스트 추가
-  - 최종 수치는 해당 단계에서 확정
+  - email/recovery, device unlink, budget guard 서버 테스트 추가 (+15) → **server 50 pass**
+  - budget_exceeded 에러 분류 테스트 추가 (+1) → **L1 61 pass**
+  - recover 페이지 e2e 테스트 추가 (+2) → **L2 38 pass**
+  - workspace 전체: **npm test 99 pass**
 - 공통:
   - `git diff --check`
   - secret 노출 없음
