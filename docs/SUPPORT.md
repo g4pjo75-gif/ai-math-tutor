@@ -24,13 +24,25 @@ cd server
 # 例1: ユーザーのメールアドレスを指定して全端末登録をリセット（推奨）
 node scripts/unlink-device.mjs --remote --email user@example.com --all
 
-# 例2: Staging 環境でテストする場合
-node scripts/unlink-device.mjs --remote --staging --email test@example.com --all
-
-# 例3: ライセンスキーを指定して全端末解除する場合
+# 例2: ライセンスキーを指定して全端末解除する場合
 node scripts/unlink-device.mjs --remote --license-key AMT-XXXX-XXXX-XXXX-XXXX --all
+
+# 例3: 特定の端末IDのみを解除する場合
+node scripts/unlink-device.mjs --remote --email user@example.com --device-id <DEVICE_ID>
+
+# 例4: Staging 環境でテストする場合
+node scripts/unlink-device.mjs --remote --staging --email test@example.com --all
 ```
-※ 実行結果には削除された件数のみが出力され、ハッシュ値や秘密情報は画面に表示されません。
+※ 実行結果には削除された件数のみ（例: `Unlinked 1 device(s).`）が出力され、端末ハッシュ値や秘密情報は画面に一切表示されません。
+
+### ユーザー側の再登録・再バインド手順
+端末解除が完了した後、ユーザーに以下の手順でアプリから再登録していただきます:
+1. アプリ（数学または英語）を開く。
+2. 画面右上の **⚙️ 設定** を開く。
+3. すでにキーが入力されている場合は、一度 **「ライセンス解除」** をクリックしてローカル認証情報をクリアする。
+4. お手元のライセンスキー（`AMT-XXXX-XXXX-XXXX-XXXX`）を貼り付ける。
+5. **「保存」** をクリックする（自動的に `/v1/redeem` が呼ばれ、現在の端末が新しいスロットにバインドされます）。
+6. 問題を1問解き、AI解説が正常に生成されることを確認する。
 
 ### 端末解除後のユーザー案内文
 ```
@@ -39,8 +51,12 @@ node scripts/unlink-device.mjs --remote --license-key AMT-XXXX-XXXX-XXXX-XXXX --
 AI家庭教師サポートでございます。
 お問い合わせいただきました端末登録上限につきまして、古い端末登録の解除手続きが完了いたしました。
 
-お手数ですが、ご利用の端末にてアプリ（設定画面 ⚙️）を開き、
-お手元のライセンスキーを再度ご登録いただきますようお願い申し上げます。
+お手数ですが、ご利用の端末にてアプリを開き、以下の手順でキーを再登録いただきますようお願い申し上げます。
+
+■ 再登録手順:
+1. 右上の「⚙️ 設定」を開く
+2. 「ライセンス解除」をクリックする
+3. お手元のライセンスキーを入力して「保存」をクリックする
 
 ■ アプリURL: https://g4pjo75-gif.github.io/ai-math-tutor/
 ■ キーの再確認（紛失時）: https://g4pjo75-gif.github.io/ai-math-tutor/site/recover.html
