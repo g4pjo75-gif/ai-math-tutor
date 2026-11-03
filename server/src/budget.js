@@ -2,10 +2,13 @@
 import { periodOf } from './license.js';
 
 export async function checkBudget(env, now = Date.now()) {
-  const dailyLimit = Number(env.DAILY_COST_LIMIT_MICRO_YEN || 0);
-  const monthlyLimit = Number(env.MONTHLY_COST_LIMIT_MICRO_YEN || 0);
+  const dailyLimit = Number(env?.DAILY_COST_LIMIT_MICRO_YEN || 0);
+  const monthlyLimit = Number(env?.MONTHLY_COST_LIMIT_MICRO_YEN || 0);
 
   if (dailyLimit <= 0 && monthlyLimit <= 0) {
+    return { allowed: true };
+  }
+  if (!env?.DB) {
     return { allowed: true };
   }
 

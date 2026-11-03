@@ -56,6 +56,7 @@ export async function solveProxy(env, license, rawBody) {
   // 예산 가드 (일간/월간 시스템 원가 상한)
   const budget = await checkBudget(env, now);
   if (!budget.allowed) {
+    console.error('budget_exceeded:', budget.reason);
     return { status: 503, body: { ok: false, error: 'budget_exceeded' } };
   }
 
