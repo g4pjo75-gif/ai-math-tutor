@@ -16,8 +16,8 @@
     "PORTAL_RETURN_URL": "https://gakushulab.com/site/portal.html",
     "PLAN_PRICE_JPY": "980",
     "PLAN_NAME": "AI家庭教師 スタンダード",
-    "DAILY_COST_LIMIT_MICRO_YEN": "50000000",
-    "MONTHLY_COST_LIMIT_MICRO_YEN": "1000000000",
+    "DAILY_COST_LIMIT_MICRO_YEN": "300000000",
+    "MONTHLY_COST_LIMIT_MICRO_YEN": "5000000000",
     "SITE_BASE_URL": "https://gakushulab.com",
     "MAIL_FROM": "AI家庭教師 <noreply@gakushulab.com>",
     "SUPPORT_EMAIL": "support@gakushulab.com"
