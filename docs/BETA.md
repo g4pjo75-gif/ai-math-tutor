@@ -1,9 +1,9 @@
 # Closed Beta 運用ガイド — Phase 7-6-2E
 
-> **目的**: live 決済を有効化する前に、実端末・実利用で品質とサポート手順を検証する  
-> **期間**: 2026-11-05 〜 2026-11-19（2週間、必要なら延長）  
-> **規模**: 5〜10名（招待制）  
-> **決済**: 行わない（Stripe は test mode のまま）  
+> **目的**: live 決済を有効化する前に、実端末・実利用で品質とサポート手順を検証する<br>
+> **期間**: 2026-11-05 〜 2026-11-19（2週間、必要なら延長）<br>
+> **規模**: 5〜10名（招待制）<br>
+> **決済**: 行わない（Stripe は test mode のまま）<br>
 > **ライセンス**: 運営者が手動発行
 
 ---
@@ -16,7 +16,7 @@
 - ベータ参加者には **手動発行ライセンス**を配布
 - 不具合は `support@gakushulab.com` で受け付ける
 
-> ベータ中は「売上」より「不具合の発見」を優先する。  
+> ベータ中は「売上」より「不具合の発見」を優先する。<br>
 > 決済・返金・請求の検証は live 移行時に行う。
 
 ---
@@ -111,7 +111,7 @@ node scripts/unlink-device.mjs --remote --email tester@example.com --all
 node scripts/new-license.mjs --remote --email tester@example.com --plan standard --limit 300 --days 30
 ```
 
-> 手動発行ライセンスは `stripe_session_id` を持たないため、**recover ページでキー再送できません**。  
+> 手動発行ライセンスは `stripe_session_id` を持たないため、**recover ページでキー再送できません**。<br>
 > キーを紛失した場合は、旧ライセンスを失効させて再発行してください。
 
 ---
