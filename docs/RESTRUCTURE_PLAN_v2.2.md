@@ -10307,6 +10307,7 @@ node scripts/new-license.mjs --remote --staging --email test@example.com --plan 
 - [x] Production 사이트 Workers Assets 배포 (`ai-math-tutor-site` -> `https://gakushulab.com/`) 및 내부 파일 보호 (.assetsignore)
 - [x] Production E2E 브라우저 검증 완료 (Checkout -> Thanks -> Redeem -> Solve -> Email)
 - [x] 아키텍처 v2.2 현행화 (`docs/ARCHITECTURE.md`)
+- [x] Phase 7-6-3A: 수학 다문항 타임아웃 개선 (2문항 제한 + has_more_problems 스키마 + 55s/60s 타임아웃 + 분할 안내 배너 + Production 배포)
 - [ ] [운영자] Live Stripe 키 교체 및 실 결제 / 실 환불 테스트 (Phase 7-6-2D)
 - [ ] [운영자] `site/legal.html` 특정상거래법 및 개인정보처리방침 최종 표기 확정 (Phase 7-6-2D)
 

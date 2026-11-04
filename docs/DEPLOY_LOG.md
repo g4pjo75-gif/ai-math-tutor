@@ -63,3 +63,5 @@
 |---|---|---|---|---|---|---|
 | 2026-11-04 23:46 | staging | api | `e5efcd0` | `f6fd62be-4930-442d-875c-427c73069906` | OK | main / g4pjo75-gif |
 | 2026-11-04 23:47 | staging | site | `e5efcd0` | `be41729b-8bf9-4fa7-a84a-2512186d3ddc` | OK | main / g4pjo75-gif |
+| 2026-11-05 00:43 | production | api | `7282b91` | `78ff0062-15cf-4816-a8a6-08b80c195949` | OK | main / g4pjo75-gif |
+| 2026-11-05 00:44 | production | site | `7282b91` | `9dec9185-49e1-4ef3-81a9-6813cfaabec1` | OK | main / g4pjo75-gif |

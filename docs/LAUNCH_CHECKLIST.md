@@ -36,7 +36,7 @@
 | Production D1 migration 0005 | ✅ 適用済み | 0001~0004 baseline 登録後に 0005 適用 |
 | Production deploy 0.7.0 | ✅ 完了 | `/health` = `0.7.0` |
 | Live Stripe | ❌ 未接続 | test mode のみ |
-| 6問画像問題 timeout | ⚠️ 既知の性能課題 | 大型入力は後日改善 |
+| 6問画像問題 timeout | ✅ 対策済み | 2問まで自動解説、3問以上は分割案内 (7-6-3A) |
 | Tailwind CDN 除去 | ✅ 完了 | shared/tailwind.css ビルド・CSP除去完了 |
 | デバイス解除 UI | ⚠️ CLI のみ | 手動サポート手順は必要 |
 | auto-retry / backoff | ❌ 未実装 | P1 |
@@ -49,10 +49,10 @@
 
 ### 2.1 코드게이트
 
-- [x] `npm run test:l1` → 61 pass
-- [x] `npx playwright test` → 40 pass
-- [x] `npm test` → 101 pass
-- [x] `cd server && npm test` → 56 pass
+- [x] `npm run test:l1` → 63 pass
+- [x] `npx playwright test` → 41 pass
+- [x] `npm test` → 104 pass
+- [x] `cd server && npm test` → 66 pass
 - [x] `node tests/check-actions.js` → math 46 / english 47
 - [x] `node tests/check-imports.js` → missing 0
 - [x] `git diff --check` → 에러 0
@@ -195,7 +195,7 @@
 - [ ] KaTeX の self-host または SRI 適用 (現在 cdn.jsdelivr.net 依存)
 - [ ] デバイス解除 UI
 - [ ] auto-retry / backoff
-- [ ] 大型問題の分割 / timeout 改善
+- [x] 大型問題の分割 / timeout 改善 (Phase 7-6-3A: 2問制限 + バナー + 55s/60sタイムアウト整流)
 - [ ] エラー画面の文言調整
 - [ ] 管理ダッシュボード / 指標
 - [ ] 返金 / 問い合わせテンプレート改善
@@ -206,7 +206,7 @@
 
 詳細手順: **`docs/BETA.md`**
 
-- [ ] ベータ用に予算を引き上げ（¥300/日・¥5,000/月）
+- [x] ベータ用に予算を引き上げ（¥300/日・¥5,000/月）
 - [ ] 5〜10名へ手動ライセンス発行
 - [ ] 招待メール送付
 - [ ] iPhone Safari / Android Chrome で実機確認
