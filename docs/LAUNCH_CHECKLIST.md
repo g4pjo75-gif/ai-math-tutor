@@ -24,16 +24,17 @@
 |---|---|---|
 | L1 unit | ✅ 61 pass | 2026-11-03 |
 | L2 E2E | ✅ 40 pass | 2026-11-03 |
-| Server test | ✅ 56 pass | 2026-11-03 |
+| Server test | ✅ 62 pass | 2026-11-03 |
 | Staging checkout → thanks → key | ✅ 完了 | Stripe test mode |
 | Staging redeem / simple solve / quota | ✅ 完了 | 1回実呼び出し |
 | Staging Customer Portal | ✅ 完了 | sandbox portal 画面確認 |
 | Staging email 実送信 | ✅ 完了 | 2026-11-03 `noreply@gakushulab.com` で受信・SPF/DKIM/DMARC PASS |
 | 法務・販売者情報 | ❌ 未完了 | `site/legal.html` placeholder |
-| Domain 決定 | ❌ 未決定 | 現行 URL 継続も選択肢 |
-| Production email/budget env | ❌ 未設定 | 7-6-2B で設定 |
-| Production D1 migration 0005 | ❌ 未適用 | 7-6-2B で適用 |
-| Production deploy 0.7.0 | ❌ 未実施 | 現在 0.6.0 |
+| Domain 決定 | ✅ 完了 | `gakushulab.com` (Cloudflare Workers Assets) |
+| Production site | ✅ 完了 | `https://gakushulab.com/` 稼働中 (noindex) |
+| Production email/budget env | ✅ 設定済み | `MAIL_FROM` / `SUPPORT_EMAIL` / ¥50日・¥1,000月 |
+| Production D1 migration 0005 | ✅ 適用済み | 0001~0004 baseline 登録後に 0005 適用 |
+| Production deploy 0.7.0 | ✅ 完了 | `/health` = `0.7.0` |
 | Live Stripe | ❌ 未接続 | test mode のみ |
 | 6問画像問題 timeout | ⚠️ 既知の性能課題 | 大型入力は後日改善 |
 | Tailwind CDN 除去 | ✅ 完了 | shared/tailwind.css ビルド・CSP除去完了 |
@@ -208,6 +209,9 @@
 - [ ] 実メール / 実決済 / 返金 / 解約 1回ずつ成功
 - [ ] サポート窓口が稼働
 - [ ] ロールバック手順確認
+- [ ] 公開時に `_headers` の `X-Robots-Tag: noindex` を解除（staging と分離する方法を決定）
+- [ ] 旧 GitHub Pages (`g4pjo75-gif.github.io/ai-math-tutor/`) を無効化、または `robots.txt` で遮断
+- [ ] `www.gakushulab.com` の扱いを決定（リダイレクト or 未使用）
 - [ ] 少数ユーザー（10〜20名）で開始
 - [ ] 毎日: 決済 / エラー / 原価 / 問い合わせを確認
 
