@@ -29,7 +29,7 @@
 | Staging redeem / simple solve / quota | ✅ 完了 | 1回実呼び出し |
 | Staging Customer Portal | ✅ 完了 | sandbox portal 画面確認 |
 | Staging email 実送信 | ✅ 完了 | 2026-11-03 `noreply@gakushulab.com` で受信・SPF/DKIM/DMARC PASS |
-| 法務・販売者情報 | ❌ 未完了 | `site/legal.html` placeholder |
+| 法務・販売者情報 | ⚠️ 最終確認待ち | `site/legal.html` 反映済み（特商法の最終確認のみ残） |
 | Domain 決定 | ✅ 完了 | `gakushulab.com` (Cloudflare Workers Assets) |
 | Production site | ✅ 完了 | `https://gakushulab.com/` 稼働中 (noindex) |
 | Production email/budget env | ✅ 設定済み | `MAIL_FROM` / `SUPPORT_EMAIL` / ¥50日・¥1,000月 |
@@ -105,15 +105,15 @@
 
 ### 3.2 法務 / サポート
 
-- [ ] `site/legal.html` 販売事業者名 / 屋号
-- [ ] 所在地（請求時開示方式でも可）
-- [ ] 連絡先メール
-- [ ] 最終返金 / キャンセル条件
-- [ ] 特定商取引法表記の最終確認
-- [ ] プライバシーポリシー最終確認
-- [ ] 問い合わせ窓口 / 応答テンプレート
-- [ ] 個人情報削除依頼の手順
-- [ ] デバイス解除依頼の手順
+- [x] `site/legal.html` 販売事業者名 / 屋号 — `朴振沃（パク・ジンオク）`
+- [x] 所在地（請求時開示方式でも可）— 請求があった場合に遅滞なく開示
+- [x] 連絡先メール — `support@gakushulab.com`
+- [x] 最終返金 / キャンセル条件 — 提供開始後返金なし / 当方帰責時の例外 / 日割り返金なし / 更新前ポータル解約
+- [ ] 特定商取引法表記の最終確認（運営者または専門家）
+- [x] プライバシーポリシー最終確認 — AI回答キャッシュ最大30日を明記
+- [x] 問い合わせ窓口 / 応答テンプレート（`docs/SUPPORT.md`）
+- [x] 個人情報削除依頼の手順（`docs/SUPPORT.md`）
+- [x] デバイス解除依頼の手順（`docs/SUPPORT.md`）
 
 ### 3.3 ドメイン
 
