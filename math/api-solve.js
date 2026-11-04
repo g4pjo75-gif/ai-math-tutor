@@ -74,7 +74,7 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
       state.currentModelId = selectedModel;
       state.currentProblemText = userText || '添付画像の問題';
 
-      showStatus('⏳ AI先生が問題を解いています...（最大30秒）', 'blue');
+      showStatus('⏳ AI先生が問題を解いています...（最大60秒）', 'blue');
       document.getElementById('solveBtn').disabled = true;
       document.getElementById('solveBtnText').classList.add('hidden');
       document.getElementById('solveBtnSpinner').classList.remove('hidden');
@@ -83,17 +83,17 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
       try {
         let resultData;
         try {
-          resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { schema: TUTOR_RESPONSE_SCHEMA });
+          resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { schema: TUTOR_RESPONSE_SCHEMA, timeoutMs: 55000 });
         } catch (firstErr) {
-          // 混雑・レート制限・タイムアウト時は3秒待って1回だけ自動再試行
-          const retryable = firstErr.name === 'AbortError' ||
-            [429, 500, 502, 503, 504].includes(firstErr.status) ||
+          // 混雑・レート制限時は3秒待って1回だけ自動再試行（タイムアウトは再試行しない）
+          const retryable =
+            [429, 500, 502, 503].includes(firstErr.status) ||
             /high demand|overloaded|rate limit|failed to fetch/i.test(firstErr.message || '');
 
           if (retryable) {
             showStatus(`⚠️ <strong>${escapeHtml(selectedModel)}</strong> が混雑しています。3秒後に自動で再試行します…`, 'amber');
             await new Promise(r => setTimeout(r, 3000));
-            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { schema: TUTOR_RESPONSE_SCHEMA, timeoutMs: 40000 });
+            resultData = await callGeminiModel(selectedModel, geminiKey, fullPrompt, state.currentImageBase64, { schema: TUTOR_RESPONSE_SCHEMA, timeoutMs: 55000 });
           } else {
             throw firstErr;
           }
@@ -108,30 +108,40 @@ export async function solveProblem(overrideModelId = null, forceRefresh = false)
         }
       } catch (err) {
         if (!isLicenseMode() && !isQuotaError(err)) {
-          const isTimeout = err.name === 'AbortError' || err.code === 'timeout';
-          const errMsg = isTimeout
-            ? '⏱️ 時間内に応答がありませんでした（サーバー混雑）。もう一度お試しください。'
-            : `❌ エラー: ${escapeHtml(err.message)}`;
-
-          const selectEl = document.getElementById('modelSelect');
-          const otherModels = selectEl ? [...selectEl.options]
-            .map(o => o.value)
-            .filter(v => v !== selectedModel)
-            .slice(0, 3) : [];
-
-          const fallbackButtons = otherModels.map(m =>
-            `<button data-action="solve" data-model="${escapeAttr(m)}" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${escapeHtml(m)} で再試行</button>`
-          ).join('');
-
-          showStatus(`
-            <div class="space-y-2">
-              <div class="font-bold text-red-700 dark:text-red-300">${errMsg}</div>
-              <div class="text-xs text-slate-600 dark:text-slate-300">「⚙️ 設定」の「モデル一覧を自動取得」を押すか、別のモデルに切り替えて再試行してください。</div>
-              <div class="pt-1">${fallbackButtons}
-                <button data-action="open-settings" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
+          const isTimeout = err.name === 'AbortError' || err.code === 'timeout' || err.status === 504;
+          if (isTimeout) {
+            showStatus(`
+              <div class="space-y-2">
+                <div class="font-bold text-red-700 dark:text-red-300">⏱️ 時間内に完了しませんでした。</div>
+                <div class="text-xs text-slate-600 dark:text-slate-300">画像に3問以上ある場合は、1〜2問に分割して撮影してください。</div>
+                <div class="pt-1">
+                  <button data-action="solve" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 もう一度試す</button>
+                  <button data-action="open-settings" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定</button>
+                </div>
               </div>
-            </div>
-          `, 'red');
+            `, 'red');
+          } else {
+            const errMsg = `❌ エラー: ${escapeHtml(err.message)}`;
+            const selectEl = document.getElementById('modelSelect');
+            const otherModels = selectEl ? [...selectEl.options]
+              .map(o => o.value)
+              .filter(v => v !== selectedModel)
+              .slice(0, 3) : [];
+
+            const fallbackButtons = otherModels.map(m =>
+              `<button data-action="solve" data-model="${escapeAttr(m)}" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">🔄 ${escapeHtml(m)} で再試行</button>`
+            ).join('');
+
+            showStatus(`
+              <div class="space-y-2">
+                <div class="font-bold text-red-700 dark:text-red-300">${errMsg}</div>
+                <div class="text-xs text-slate-600 dark:text-slate-300">「⚙️ 設定」の「モデル一覧を自動取得」を押すか、別のモデルに切り替えて再試行してください。</div>
+                <div class="pt-1">${fallbackButtons}
+                  <button data-action="open-settings" class="bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg m-1">⚙️ 設定・モデル自動取得</button>
+                </div>
+              </div>
+            `, 'red');
+          }
         } else {
           showApiError(err, {
             selectedModel,

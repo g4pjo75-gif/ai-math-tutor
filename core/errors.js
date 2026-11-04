@@ -18,8 +18,9 @@ export function classifyApiError(err) {
   const code = String((isAbort ? 'timeout' : err?.code) || 'unknown');
   const status = Number(err?.status) || (isAbort ? 504 : 0);
   const quota = err?.quota || null;
-  const message = isAbort
-    ? 'AIの応答がタイムアウトしました。もう一度お試しください。'
+  const timedOut = isAbort || code === 'timeout';
+  const message = timedOut
+    ? 'AIの応答がタイムアウトしました。画像に3問以上ある場合は、1〜2問に分割して撮影してください。'
     : (err?.message || '通信エラーが発生しました。もう一度お試しください。');
   const base = { code, status, quota, message, retryable: false, actions: [] };
 

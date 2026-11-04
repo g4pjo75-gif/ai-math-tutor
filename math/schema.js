@@ -162,10 +162,11 @@ export const TUTOR_RESPONSE_SCHEMA = {
             required: ['problem_label', 'recognized_problem', 'key_point', 'steps', 'final_answer', 'twin_quiz'],
             propertyOrdering: ['problem_label', 'recognized_problem', 'key_point', 'steps', 'final_answer', 'twin_quiz']
           }
-        }
+        },
+        has_more_problems: { type: 'BOOLEAN' }
       },
-      required: ['problems'],
-      propertyOrdering: ['problems']
+      required: ['problems', 'has_more_problems'],
+      propertyOrdering: ['problems', 'has_more_problems']
     };
 
 export const SIMPLIFY_RESPONSE_SCHEMA = {
@@ -196,9 +197,13 @@ export function buildSystemPrompt(unitHint) {
 
 単元ヒント: ${unitHint}
 
-【複数問題（小問）の全問認識ルール（最重要・厳守）】
-添付画像の中に (1), (2), (3) や 1, 2 などの複数の問題（小問）が含まれている場合、絶対に1つだけを勝手に選んで省略しないでください。
-画像内のすべての問題を左から右、上から下の順番で漏れなくすべて認識し、それぞれの問題ごとに完全なステップ解説を作成してください。
+【複数問題（小問）の上限ルール（最重要・厳守）】
+添付画像の中に複数の問題（小問）が含まれている場合でも、一度に解説するのは最大2問までです。
+- 画像内に3問以上ある場合は、左から右、上から下の順で最初の2問だけを problems 配列に入れてください。
+- 残りの問題は解説しないでください。
+- その場合、has_more_problems を true にしてください。
+- 2問以下の場合は has_more_problems を false にしてください。
+- problems 配列は最大2要素です。
 （画像内に問題が1問のみの場合でも、problems配列に要素1つの配列として出力してください）
 
 【授業の設計ルール】

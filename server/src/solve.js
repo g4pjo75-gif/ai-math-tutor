@@ -4,6 +4,7 @@ import { getUsage, periodOf, quotaSnapshot, sha256Hex } from './license.js';
 import { validateSolveBody } from './validate.js';
 import { costMicroYen, DEFAULT_MODEL } from './pricing.js';
 import { checkBudget } from './budget.js';
+import { limitMathProblems } from './problem-limit.js';
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30일
 
@@ -76,6 +77,7 @@ export async function solveProxy(env, license, rawBody) {
       data = null;
     }
     if (data !== null) {
+      data = limitMathProblems(data);
       return {
         status: 200,
         body: {
@@ -110,7 +112,7 @@ export async function solveProxy(env, license, rawBody) {
     return { status: 502, body: { ok: false, error: 'upstream_error' } };
   }
 
-  const data = result.data;
+  const data = limitMathProblems(result.data);
   const usage = result.usage || { in: 0, out: 0 };
   const costMicro = costMicroYen(model, usage.in, usage.out, usdJpy);
 

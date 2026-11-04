@@ -124,7 +124,7 @@ test('classifyApiError: AbortError maps to timeout transient', async () => {
   assert.equal(c.status, 504);
   assert.equal(c.retryable, true);
   assert.deepEqual(c.actions, ['retry']);
-  assert.equal(c.message, 'AIの応答がタイムアウトしました。もう一度お試しください。');
+  assert.equal(c.message, 'AIの応答がタイムアウトしました。画像に3問以上ある場合は、1〜2問に分割して撮影してください。');
 });
 
 test('classifyApiError: unknown fallback (proxy_503 retry, proxy_404 no retry)', async () => {

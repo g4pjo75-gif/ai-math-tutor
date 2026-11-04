@@ -7,6 +7,7 @@ const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 
 const FIXTURE_FILES = {
   'math-solve-2problems': 'math-solve-2problems.json',
+  'math-solve-has-more': 'math-solve-has-more.json',
   'math-quiz': 'math-quiz.json',
   'math-judge': 'math-judge.json',
   'math-simplify': 'math-simplify.json',
@@ -86,6 +87,10 @@ function pickFixture(urlOrReq, options = {}) {
 
   // Schema matching precedence table (docs/RESTRUCTURE_PLAN_v2.2.md 4.0-B)
   if (props.problems) {
+    const rawBody = typeof body === 'string' ? body : JSON.stringify(body || '');
+    if (rawBody.includes('HAS_MORE_PROBLEMS_FIXTURE')) {
+      return 'math-solve-has-more';
+    }
     return 'math-solve-2problems';
   }
   if (props.passage_en) {

@@ -209,6 +209,10 @@ export function renderTutorResult(data) {
         return false;
       }
 
+      const MAX_PROBLEMS = 2;
+      const hasMore = data?.has_more_problems === true || normalized.length > MAX_PROBLEMS;
+      const limited = normalized.slice(0, MAX_PROBLEMS);
+
       closeQuizSection();
       state.currentQuizData = null;
       state.stepChats = {};
@@ -216,8 +220,11 @@ export function renderTutorResult(data) {
       state.stepQuotes = {};
       state.overallChats = {};
       state.overallChatBusy = false;
-      state.currentProblems = normalized;
+      state.currentProblems = limited;
       state.currentProblemIndex = 0;
+
+      const limitBanner = document.getElementById('problemLimitBanner');
+      if (limitBanner) limitBanner.classList.toggle('hidden', !hasMore);
 
       showSectionWithFade('resultSection');
       renderProblemTabs();

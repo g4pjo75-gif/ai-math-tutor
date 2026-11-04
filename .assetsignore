@@ -33,3 +33,4 @@ __pycache__
 wrangler.site.jsonc
 math/tailwind.config.js
 english/tailwind.config.js
+math/package.json
