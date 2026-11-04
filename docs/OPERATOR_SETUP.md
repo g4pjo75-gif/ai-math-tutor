@@ -408,7 +408,7 @@ Webhook において `charge.refunded`（全額返金）が自動処理される
 
 | 対象 | 手順 |
 |---|---|
-| Worker | `npx wrangler rollback [DEPLOYMENT_ID]` |
+| Worker | `npx wrangler rollback [VERSION_ID]` |
 | D1 | バックアップ SQL から復元（運営者判断） |
 | サイト | GitHub Pages を前回安定コミットに戻して push |
 | Stripe | live キーを停止 / 商品を非公開化 |

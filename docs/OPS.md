@@ -2,6 +2,8 @@
 
 本書は AI家庭教師（ai-math-tutor）の運用管理手順書です。
 
+> デプロイ手順（GitHub と Cloudflare の関係、Version ID の記録）は **`docs/DEPLOYMENT.md`** を参照してください。
+
 ## 1. D1 データベース バックアップと復元
 
 ### バックアップ手順
@@ -125,8 +127,8 @@ npx wrangler tail
 Cloudflare Deployments 一覧から前バージョンのデプロイメントIDを確認し、瞬時にロールバックできます:
 ```bash
 cd server
-npx wrangler rollback [DEPLOYMENT_ID] --config wrangler.staging.jsonc
-npx wrangler rollback [DEPLOYMENT_ID]
+npx wrangler rollback [VERSION_ID] --config wrangler.staging.jsonc
+npx wrangler rollback [VERSION_ID]
 ```
 
 ### 静的サイトのロールバック

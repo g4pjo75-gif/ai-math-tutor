@@ -28,6 +28,7 @@ tailwind.config.cjs
 shared/tailwind.input.css
 backup
 tools
+scripts
 __pycache__
 wrangler.site.jsonc
 math/tailwind.config.js
