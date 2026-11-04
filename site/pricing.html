@@ -17,7 +17,7 @@
   </header>
 
   <h1>料金</h1>
-  <p class="lead">まずは無料で試せます。続ける場合はサブスクリプションをご利用ください。</p>
+  <p class="lead">まずは無料で試せます。現在は<strong>クローズドベータ</strong>期間中です。</p>
 
   <div class="grid cols-2">
     <div class="card">
@@ -40,37 +40,18 @@
         <li>写真・音声・クイズ・添削すべて</li>
         <li>いつでも解約可能</li>
       </ul>
-      <button class="cta" id="subscribeBtn" type="button">サブスクをはじめる</button>
-      <script src="./config.js"></script>
-      <script>
-      (function () {
-        var API = window.API_BASE;
-        var btn = document.getElementById('subscribeBtn');
-        btn.addEventListener('click', function () {
-          btn.disabled = true;
-          btn.textContent = '決済ページを準備中…';
-          fetch(API + '/v1/checkout', { method: 'POST' })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-              if (!d.ok || !d.url) throw new Error((d && d.error) || 'checkout_failed');
-              location.href = d.url;
-            })
-            .catch(function (e) {
-              btn.disabled = false;
-              btn.textContent = 'サブスクをはじめる';
-              alert('決済ページを開けませんでした: ' + e.message);
-            });
-        });
-      })();
-      </script>
-      <p class="muted" style="margin-top:10px">現在は<strong>テストモード</strong>です。テストカード 4242 4242 4242 4242 で動作確認できます。</p>
+      <a class="cta" href="../math/">アプリを開く</a>
+      <p class="muted" style="margin-top:10px">
+        現在は<strong>クローズドベータ</strong>期間中のため、新規のお申し込みは受け付けていません。<br>
+        参加をご希望の方は <a href="mailto:support@gakushulab.com">support@gakushulab.com</a> までご連絡ください。
+      </p>
     </div>
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0">購入後にすること</h2>
+    <h2 style="margin-top:0">ライセンスキーについて</h2>
     <ol>
-      <li>決済完了ページに<strong>ライセンスキー</strong>が表示されます（<code>AMT-XXXX-…</code>）</li>
+      <li>決済完了後（ベータ期間中は運営者から）ライセンスキーが発行されます（<code>AMT-XXXX-…</code>）</li>
       <li>アプリの <strong>⚙️ 設定</strong> にキーを入力</li>
       <li>以後はAPIキーなしで利用できます</li>
     </ol>
