@@ -61,3 +61,5 @@
 
 | 日時 (JST) | 環境 | 対象 | コミット | Version ID | 結果 | 備考 |
 |---|---|---|---|---|---|---|
+| 2026-11-04 23:46 | staging | api | `e5efcd0` | `f6fd62be-4930-442d-875c-427c73069906` | OK | main / g4pjo75-gif |
+| 2026-11-04 23:47 | staging | site | `e5efcd0` | `be41729b-8bf9-4fa7-a84a-2512186d3ddc` | OK | main / g4pjo75-gif |
